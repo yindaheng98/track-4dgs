@@ -8,16 +8,17 @@ from .tracker import ReorderedCameraDataset
 
 def prepare_datasets(
         sources: List[str], device: str,
-        trainable_camera: bool = False, load_cameras: List[str] = None, load_mask=True, load_depth=True,
-        reorder_reference_source: Optional[str] = None,
+        trainable_camera: bool = False, load_cameras: Optional[List[str]] = None, load_mask=True, load_depth=True,
+        reorder_reference_idx: Optional[int] = None,
 ) -> List[CameraDataset]:
     """Load cameras for all sources and optionally align them to a reference.
 
-    When reorder_reference_source is provided, it is loaded as a plain Gaussian
-    Splatting dataset and every returned dataset is reordered to match it.
-    Otherwise datasets keep their original order.
+    When reorder_reference_idx is provided, every returned dataset is reordered
+    to match that dataset. Otherwise datasets keep their original order.
     """
     assert len(sources) > 0, "sources must not be empty"
+    if reorder_reference_idx is not None:
+        assert 0 <= reorder_reference_idx < len(sources), "reorder_reference_idx must point to one of the sources"
 
     load_cameras = load_cameras if load_cameras is not None else [None] * len(sources)
     assert len(load_cameras) == len(sources), "len(load_cameras) must equal len(sources)"
@@ -29,22 +30,18 @@ def prepare_datasets(
         )
         for source, load_camera in zip(sources, load_cameras)
     ]
-    if reorder_reference_source is None:
+    if reorder_reference_idx is None:
         return datasets
 
-    reorder_reference = prepare_dataset(
-        source=reorder_reference_source, device=device,
-        trainable_camera=trainable_camera,
-        load_mask=load_mask, load_depth=load_depth,
-    )
+    reorder_reference = datasets[reorder_reference_idx]
+    reference_source = sources[reorder_reference_idx]
     datasets = [
         ReorderedCameraDataset(
             dataset=dataset,
             dataset_source=source,
             reference=reorder_reference,
-            reference_source=reorder_reference_source,
+            reference_source=reference_source,
         )
         for dataset, source in zip(datasets, sources)
     ]
-    del reorder_reference
     return datasets
