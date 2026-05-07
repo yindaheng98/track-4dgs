@@ -69,40 +69,40 @@ class AbstractPointTracker(metaclass=ABCMeta):
     def __call__(
             self,
             query: Query,
-            ground_truth_images: Sequence[torch.Tensor],
-            ground_truth_image_masks: Sequence[Optional[torch.Tensor]]) -> Track:
-        if len(ground_truth_images) == 0:
-            raise ValueError("ground_truth_images must not be empty")
-        if len(ground_truth_image_masks) != len(ground_truth_images):
-            raise ValueError("ground_truth_image_masks must have the same length as ground_truth_images")
+            frames: Sequence[torch.Tensor],
+            frame_masks: Sequence[Optional[torch.Tensor]]) -> Track:
+        if len(frames) == 0:
+            raise ValueError("frames must not be empty")
+        if len(frame_masks) != len(frames):
+            raise ValueError("frame_masks must have the same length as frames")
 
-        for image, mask in zip(ground_truth_images, ground_truth_image_masks):
-            if image.ndim != 3:
-                raise ValueError("ground_truth_images entries must have shape [C, H, W]")
-            if mask is not None:
-                if mask.ndim != 2:
-                    raise ValueError("ground_truth_image_masks entries must have shape [H, W]")
-                if mask.shape != image.shape[-2:]:
-                    raise ValueError("ground_truth_image_masks entries must match their image spatial dimensions")
+        for frame, frame_mask in zip(frames, frame_masks):
+            if frame.ndim != 3:
+                raise ValueError("frames entries must have shape [C, H, W]")
+            if frame_mask is not None:
+                if frame_mask.ndim != 2:
+                    raise ValueError("frame_masks entries must have shape [H, W]")
+                if frame_mask.shape != frame.shape[-2:]:
+                    raise ValueError("frame_masks entries must match their frame spatial dimensions")
 
         if query.frame_indices.numel() > 0:
             if query.frame_indices.min().item() < 0:
                 raise ValueError("Query.frame_indices must be non-negative")
-            if query.frame_indices.max().item() >= len(ground_truth_images):
-                raise ValueError("Query.frame_indices must be within the ground_truth_images sequence")
+            if query.frame_indices.max().item() >= len(frames):
+                raise ValueError("Query.frame_indices must be within the frames sequence")
 
-        track = self.track(query, ground_truth_images, ground_truth_image_masks)
-        if track.points.shape != (len(ground_truth_images), query.points.shape[0], 2):
-            raise ValueError(f"AbstractPointTracker.track output points must have shape {(len(ground_truth_images), query.points.shape[0], 2)}")
-        if track.visibility.shape != (len(ground_truth_images), query.points.shape[0]):
-            raise ValueError(f"AbstractPointTracker.track output visibility must have shape {(len(ground_truth_images), query.points.shape[0])}")
+        track = self.track(query, frames, frame_masks)
+        if track.points.shape != (len(frames), query.points.shape[0], 2):
+            raise ValueError(f"AbstractPointTracker.track output points must have shape {(len(frames), query.points.shape[0], 2)}")
+        if track.visibility.shape != (len(frames), query.points.shape[0]):
+            raise ValueError(f"AbstractPointTracker.track output visibility must have shape {(len(frames), query.points.shape[0])}")
         return track
 
     @abstractmethod
     def track(
             self,
             query: Query,
-            ground_truth_images: Sequence[torch.Tensor],
-            ground_truth_image_masks: Sequence[Optional[torch.Tensor]]) -> Track:
+            frames: Sequence[torch.Tensor],
+            frame_masks: Sequence[Optional[torch.Tensor]]) -> Track:
         """Return tracked pixel coordinates and visibility."""
         raise NotImplementedError
