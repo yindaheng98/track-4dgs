@@ -3,7 +3,8 @@ from typing import List, Optional
 from gaussian_splatting.dataset import CameraDataset
 from gaussian_splatting.prepare import prepare_dataset
 
-from .tracker import ReorderedCameraDataset
+from .registry import build_point_tracker
+from .tracker import CameraDatasetTracker, ReorderedCameraDataset
 
 
 def prepare_datasets(
@@ -45,3 +46,8 @@ def prepare_datasets(
         for dataset, source in zip(datasets, sources)
     ]
     return datasets
+
+
+def prepare_tracker(tracker_name: str, device: str, tracker_configs: dict = {}) -> CameraDatasetTracker:
+    tracker = build_point_tracker(tracker_name, **tracker_configs)
+    return CameraDatasetTracker(tracker).to(device)
