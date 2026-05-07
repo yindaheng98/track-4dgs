@@ -36,6 +36,30 @@ class Query:
         )
 
 
+@dataclass(frozen=True)
+class Track:
+    """Tracked query locations and visibility over a frame sequence."""
+
+    points: torch.Tensor
+    visibility: torch.Tensor
+
+    def __post_init__(self):
+        if self.points.ndim != 3 or self.points.shape[-1] != 2:
+            raise ValueError("Track.points must have shape [D, N, 2]")
+        if not torch.is_floating_point(self.points):
+            raise TypeError("Track.points must be a floating point tensor")
+        if self.visibility.ndim != 2:
+            raise ValueError("Track.visibility must have shape [D, N]")
+        if self.visibility.shape != self.points.shape[:2]:
+            raise ValueError("Track.visibility must match Track.points first two dimensions")
+
+    def to(self, device) -> 'Track':
+        return Track(
+            points=self.points.to(device),
+            visibility=self.visibility.to(device),
+        )
+
+
 class AbstractPointTracker(metaclass=ABCMeta):
     """Base class for point trackers over one camera sequence."""
 
@@ -46,7 +70,7 @@ class AbstractPointTracker(metaclass=ABCMeta):
             self,
             query: Query,
             ground_truth_images: Sequence[torch.Tensor],
-            ground_truth_image_masks: Sequence[Optional[torch.Tensor]]) -> torch.Tensor:
+            ground_truth_image_masks: Sequence[Optional[torch.Tensor]]) -> Track:
         if len(ground_truth_images) == 0:
             raise ValueError("ground_truth_images must not be empty")
         if len(ground_truth_image_masks) != len(ground_truth_images):
@@ -67,17 +91,18 @@ class AbstractPointTracker(metaclass=ABCMeta):
             if query.frame_indices.max().item() >= len(ground_truth_images):
                 raise ValueError("Query.frame_indices must be within the ground_truth_images sequence")
 
-        tracks = self.track(query, ground_truth_images, ground_truth_image_masks)
-        expected_shape = (len(ground_truth_images), query.points.shape[0], 2)
-        if tracks.shape != expected_shape:
-            raise ValueError(f"AbstractPointTracker.track output must have shape {expected_shape}")
-        return tracks
+        track = self.track(query, ground_truth_images, ground_truth_image_masks)
+        if track.points.shape != (len(ground_truth_images), query.points.shape[0], 2):
+            raise ValueError(f"AbstractPointTracker.track output points must have shape {(len(ground_truth_images), query.points.shape[0], 2)}")
+        if track.visibility.shape != (len(ground_truth_images), query.points.shape[0]):
+            raise ValueError(f"AbstractPointTracker.track output visibility must have shape {(len(ground_truth_images), query.points.shape[0])}")
+        return track
 
     @abstractmethod
     def track(
             self,
             query: Query,
             ground_truth_images: Sequence[torch.Tensor],
-            ground_truth_image_masks: Sequence[Optional[torch.Tensor]]) -> torch.Tensor:
-        """Return tracked pixel coordinates with shape ``[D, N, 2]``."""
+            ground_truth_image_masks: Sequence[Optional[torch.Tensor]]) -> Track:
+        """Return tracked pixel coordinates and visibility."""
         raise NotImplementedError
