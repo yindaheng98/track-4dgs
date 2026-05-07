@@ -71,6 +71,14 @@ class AbstractPointTracker(metaclass=ABCMeta):
             query: Query,
             frames: Sequence[torch.Tensor],
             frame_masks: Sequence[Optional[torch.Tensor]]) -> Track:
+        """Validate inputs, run tracking, and validate the returned Track.
+
+        ``frames`` and ``frame_masks`` are frame-major for one view:
+        frames are ``[C, H, W]`` tensors, masks are optional ``[H, W]`` tensors.
+        ``query`` contains ``N`` points on these frames, and the returned
+        :class:`Track` must contain ``points`` with shape ``[D, N, 2]`` and
+        ``visibility`` with shape ``[D, N]``, where ``D == len(frames)``.
+        """
         if len(frames) == 0:
             raise ValueError("frames must not be empty")
         if len(frame_masks) != len(frames):
@@ -104,5 +112,10 @@ class AbstractPointTracker(metaclass=ABCMeta):
             query: Query,
             frames: Sequence[torch.Tensor],
             frame_masks: Sequence[Optional[torch.Tensor]]) -> Track:
-        """Return tracked pixel coordinates and visibility."""
+        """Track ``query`` points through ``frames`` for one view.
+
+        Implementations should return a :class:`Track` whose ``points`` tensor
+        has shape ``[len(frames), query.points.shape[0], 2]`` and whose
+        ``visibility`` tensor has shape ``[len(frames), query.points.shape[0]]``.
+        """
         raise NotImplementedError
