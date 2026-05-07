@@ -93,11 +93,12 @@ class AbstractPointTracker(metaclass=ABCMeta):
                 if frame_mask.shape != frame.shape[-2:]:
                     raise ValueError("frame_masks entries must match their frame spatial dimensions")
 
-        if query.frame_indices.numel() > 0:
-            if query.frame_indices.min().item() < 0:
-                raise ValueError("Query.frame_indices must be non-negative")
-            if query.frame_indices.max().item() >= len(frames):
-                raise ValueError("Query.frame_indices must be within the frames sequence")
+        if query.points.shape[0] == 0:
+            raise ValueError("Query.points must not be empty")
+        if query.frame_indices.min().item() < 0:
+            raise ValueError("Query.frame_indices must be non-negative")
+        if query.frame_indices.max().item() >= len(frames):
+            raise ValueError("Query.frame_indices must be within the frames sequence")
 
         track = self.track(query, frames, frame_masks)
         if track.points.shape != (len(frames), query.points.shape[0], 2):
