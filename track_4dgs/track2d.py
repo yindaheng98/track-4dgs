@@ -58,7 +58,7 @@ def image_tensor_to_pil(image: torch.Tensor) -> Image.Image:
         image = image.repeat(3, 1, 1)
     image = image[:3].permute(1, 2, 0)
     array = (image.numpy() * 255).astype("uint8")
-    return Image.fromarray(array, mode="RGB")
+    return Image.fromarray(array)
 
 
 def rainbow_colors(n: int) -> list[tuple[int, int, int]]:
