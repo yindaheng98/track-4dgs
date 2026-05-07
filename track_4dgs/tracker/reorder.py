@@ -4,18 +4,24 @@ from gaussian_splatting import Camera
 from gaussian_splatting.dataset import CameraDataset
 
 
+def relative_path(path: str, root: str) -> str:
+    try:
+        rel_path = os.path.relpath(path, root)
+    except ValueError:
+        rel_path = path
+    return os.path.normcase(os.path.normpath(rel_path))
+
+
 class ReorderedCameraDataset(CameraDataset):
     @staticmethod
     def find_matching_index(reference_camera: Camera, reference_source: str, dataset: CameraDataset, dataset_source: str) -> int:
         """Find the index of the best-matching camera in *dataset*."""
-        rel_reference = os.path.relpath(reference_camera.ground_truth_image_path, reference_source)
-        best_idx, best_len = 0, -1
+        rel_reference = relative_path(reference_camera.ground_truth_image_path, reference_source)
         for idx in range(len(dataset)):
-            rel_dataset = os.path.relpath(dataset[idx].ground_truth_image_path, dataset_source)
-            suffix = os.path.commonprefix([rel_reference[::-1], rel_dataset[::-1]])
-            if len(suffix) > best_len:
-                best_idx, best_len = idx, len(suffix)
-        return best_idx
+            rel_dataset = relative_path(dataset[idx].ground_truth_image_path, dataset_source)
+            if rel_dataset == rel_reference:
+                return idx
+        raise ValueError(f"No camera in dataset matches relative path: {rel_reference}")
 
     def __init__(
         self,
@@ -42,7 +48,7 @@ class ReorderedCameraDataset(CameraDataset):
         return getattr(self.dataset, name)
 
     def to(self, device) -> "ReorderedCameraDataset":
-        self.dataset.to(device)
+        self.dataset = self.dataset.to(device)
         return self
 
     def __len__(self) -> int:
