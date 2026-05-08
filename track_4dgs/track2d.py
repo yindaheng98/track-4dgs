@@ -1,4 +1,3 @@
-import colorsys
 import os
 from typing import Sequence, Tuple
 
@@ -6,10 +5,10 @@ import torch
 from gaussian_splatting import Camera, GaussianModel
 from gaussian_splatting.dataset import CameraDataset
 from gaussian_splatting.prepare import prepare_gaussians
-from PIL import Image, ImageDraw
 
 from track_4dgs.prepare import prepare_datasets, prepare_tracker
 from track_4dgs.registry import get_available_point_trackers
+from track_4dgs.track1v import draw_rainbow_tracks
 from track_4dgs.tracker import Query, Track
 
 
@@ -48,61 +47,6 @@ def query_views_from_gaussians(
         frame_indices = torch.full((chosen.numel(),), init_dataset_index, device=xyz.device, dtype=torch.long)
         queries.append(Query(points=pixels[chosen].float(), frame_indices=frame_indices))
     return queries
-
-
-def image_tensor_to_pil(image: torch.Tensor) -> Image.Image:
-    image = image.detach().clamp(0, 1).cpu()
-    if image.ndim != 3:
-        raise ValueError("Expected image tensor with shape [C, H, W]")
-    if image.shape[0] == 1:
-        image = image.repeat(3, 1, 1)
-    image = image[:3].permute(1, 2, 0)
-    array = (image.numpy() * 255).astype("uint8")
-    return Image.fromarray(array)
-
-
-def rainbow_colors(n: int) -> list[tuple[int, int, int]]:
-    if n <= 0:
-        return []
-    return [
-        tuple(int(channel * 255) for channel in colorsys.hsv_to_rgb(i / max(n, 1), 1.0, 1.0))
-        for i in range(n)
-    ]
-
-
-def draw_rainbow_tracks(
-    image: torch.Tensor,
-    track: Track,
-    frame_idx: int,
-) -> Image.Image:
-    canvas = image_tensor_to_pil(image)
-    draw = ImageDraw.Draw(canvas)
-
-    points = track.points.detach().cpu()
-    visibility = track.visibility.detach().cpu().bool()
-    colors = rainbow_colors(points.shape[1])
-
-    for point_idx, color in enumerate(colors):
-        visible = visibility[:frame_idx + 1, point_idx]
-        if not visible.any():
-            continue
-
-        history_points = points[:frame_idx + 1, point_idx]
-        last_visible_point = None
-        for point, is_visible in zip(history_points, visible):
-            xy = (float(point[0]), float(point[1]))
-            if is_visible:
-                if last_visible_point is not None:
-                    draw.line([last_visible_point, xy], fill=color, width=1)
-                last_visible_point = xy
-            else:
-                last_visible_point = None
-
-        if visibility[frame_idx, point_idx]:
-            x, y = points[frame_idx, point_idx].tolist()
-            draw.ellipse((x - 2, y - 2, x + 2, y + 2), fill=color)
-
-    return canvas
 
 
 @torch.no_grad()
