@@ -45,28 +45,16 @@ def draw_rainbow_tracks(
     draw = ImageDraw.Draw(canvas)
 
     points = track.points.detach().cpu()
-    visibility = track.visibility.detach().cpu().bool()
     colors = rainbow_colors(points.shape[1])
 
     for point_idx, color in enumerate(colors):
-        visible = visibility[:frame_idx + 1, point_idx]
-        if not visible.any():
-            continue
-
         history_points = points[:frame_idx + 1, point_idx]
-        last_visible_point = None
-        for point, is_visible in zip(history_points, visible):
-            xy = (float(point[0]), float(point[1]))
-            if is_visible:
-                if last_visible_point is not None:
-                    draw.line([last_visible_point, xy], fill=color, width=1)
-                last_visible_point = xy
-            else:
-                last_visible_point = None
+        line = [(float(point[0]), float(point[1])) for point in history_points]
+        if len(line) > 1:
+            draw.line(line, fill=color, width=1)
 
-        if visibility[frame_idx, point_idx]:
-            x, y = points[frame_idx, point_idx].tolist()
-            draw.ellipse((x - 2, y - 2, x + 2, y + 2), fill=color)
+        x, y = points[frame_idx, point_idx].tolist()
+        draw.ellipse((x - 2, y - 2, x + 2, y + 2), fill=color)
 
     return canvas
 
