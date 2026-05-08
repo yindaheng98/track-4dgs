@@ -100,7 +100,9 @@ class AbstractPointTracker(metaclass=ABCMeta):
         if query.frame_indices.max().item() >= len(frames):
             raise ValueError("Query.frame_indices must be within the frames sequence")
 
+        torch.cuda.empty_cache()
         track = self.track(query, frames, frame_masks)
+        torch.cuda.empty_cache()
         if track.points.shape != (len(frames), query.points.shape[0], 2):
             raise ValueError(f"AbstractPointTracker.track output points must have shape {(len(frames), query.points.shape[0], 2)}")
         if track.visibility.shape != (len(frames), query.points.shape[0]):
