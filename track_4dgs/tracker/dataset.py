@@ -76,7 +76,7 @@ class CameraDatasetTracker:
     def __call__(
             self,
             view_queries: Iterable[Query],
-            frame_datasets: Iterable[CameraDataset]) -> list[CameraDataset]:
+            frame_datasets: Iterable[CameraDataset]) -> list[TrackedCameraDataset]:
         """Track points for a frame-major collection of camera datasets.
 
         ``view_queries`` is view-major: one query per camera/view.
