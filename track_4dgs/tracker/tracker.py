@@ -70,7 +70,8 @@ class AbstractPointTracker(metaclass=ABCMeta):
             self,
             query: Query,
             frames: Sequence[torch.Tensor],
-            frame_masks: Sequence[Optional[torch.Tensor]]) -> Track:
+            frame_masks: Sequence[Optional[torch.Tensor]],
+            batch_size: Optional[int] = None) -> Track:
         """Validate inputs, run tracking, and validate the returned Track.
 
         ``frames`` and ``frame_masks`` are frame-major for one view:
@@ -78,6 +79,9 @@ class AbstractPointTracker(metaclass=ABCMeta):
         ``query`` contains ``N`` points on these frames, and the returned
         :class:`Track` must contain ``points`` with shape ``[D, N, 2]`` and
         ``visibility`` with shape ``[D, N]``, where ``D == len(frames)``.
+
+        Query points are forwarded to :meth:`track` in chunks of ``batch_size``.
+        ``None`` tracks all points in one call.
         """
         if len(frames) == 0:
             raise ValueError("frames must not be empty")
@@ -100,8 +104,27 @@ class AbstractPointTracker(metaclass=ABCMeta):
         if query.frame_indices.max().item() >= len(frames):
             raise ValueError("Query.frame_indices must be within the frames sequence")
 
+        if batch_size is not None and batch_size <= 0:
+            raise ValueError("batch_size must be a positive integer")
+
         torch.cuda.empty_cache()
-        track = self.track(query, frames, frame_masks)
+        n_points = query.points.shape[0]
+        if batch_size is None or n_points <= batch_size:
+            track = self.track(query, frames, frame_masks)
+        else:
+            tracks = []
+            for start in range(0, n_points, batch_size):
+                end = min(start + batch_size, n_points)
+                batch_query = Query(
+                    points=query.points[start:end],
+                    frame_indices=query.frame_indices[start:end],
+                )
+                tracks.append(self.track(batch_query, frames, frame_masks))
+                torch.cuda.empty_cache()
+            track = Track(
+                points=torch.cat([item.points for item in tracks], dim=1),
+                visibility=torch.cat([item.visibility for item in tracks], dim=1),
+            )
         torch.cuda.empty_cache()
         if track.points.shape != (len(frames), query.points.shape[0], 2):
             raise ValueError(f"AbstractPointTracker.track output points must have shape {(len(frames), query.points.shape[0], 2)}")
