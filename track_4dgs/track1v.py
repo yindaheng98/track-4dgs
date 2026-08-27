@@ -89,6 +89,7 @@ if __name__ == "__main__":
     parser.add_argument("--tracker", type=str, default="cotracker3", choices=get_available_point_trackers())
     parser.add_argument("-m", "--option_tracker", default=[], action="append", type=str)
     parser.add_argument("--num-points", default=256, type=int)
+    parser.add_argument("--batch-size", default=None, type=int)
     args = parser.parse_args()
     tracker_configs = {o.split("=", 1)[0]: eval(o.split("=", 1)[1]) for o in args.option_tracker}
 
@@ -96,5 +97,5 @@ if __name__ == "__main__":
         frames = [load_image(path, args.device) for path in args.sources]
         query = sample_query(frames[0], args.num_points)
         tracker = build_point_tracker(args.tracker, **tracker_configs).to(args.device)
-        track = tracker(query, frames, [None] * len(frames))
+        track = tracker(query, frames, [None] * len(frames), batch_size=args.batch_size)
         rendering(frames, track, args.destination)
