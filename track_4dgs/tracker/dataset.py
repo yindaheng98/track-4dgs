@@ -3,6 +3,7 @@ from typing import Optional
 
 from gaussian_splatting.dataset import CameraDataset
 from gaussian_splatting.camera import Camera
+from tqdm import tqdm
 
 from .tracker import AbstractPointTracker, CameraTrack, Query
 
@@ -68,7 +69,7 @@ class CameraDatasetTracker:
             return []
 
         frame_camera_tracks = [[] for _ in frame_datasets]
-        for view_idx, query in enumerate(view_queries):
+        for view_idx, query in enumerate(tqdm(view_queries, desc="Tracking views")):
             frames = []
             frame_masks = []
             for dataset in frame_datasets:
