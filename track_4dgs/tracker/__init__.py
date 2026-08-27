@@ -1,5 +1,5 @@
-from .tracker import Query, Track, AbstractPointTracker
-from .dataset import CameraTrack, TrackedCameraDataset, CameraDatasetTracker
+from .tracker import Query, Track, AbstractPointTracker, CameraTrack
+from .dataset import TrackedCameraDataset, CameraDatasetTracker
 from .reorder import ReorderedCameraDataset
 
 __all__ = [

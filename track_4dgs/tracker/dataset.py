@@ -1,34 +1,9 @@
 from collections.abc import Iterable, Sequence
-from dataclasses import dataclass
-
-import torch
 
 from gaussian_splatting.dataset import CameraDataset
 from gaussian_splatting.camera import Camera
 
-from .tracker import AbstractPointTracker, Query
-
-
-@dataclass(frozen=True)
-class CameraTrack:
-    """Track result for one camera in one frame."""
-
-    points: torch.Tensor
-    visibility: torch.Tensor
-
-    def __post_init__(self):
-        if self.points.ndim != 2 or self.points.shape[-1] != 2:
-            raise ValueError("CameraTrack.points must have shape [N, 2]")
-        if self.visibility.ndim != 1:
-            raise ValueError("CameraTrack.visibility must have shape [N]")
-        if self.visibility.shape[0] != self.points.shape[0]:
-            raise ValueError("CameraTrack.visibility must match CameraTrack.points first dimension")
-
-    def to(self, device) -> 'CameraTrack':
-        return CameraTrack(
-            points=self.points.to(device),
-            visibility=self.visibility.to(device),
-        )
+from .tracker import AbstractPointTracker, CameraTrack, Query
 
 
 class TrackedCameraDataset(CameraDataset):
@@ -101,10 +76,7 @@ class CameraDatasetTracker:
                 frame_masks.append(camera.ground_truth_image_mask)
             track = self.tracker(query, frames, frame_masks)
             for frame_idx, camera_tracks in enumerate(frame_camera_tracks):
-                camera_tracks.append(CameraTrack(
-                    points=track.points[frame_idx],
-                    visibility=track.visibility[frame_idx],
-                ))
+                camera_tracks.append(track[frame_idx])
 
         return [
             TrackedCameraDataset(

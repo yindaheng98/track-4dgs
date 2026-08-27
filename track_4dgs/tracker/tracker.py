@@ -1,7 +1,7 @@
 from abc import ABCMeta, abstractmethod
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Union
 
 import torch
 
@@ -37,6 +37,28 @@ class Query:
 
 
 @dataclass(frozen=True)
+class CameraTrack:
+    """Track result for one camera in one frame."""
+
+    points: torch.Tensor
+    visibility: torch.Tensor
+
+    def __post_init__(self):
+        if self.points.ndim != 2 or self.points.shape[-1] != 2:
+            raise ValueError("CameraTrack.points must have shape [N, 2]")
+        if self.visibility.ndim != 1:
+            raise ValueError("CameraTrack.visibility must have shape [N]")
+        if self.visibility.shape[0] != self.points.shape[0]:
+            raise ValueError("CameraTrack.visibility must match CameraTrack.points first dimension")
+
+    def to(self, device) -> 'CameraTrack':
+        return CameraTrack(
+            points=self.points.to(device),
+            visibility=self.visibility.to(device),
+        )
+
+
+@dataclass(frozen=True)
 class Track:
     """Tracked query locations and visibility over a frame sequence."""
 
@@ -58,6 +80,15 @@ class Track:
             points=self.points.to(device),
             visibility=self.visibility.to(device),
         )
+
+    def __getitem__(self, index) -> Union[CameraTrack, 'Track']:
+        points = self.points[index]
+        visibility = self.visibility[index]
+        if points.ndim == 2:
+            return CameraTrack(points=points, visibility=visibility)
+        if points.ndim == 3:
+            return Track(points=points, visibility=visibility)
+        raise TypeError("Track only supports indexing along the frame dimension")
 
 
 class AbstractPointTracker(metaclass=ABCMeta):
