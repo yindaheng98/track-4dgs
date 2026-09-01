@@ -143,7 +143,7 @@ class AbstractPointTracker(metaclass=ABCMeta):
         if batch_size is None or n_points <= batch_size:
             track = self.track(query, frames, frame_masks)
         else:
-            tracks = []
+            tracks: list[Track] = []
             for start in range(0, n_points, batch_size):
                 end = min(start + batch_size, n_points)
                 batch_query = Query(
