@@ -191,7 +191,7 @@ frames = [
 query = sample_query(frames[0], num_points=256)
 
 with torch.no_grad():
-    track = tracker(query, frames, [None] * len(frames))
+    track = tracker.track_view(query, frames, [None] * len(frames))
 
 print(track.points.shape)      # [num_frames, num_points, 2]
 print(track.visibility.shape)  # [num_frames, num_points]
@@ -240,17 +240,17 @@ print(camera_track.points.shape)
 
 ## Design: Point Tracker Registry
 
-The core abstraction is `AbstractPointTracker`. A tracker receives one `Query`, a frame-major list of images for one camera view, and optional masks:
+`AbstractPointTracker.__call__` validates inputs, then calls `track`. It takes view-major queries and frame-major camera datasets, and returns one `Track` per view. `CameraDatasetTracker` attaches those tracks back onto the camera datasets:
 
 ```text
-Query points + frame sequence -> Point Tracker -> tracked points + visibility
+view_queries + frame_datasets -> validate + track -> view_tracks -> tracked camera datasets
 ```
 
-`CameraDatasetTracker` lifts the same tracker to Gaussian Splatting datasets by iterating over views. Input datasets are frame-major, while queries are view-major:
+Single-view trackers (`AbstractViewPointTracker`, e.g. CoTracker3 / VGGT) implement `track_batch(query, frames, masks)` for one camera sequence. Their `track` loops `track_view` over views. Multi-view trackers (`AbstractMultiViewPointTracker`, e.g. MV-TAP) consume all views at once, using camera `K` / `R` / `T` when the model needs them.
 
 ```text
 Frame 0 cameras --\
-Frame 1 cameras ----> per-view tracking ----> tracked camera datasets
+Frame 1 cameras ----> single-view loop, or one joint multi-view call ----> view_tracks
 Frame 2 cameras --/
 ```
 
@@ -258,22 +258,22 @@ This keeps model-specific code isolated in tracker implementations while the 4DG
 
 ## Extending: Adding a New Point Tracker
 
-Create a tracker class that returns `Track(points=[D, N, 2], visibility=[D, N])`:
+Single-view trackers return `Track(points=[D, N, 2], visibility=[D, N])` from `track_batch`:
 
 ```python
 from collections.abc import Sequence
 
 import torch
 
-from track_4dgs.tracker import AbstractPointTracker, Query, Track
+from track_4dgs.tracker import AbstractViewPointTracker, Query, Track
 
 
-class MyPointTracker(AbstractPointTracker):
+class MyPointTracker(AbstractViewPointTracker):
     def to(self, device):
         self.device = torch.device(device)
         return self
 
-    def track(
+    def track_batch(
         self,
         query: Query,
         frames: Sequence[torch.Tensor],

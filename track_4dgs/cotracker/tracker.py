@@ -3,10 +3,10 @@ from collections.abc import Sequence
 import torch
 from cotracker.predictor import CoTrackerPredictor
 
-from track_4dgs.tracker import AbstractSingleViewPointTracker, Query, Track
+from track_4dgs.tracker import AbstractViewPointTracker, Query, Track
 
 
-class Cotracker3PointTracker(AbstractSingleViewPointTracker):
+class Cotracker3PointTracker(AbstractViewPointTracker):
     """Track queried points with CoTracker3.
 
     Frames are expected to be ``[C, H, W]`` tensors and query points use pixel

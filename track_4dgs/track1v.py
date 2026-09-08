@@ -6,7 +6,7 @@ import torch
 from PIL import Image, ImageDraw
 
 from track_4dgs.registry import build_point_tracker, get_available_point_trackers
-from track_4dgs.tracker import Query, Track
+from track_4dgs.tracker import AbstractViewPointTracker, Query, Track
 
 
 def load_image(path: str, device: str) -> torch.Tensor:
@@ -97,5 +97,7 @@ if __name__ == "__main__":
         frames = [load_image(path, args.device) for path in args.sources]
         query = sample_query(frames[0], args.num_points)
         tracker = build_point_tracker(args.tracker, **tracker_configs).to(args.device)
-        track = tracker(query, frames, [None] * len(frames), batch_size=args.batch_size)
+        if not isinstance(tracker, AbstractViewPointTracker):
+            raise TypeError("track1v requires an AbstractViewPointTracker")
+        track = tracker.track_view(query, frames, [None] * len(frames), batch_size=args.batch_size)
         rendering(frames, track, args.destination)

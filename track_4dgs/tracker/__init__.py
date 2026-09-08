@@ -1,5 +1,6 @@
 from .tracker import Query, Track, AbstractPointTracker, CameraTrack
-from .tracker import AbstractSingleViewPointTracker, AbstractMultiViewPointTracker
+from .singleview import AbstractViewPointTracker
+from .multiview import AbstractMultiViewPointTracker
 from .dataset import TrackedCameraDataset, CameraDatasetTracker
 from .reorder import ReorderedCameraDataset
 
@@ -7,7 +8,7 @@ __all__ = [
     "Query",
     "Track",
     "AbstractPointTracker",
-    "AbstractSingleViewPointTracker",
+    "AbstractViewPointTracker",
     "AbstractMultiViewPointTracker",
     "CameraTrack",
     "TrackedCameraDataset",
