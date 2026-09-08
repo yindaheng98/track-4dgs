@@ -3,10 +3,10 @@ from collections.abc import Sequence
 import torch
 from cotracker.predictor import CoTrackerPredictor
 
-from track_4dgs.tracker import AbstractPointTracker, Query, Track
+from track_4dgs.tracker import AbstractSingleViewPointTracker, Query, Track
 
 
-class Cotracker3PointTracker(AbstractPointTracker):
+class Cotracker3PointTracker(AbstractSingleViewPointTracker):
     """Track queried points with CoTracker3.
 
     Frames are expected to be ``[C, H, W]`` tensors and query points use pixel
@@ -26,7 +26,7 @@ class Cotracker3PointTracker(AbstractPointTracker):
         self.model.eval()
         return self
 
-    def track(self, query: Query, frames: Sequence[torch.Tensor], frame_masks: Sequence[torch.Tensor | None]) -> Track:
+    def track_batch(self, query: Query, frames: Sequence[torch.Tensor], frame_masks: Sequence[torch.Tensor | None]) -> Track:
         assert all(frame.shape == frames[0].shape for frame in frames)
 
         video = torch.stack(frames, dim=0).unsqueeze(0)

@@ -5,7 +5,7 @@ import torch
 import torch.nn.functional as F
 from vggt.models.vggt import VGGT
 
-from track_4dgs.tracker import AbstractPointTracker, Query, Track
+from track_4dgs.tracker import AbstractSingleViewPointTracker, Query, Track
 
 RESOLUTION = 518
 
@@ -69,7 +69,7 @@ def load_vggt(checkpoint: str = "checkpoints/vggt_1B_commercial.pt") -> VGGT:
     return model
 
 
-class VGGTPointTracker(AbstractPointTracker):
+class VGGTPointTracker(AbstractSingleViewPointTracker):
     """Track queried points with VGGT TrackHead.
 
     Frames are expected to be RGB ``[3, H, W]`` tensors in ``[0, 1]`` and query
@@ -94,7 +94,7 @@ class VGGTPointTracker(AbstractPointTracker):
         return self
 
     @torch.no_grad()
-    def track(
+    def track_batch(
             self,
             query: Query,
             frames: Sequence[torch.Tensor],

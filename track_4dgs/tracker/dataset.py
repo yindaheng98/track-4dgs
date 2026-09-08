@@ -3,7 +3,6 @@ from typing import Optional
 
 from gaussian_splatting.dataset import CameraDataset
 from gaussian_splatting.camera import Camera
-from tqdm import tqdm
 
 from .tracker import AbstractPointTracker, CameraTrack, Query
 
@@ -41,7 +40,7 @@ class TrackedCameraDataset(CameraDataset):
 
 
 class CameraDatasetTracker:
-    """Run a point tracker for each view and attach tracks to camera datasets."""
+    """Run a point tracker and attach tracks to camera datasets."""
 
     def __init__(self, tracker: AbstractPointTracker):
         self.tracker = tracker
@@ -68,17 +67,9 @@ class CameraDatasetTracker:
         if len(frame_datasets) == 0:
             return []
 
+        view_tracks = self.tracker(view_queries, frame_datasets, batch_size=batch_size)
         frame_camera_tracks = [[] for _ in frame_datasets]
-        for view_idx, query in enumerate(tqdm(view_queries, desc="Tracking views")):
-            frames = []
-            frame_masks = []
-            for dataset in frame_datasets:
-                camera = dataset[view_idx]
-                if camera.ground_truth_image is None:
-                    raise ValueError("Point tracking requires cameras with loaded ground_truth_image tensors")
-                frames.append(camera.ground_truth_image)
-                frame_masks.append(camera.ground_truth_image_mask)
-            track = self.tracker(query, frames, frame_masks, batch_size=batch_size)
+        for track in view_tracks:
             for frame_idx, camera_tracks in enumerate(frame_camera_tracks):
                 camera_tracks.append(track[frame_idx])
 
