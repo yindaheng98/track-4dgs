@@ -1,6 +1,6 @@
 # Point Tracking for 4DGS
 
-This repo is the **point tracking Python extension for 4D Gaussian Splatting**. It wraps sequence point trackers such as [CoTracker3](https://github.com/facebookresearch/co-tracker) and [VGGT](https://github.com/facebookresearch/vggt) behind one small registry, then applies them either to plain image sequences or to multi-timestep Gaussian Splatting camera datasets.
+This repo is the **point tracking Python extension for 4D Gaussian Splatting**. It wraps sequence point trackers such as [CoTracker3](https://github.com/facebookresearch/co-tracker), [VGGT](https://github.com/facebookresearch/vggt), and [MV-TAP](https://github.com/cvlab-kaist/MV-TAP) behind one small registry, then applies them either to plain image sequences or to multi-timestep Gaussian Splatting camera datasets.
 
 The package provides two common workflows:
 
@@ -10,7 +10,7 @@ The package provides two common workflows:
 ## Features
 
 * [x] Organised as a standard Python package with `pip install` support
-* [x] Shared point tracker registry with `cotracker3` and `vggt` implementations
+* [x] Shared point tracker registry with `cotracker3`, `vggt`, and `mvtap` implementations
 * [x] Single-view image sequence tracking and rendering
 * [x] Multi-timestep Gaussian Splatting camera dataset tracking
 * [x] Camera dataset reordering against a selected reference timestep
@@ -89,6 +89,13 @@ wget -P checkpoints https://huggingface.co/facebook/VGGT-1B-Commercial/resolve/m
 
 If the VGGT checkpoint is not present, `VGGTPointTracker` falls back to `VGGT.from_pretrained("facebook/VGGT-1B")`.
 
+MV-TAP checkpoint (from the [MV-TAP release](https://drive.google.com/file/d/1sCml0BL6VQGy-MGgpidz2-BdymAJhboU/view?usp=sharing)):
+
+```shell
+mkdir -p checkpoints
+# save the downloaded file as checkpoints/mvtap.ckpt
+```
+
 ## Command-Line Usage
 
 ### List Registered Point Trackers
@@ -103,6 +110,7 @@ The built-in trackers are:
 
 * `cotracker3`: CoTracker3 offline point tracker
 * `vggt`: VGGT TrackHead point tracker
+* `mvtap`: MV-TAP multi-view point tracker
 
 ### Track One Image Sequence
 
@@ -298,4 +306,4 @@ python -m track_4dgs.track1v --tracker mytracker -s frame0.png frame1.png -d out
 
 ## Acknowledgement
 
-This repo is developed based on [CoTracker](https://github.com/facebookresearch/co-tracker), [VGGT](https://github.com/facebookresearch/vggt), [LightGlue](https://github.com/jytime/LightGlue), and [gaussian-splatting (packaged)](https://github.com/yindaheng98/gaussian-splatting). Many thanks to the authors for open-sourcing their codebases.
+This repo is developed based on [CoTracker](https://github.com/facebookresearch/co-tracker), [VGGT](https://github.com/facebookresearch/vggt), [MV-TAP](https://github.com/cvlab-kaist/MV-TAP), [LightGlue](https://github.com/jytime/LightGlue), and [gaussian-splatting (packaged)](https://github.com/yindaheng98/gaussian-splatting). Many thanks to the authors for open-sourcing their codebases.
