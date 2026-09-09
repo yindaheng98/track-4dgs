@@ -392,7 +392,7 @@ class MVTAP(nn.Module):
 
 
         if T_pad > fmaps_chunk_size:
-            fmaps_list = []
+            fmaps = video.new_empty((B * V, T_pad, self.latent_dim, H4, W4))
             for ch_t in range(0, T_pad, fmaps_chunk_size):
                 ch_end = min(ch_t + fmaps_chunk_size, T_pad)
                 vid_ch = video[:, :, ch_t:ch_end]
@@ -401,11 +401,9 @@ class MVTAP(nn.Module):
                 if ch_size == 0:
                     continue
 
-                fmaps_ch = self.fnet(vid_ch.reshape(-1, C, H, W))      
-                fmaps_ch = fmaps_ch.reshape(B*V, ch_size, -1, H4, W4)
-                
-                fmaps_list.append(fmaps_ch)
-            fmaps = torch.cat(fmaps_list, dim=1)
+                fmaps[:, ch_t:ch_end] = self.fnet(vid_ch.reshape(-1, C, H, W)).reshape(
+                    B * V, ch_size, -1, H4, W4
+                )
             fmaps = fmaps.reshape(-1, self.latent_dim, H4, W4)
 
         else:    

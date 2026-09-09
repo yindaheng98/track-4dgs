@@ -108,7 +108,7 @@ class MVTAPPointTracker(AbstractMultiViewPointTracker):
 
         coords, vis, conf, _ = self.model(
             video, queries.clone(), intrinsic, extrinsic,
-            iters=self.iters, is_train=False,
+            iters=self.iters, is_train=False, fmaps_chunk_size=1,
         )
         coords = coords[:, :, :n_frames]
         vis = vis[:, :, :n_frames]
