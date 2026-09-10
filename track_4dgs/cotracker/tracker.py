@@ -61,7 +61,7 @@ class Cotracker3PointTracker(AbstractViewPointTracker):
         pred_confidence = pred_confidence.squeeze(0)
         return Track(
             points=pred_tracks,
-            visibility=pred_visibility,
-            confidence=pred_confidence,
+            visibility=pred_visibility.to(dtype=points.dtype),
+            confidence=pred_confidence.to(dtype=points.dtype),
             mask=torch.ones(pred_visibility.shape, dtype=torch.bool, device=pred_tracks.device),
         )
