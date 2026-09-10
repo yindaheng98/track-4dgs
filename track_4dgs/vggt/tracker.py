@@ -74,6 +74,9 @@ class VGGTPointTracker(AbstractViewPointTracker):
 
     Frames are expected to be RGB ``[3, H, W]`` tensors in ``[0, 1]`` and query
     points use pixel coordinates ``[x, y]`` in the original frame resolution.
+
+    ``visibility`` and ``confidence`` are independent sigmoid scores in
+    ``(0, 1)``. Confidence is trained as ``P(error < 3 px)``.
     """
 
     def __init__(

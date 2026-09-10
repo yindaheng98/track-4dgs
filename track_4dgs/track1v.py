@@ -28,6 +28,7 @@ def image_tensor_to_pil(image: torch.Tensor) -> Image.Image:
 
 
 def rainbow_colors(n: int, confidences=None) -> list[tuple[int, int, int]]:
+    """Map confidence in ``[0, 1]`` to hue: red (low) to green (high)."""
     if n <= 0:
         return []
     return [

@@ -91,7 +91,12 @@ class Query:
 
 @dataclass(frozen=True)
 class CameraTrack:
-    """Track result for one camera in one frame."""
+    """Track result for one camera in one frame.
+
+    Field semantics match :class:`Track` at a single frame: ``points`` are
+    ``[N, 2]`` pixels, ``visibility`` / ``confidence`` are ``[N]``, and
+    ``mask`` is ``[N]`` bool validity.
+    """
 
     points: torch.Tensor
     visibility: torch.Tensor
@@ -127,7 +132,25 @@ class CameraTrack:
 
 @dataclass(frozen=True)
 class Track:
-    """Tracked query locations and validity over a frame sequence."""
+    """Tracked query locations and validity over a frame sequence.
+
+    ``points`` is ``[D, N, 2]`` pixel coordinates. ``visibility``,
+    ``confidence``, and ``mask`` are ``[D, N]``.
+
+    ``visibility`` is the occlusion score: whether the point is visible in that
+    frame. Some models keep a float in ``(0, 1)``; CoTracker3's predictor
+    thresholds it to a bool.
+
+    ``confidence`` is a localization score in ``(0, 1)``, not a calibrated
+    variance. Models emit unbounded logits (iterative residuals for CoTracker3
+    / MV-TAP, a linear head for VGGT) then apply ``sigmoid``. Training is
+    binary: 1 if the predicted location is within a pixel threshold of ground
+    truth, else 0. CoTracker3 and MV-TAP use 12 px; VGGT uses 3 px. The
+    stored value is therefore ``P(error < threshold)``. Well-tracked points
+    often saturate near 1.
+
+    ``mask`` is implementation-defined boolean validity for each point.
+    """
 
     points: torch.Tensor
     visibility: torch.Tensor

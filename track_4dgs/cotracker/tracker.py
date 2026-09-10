@@ -27,6 +27,10 @@ class Cotracker3PointTracker(AbstractViewPointTracker):
 
     Frames are expected to be ``[C, H, W]`` tensors and query points use pixel
     coordinates ``[x, y]`` in the original frame resolution.
+
+    ``visibility`` is the predictor's thresholded occlusion flag.
+    ``confidence`` is the inner-model sigmoid score in ``(0, 1)``, trained as
+    ``P(error <= 12 px)``.
     """
 
     def __init__(
