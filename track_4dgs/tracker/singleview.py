@@ -15,21 +15,21 @@ class AbstractViewPointTracker(AbstractPointTracker):
     def track(
             self,
             query: Query,
-            frame_datasets: Sequence[CameraDataset],
+            frames: Sequence[CameraDataset],
             batch_size: Optional[int] = None) -> Sequence[Track]:
         view_tracks = []
         for view_idx in tqdm(range(query.points.shape[0]), desc="Tracking views"):
-            frames = []
+            views = []
             frame_masks = []
-            for dataset in frame_datasets:
+            for dataset in frames:
                 camera = dataset[view_idx]
-                frames.append(camera.ground_truth_image)
+                views.append(camera.ground_truth_image)
                 frame_masks.append(camera.ground_truth_image_mask)
 
             points = query.points[view_idx]
             frame_indices = query.frame_indices[view_idx]
             sizes = points.new_tensor([
-                [frames[frame_idx].shape[-1], frames[frame_idx].shape[-2]]
+                [views[frame_idx].shape[-1], views[frame_idx].shape[-2]]
                 for frame_idx in frame_indices.tolist()
             ])
             valid = (
@@ -37,7 +37,7 @@ class AbstractViewPointTracker(AbstractPointTracker):
                 & (points[:, 1] >= 0) & (points[:, 1] < sizes[:, 1])
             )
 
-            n_frames = len(frames)
+            n_frames = len(views)
             result_points = points.unsqueeze(0).expand(n_frames, -1, -1).clone()
             result_visibility = points.new_zeros((n_frames, points.shape[0]))
             result_confidence = points.new_zeros((n_frames, points.shape[0]))
@@ -47,7 +47,7 @@ class AbstractViewPointTracker(AbstractPointTracker):
                 track = self.track_view(
                     points[valid],
                     frame_indices[valid],
-                    frames,
+                    views,
                     frame_masks,
                     batch_size=batch_size,
                 )
@@ -56,7 +56,7 @@ class AbstractViewPointTracker(AbstractPointTracker):
                     & (frame_points[:, 0] < frame.shape[-1])
                     & (frame_points[:, 1] >= 0)
                     & (frame_points[:, 1] < frame.shape[-2])
-                    for frame_points, frame in zip(track.points, frames)
+                    for frame_points, frame in zip(track.points, views)
                 ])
                 result_points[:, valid] = track.points
                 result_visibility[:, valid] = track.visibility
