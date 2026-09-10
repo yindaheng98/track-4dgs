@@ -58,6 +58,7 @@ def rendering(datasets: Sequence[CameraDataset], save: str) -> None:
         track = Track(
             points=torch.stack([dataset[view_idx].custom_data["track"].points for dataset in datasets]),
             visibility=torch.stack([dataset[view_idx].custom_data["track"].visibility for dataset in datasets]),
+            confidence=torch.stack([dataset[view_idx].custom_data["track"].confidence for dataset in datasets]),
         )
 
         save_view = os.path.join(save, f"{view_idx:05d}")

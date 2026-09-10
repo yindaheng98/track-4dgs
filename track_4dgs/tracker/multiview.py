@@ -37,6 +37,7 @@ class AbstractMultiViewPointTracker(AbstractPointTracker):
                 Track(
                     points=torch.cat([item[view_idx].points for item in tracks], dim=1),
                     visibility=torch.cat([item[view_idx].visibility for item in tracks], dim=1),
+                    confidence=torch.cat([item[view_idx].confidence for item in tracks], dim=1),
                 )
                 for view_idx in range(len(view_queries))
             ]
@@ -51,7 +52,7 @@ class AbstractMultiViewPointTracker(AbstractPointTracker):
         """Track ``view_queries`` jointly across ``frame_datasets``.
 
         Implementations should return one :class:`Track` per view, each with
-        ``points`` shape ``[len(frame_datasets), N, 2]`` and ``visibility``
-        shape ``[len(frame_datasets), N]``.
+        ``points`` shape ``[len(frame_datasets), N, 2]`` and ``visibility`` /
+        ``confidence`` shape ``[len(frame_datasets), N]``.
         """
         raise NotImplementedError

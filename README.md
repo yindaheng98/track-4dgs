@@ -203,6 +203,7 @@ with torch.no_grad():
 
 print(track.points.shape)      # [num_frames, num_points, 2]
 print(track.visibility.shape)  # [num_frames, num_points]
+print(track.confidence.shape)  # [num_frames, num_points]
 ```
 
 ### Track Gaussian Splatting Camera Datasets
@@ -266,7 +267,7 @@ This keeps model-specific code isolated in tracker implementations while the 4DG
 
 ## Extending: Adding a New Point Tracker
 
-Single-view trackers return `Track(points=[D, N, 2], visibility=[D, N])` from `track_batch`:
+Single-view trackers return `Track(points=[D, N, 2], visibility=[D, N], confidence=[D, N])` from `track_batch`:
 
 ```python
 from collections.abc import Sequence

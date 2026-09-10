@@ -106,7 +106,7 @@ class VGGTPointTracker(AbstractViewPointTracker):
             frames: Sequence of (C, H, W) tensors in [0, 1] range.
 
         Returns:
-            Per-image tracked points and VGGT visibility scores.
+            Per-image tracked points with VGGT visibility and confidence scores.
         """
         if any(frame.shape[0] != 3 for frame in frames):
             raise ValueError("VGGTPointTracker expects RGB frames with shape [3, H, W]")
@@ -139,7 +139,7 @@ class VGGTPointTracker(AbstractViewPointTracker):
         H, W = orig_sizes[0]
         query_points = points_to_square(query.points, H, W).unsqueeze(0)
         with torch.cuda.amp.autocast(enabled=False):
-            track_list, vis, _ = self.model.track_head(
+            track_list, vis, conf = self.model.track_head(
                 aggregated_tokens_list,
                 images=batch,
                 patch_start_idx=ps_idx,
@@ -148,6 +148,7 @@ class VGGTPointTracker(AbstractViewPointTracker):
             )
         points = track_list[-1].squeeze(0)
         visibility = vis.squeeze(0)
+        confidence = conf.squeeze(0)
 
         # 4. Restore original pixel coordinates for each image
         track_points = []
@@ -155,4 +156,4 @@ class VGGTPointTracker(AbstractViewPointTracker):
             track_points.append(points_from_square(points[i], H, W))
         track_points = torch.stack(track_points)
 
-        return Track(points=track_points, visibility=visibility)
+        return Track(points=track_points, visibility=visibility, confidence=confidence)

@@ -115,6 +115,8 @@ class MVTAPPointTracker(AbstractMultiViewPointTracker):
         conf = conf[:, :, :n_frames]
 
         return [
-            Track(points=points, visibility=visibility)
-            for points, visibility in zip(coords[0] / scale[:, :, None, :], vis[0] * conf[0])
+            Track(points=points, visibility=visibility, confidence=confidence)
+            for points, visibility, confidence in zip(
+                coords[0] / scale[:, :, None, :], vis[0], conf[0],
+            )
         ]

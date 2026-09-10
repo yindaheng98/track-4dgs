@@ -6,6 +6,22 @@ from cotracker.predictor import CoTrackerPredictor
 from track_4dgs.tracker import AbstractViewPointTracker, Query, Track
 
 
+class CoTrackerPredictorWithConfidence(CoTrackerPredictor):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        model_forward = self.model.forward
+
+        def forward(*args, **kwargs):
+            tracks, vis, self.confidence, train_data = model_forward(*args, **kwargs)
+            return tracks, vis, self.confidence, train_data
+
+        self.model.forward = forward
+
+    def forward(self, *args, **kwargs):
+        tracks, visibilities = super().forward(*args, **kwargs)
+        return tracks, visibilities, self.confidence[:, :, : tracks.shape[2]]
+
+
 class Cotracker3PointTracker(AbstractViewPointTracker):
     """Track queried points with CoTracker3.
 
@@ -17,7 +33,7 @@ class Cotracker3PointTracker(AbstractViewPointTracker):
             self,
             checkpoint: str = "./checkpoints/scaled_offline.pth",
             offline: bool = True):
-        self.model = CoTrackerPredictor(checkpoint=checkpoint, offline=offline)
+        self.model = CoTrackerPredictorWithConfidence(checkpoint=checkpoint, offline=offline)
         self.model.eval()
 
     def to(self, device: torch.device) -> 'Cotracker3PointTracker':
@@ -34,6 +50,10 @@ class Cotracker3PointTracker(AbstractViewPointTracker):
         queries = torch.cat([query.frame_indices[:, None].to(dtype=query.points.dtype), query.points], dim=-1).unsqueeze(0)
 
         with torch.inference_mode():
-            pred_tracks, pred_visibility = self.model(video, queries=queries)
+            pred_tracks, pred_visibility, pred_confidence = self.model(video, queries=queries)
 
-        return Track(points=pred_tracks.squeeze(0), visibility=pred_visibility.squeeze(0))
+        return Track(
+            points=pred_tracks.squeeze(0),
+            visibility=pred_visibility.squeeze(0),
+            confidence=pred_confidence.squeeze(0),
+        )

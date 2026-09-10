@@ -56,6 +56,7 @@ class AbstractViewPointTracker(AbstractPointTracker):
             track = Track(
                 points=torch.cat([item.points for item in tracks], dim=1),
                 visibility=torch.cat([item.visibility for item in tracks], dim=1),
+                confidence=torch.cat([item.confidence for item in tracks], dim=1),
             )
         torch.cuda.empty_cache()
         return track
@@ -70,6 +71,7 @@ class AbstractViewPointTracker(AbstractPointTracker):
 
         Implementations should return a :class:`Track` whose ``points`` tensor
         has shape ``[len(frames), query.points.shape[0], 2]`` and whose
-        ``visibility`` tensor has shape ``[len(frames), query.points.shape[0]]``.
+        ``visibility`` / ``confidence`` tensors have shape
+        ``[len(frames), query.points.shape[0]]``.
         """
         raise NotImplementedError

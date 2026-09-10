@@ -43,6 +43,7 @@ class CameraTrack:
 
     points: torch.Tensor
     visibility: torch.Tensor
+    confidence: torch.Tensor
 
     def __post_init__(self):
         if self.points.ndim != 2 or self.points.shape[-1] != 2:
@@ -51,20 +52,26 @@ class CameraTrack:
             raise ValueError("CameraTrack.visibility must have shape [N]")
         if self.visibility.shape[0] != self.points.shape[0]:
             raise ValueError("CameraTrack.visibility must match CameraTrack.points first dimension")
+        if self.confidence.ndim != 1:
+            raise ValueError("CameraTrack.confidence must have shape [N]")
+        if self.confidence.shape[0] != self.points.shape[0]:
+            raise ValueError("CameraTrack.confidence must match CameraTrack.points first dimension")
 
     def to(self, device) -> 'CameraTrack':
         return CameraTrack(
             points=self.points.to(device),
             visibility=self.visibility.to(device),
+            confidence=self.confidence.to(device),
         )
 
 
 @dataclass(frozen=True)
 class Track:
-    """Tracked query locations and visibility over a frame sequence."""
+    """Tracked query locations, visibility, and confidence over a frame sequence."""
 
     points: torch.Tensor
     visibility: torch.Tensor
+    confidence: torch.Tensor
 
     def __post_init__(self):
         if self.points.ndim != 3 or self.points.shape[-1] != 2:
@@ -75,20 +82,28 @@ class Track:
             raise ValueError("Track.visibility must have shape [D, N]")
         if self.visibility.shape != self.points.shape[:2]:
             raise ValueError("Track.visibility must match Track.points first two dimensions")
+        if self.confidence.ndim != 2:
+            raise ValueError("Track.confidence must have shape [D, N]")
+        if self.confidence.shape != self.points.shape[:2]:
+            raise ValueError("Track.confidence must match Track.points first two dimensions")
+        if not torch.is_floating_point(self.confidence):
+            raise TypeError("Track.confidence must be a floating point tensor")
 
     def to(self, device) -> 'Track':
         return Track(
             points=self.points.to(device),
             visibility=self.visibility.to(device),
+            confidence=self.confidence.to(device),
         )
 
     def __getitem__(self, index) -> Union[CameraTrack, 'Track']:
         points = self.points[index]
         visibility = self.visibility[index]
+        confidence = self.confidence[index]
         if points.ndim == 2:
-            return CameraTrack(points=points, visibility=visibility)
+            return CameraTrack(points=points, visibility=visibility, confidence=confidence)
         if points.ndim == 3:
-            return Track(points=points, visibility=visibility)
+            return Track(points=points, visibility=visibility, confidence=confidence)
         raise TypeError("Track only supports indexing along the frame dimension")
 
 
@@ -114,7 +129,8 @@ class AbstractPointTracker(metaclass=ABCMeta):
         frames are ``[C, H, W]`` tensors, masks are optional ``[H, W]`` tensors.
         ``query`` contains ``N`` points on these frames, and the returned
         :class:`Track` must contain ``points`` with shape ``[D, N, 2]`` and
-        ``visibility`` with shape ``[D, N]``, where ``D == len(frames)``.
+        ``visibility`` / ``confidence`` with shape ``[D, N]``, where
+        ``D == len(frames)``.
 
         Query points are forwarded to :meth:`track` in chunks of ``batch_size``.
         ``None`` tracks all points in one call.
@@ -163,6 +179,8 @@ class AbstractPointTracker(metaclass=ABCMeta):
                 raise ValueError(f"Track.points must have shape {(len(frame_datasets), query.points.shape[0], 2)}")
             if track.visibility.shape != (len(frame_datasets), query.points.shape[0]):
                 raise ValueError(f"Track.visibility must have shape {(len(frame_datasets), query.points.shape[0])}")
+            if track.confidence.shape != (len(frame_datasets), query.points.shape[0]):
+                raise ValueError(f"Track.confidence must have shape {(len(frame_datasets), query.points.shape[0])}")
         return view_tracks
 
     @abstractmethod
