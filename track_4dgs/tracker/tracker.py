@@ -134,12 +134,12 @@ class AbstractPointTracker(metaclass=ABCMeta):
     def __call__(
             self,
             query: Query,
-            frame_datasets: Sequence[CameraDataset],
+            frames: Sequence[CameraDataset],
             batch_size: Optional[int] = None) -> Sequence[Track]:
         """Validate inputs, run tracking, and validate the returned tracks.
 
         ``query`` is view-major with one row per camera/view.
-        ``frame_datasets`` is frame-major: one CameraDataset per frame, and
+        ``frames`` is frame-major: one CameraDataset per frame, and
         each dataset is expected to contain cameras/views in the same order as
         ``query``. Returns one :class:`Track` per view.
 
@@ -153,16 +153,15 @@ class AbstractPointTracker(metaclass=ABCMeta):
         Query points are forwarded to :meth:`track` in chunks of ``batch_size``.
         ``None`` tracks all points in one call.
         """
-        frame_datasets = list(frame_datasets)
-        if len(frame_datasets) == 0:
+        if len(frames) == 0:
             return []
-        n_views = len(frame_datasets[0])
-        if any(len(dataset) != n_views for dataset in frame_datasets):
-            raise ValueError("frame_datasets must all contain the same number of cameras")
+        n_views = len(frames[0])
+        if any(len(dataset) != n_views for dataset in frames):
+            raise ValueError("frames must all contain the same number of cameras")
         if query.points.shape[0] != n_views:
             raise ValueError("Query must have one row per camera/view")
         for view_idx in range(n_views):
-            for dataset in frame_datasets:
+            for dataset in frames:
                 camera = dataset[view_idx]
                 if camera.ground_truth_image is None:
                     raise ValueError("Point tracking requires cameras with loaded ground_truth_image tensors")
@@ -180,34 +179,34 @@ class AbstractPointTracker(metaclass=ABCMeta):
                 raise ValueError("Query.points must not be empty")
             if query.frame_indices[view_idx].min().item() < 0:
                 raise ValueError("Query.frame_indices must be non-negative")
-            if query.frame_indices[view_idx].max().item() >= len(frame_datasets):
+            if query.frame_indices[view_idx].max().item() >= len(frames):
                 raise ValueError("Query.frame_indices must be within the frames sequence")
 
         if batch_size is not None and batch_size <= 0:
             raise ValueError("batch_size must be a positive integer")
 
-        view_tracks = self.track(query, frame_datasets, batch_size)
+        view_tracks = self.track(query, frames, batch_size)
         if len(view_tracks) != n_views:
             raise ValueError(f"AbstractPointTracker.track must return one Track per view, got {len(view_tracks)}")
         n_points = query.points.shape[1]
         for track in view_tracks:
-            if track.points.shape != (len(frame_datasets), n_points, 2):
-                raise ValueError(f"Track.points must have shape {(len(frame_datasets), n_points, 2)}")
-            if track.visibility.shape != (len(frame_datasets), n_points):
-                raise ValueError(f"Track.visibility must have shape {(len(frame_datasets), n_points)}")
-            if track.confidence.shape != (len(frame_datasets), n_points):
-                raise ValueError(f"Track.confidence must have shape {(len(frame_datasets), n_points)}")
-            if track.mask.shape != (len(frame_datasets), n_points):
-                raise ValueError(f"Track.mask must have shape {(len(frame_datasets), n_points)}")
+            if track.points.shape != (len(frames), n_points, 2):
+                raise ValueError(f"Track.points must have shape {(len(frames), n_points, 2)}")
+            if track.visibility.shape != (len(frames), n_points):
+                raise ValueError(f"Track.visibility must have shape {(len(frames), n_points)}")
+            if track.confidence.shape != (len(frames), n_points):
+                raise ValueError(f"Track.confidence must have shape {(len(frames), n_points)}")
+            if track.mask.shape != (len(frames), n_points):
+                raise ValueError(f"Track.mask must have shape {(len(frames), n_points)}")
         return view_tracks
 
     @abstractmethod
     def track(
             self,
             query: Query,
-            frame_datasets: Sequence[CameraDataset],
+            frames: Sequence[CameraDataset],
             batch_size: Optional[int] = None) -> Sequence[Track]:
-        """Track ``query`` across ``frame_datasets``.
+        """Track ``query`` across ``frames``.
 
         Implementations should return one :class:`Track` per view.
         """
