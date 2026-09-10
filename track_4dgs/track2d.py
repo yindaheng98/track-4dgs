@@ -1,8 +1,8 @@
 import os
-from typing import Sequence, Tuple
+from typing import Sequence
 
 import torch
-from gaussian_splatting import Camera, GaussianModel
+from gaussian_splatting import GaussianModel
 from gaussian_splatting.dataset import CameraDataset
 from gaussian_splatting.prepare import prepare_gaussians
 
@@ -12,40 +12,16 @@ from track_4dgs.track1v import draw_rainbow_tracks
 from track_4dgs.tracker import Query, Track
 
 
-def project_points(xyz: torch.Tensor, camera: Camera) -> Tuple[torch.Tensor, torch.Tensor]:
-    """Project 3D world points to camera pixel coordinates."""
-    p_hom = torch.cat([xyz, torch.ones(xyz.shape[0], 1, device=xyz.device, dtype=xyz.dtype)], dim=1)
-    p_hom = p_hom @ camera.full_proj_transform.to(device=xyz.device, dtype=xyz.dtype)
-    p_proj = p_hom[:, :-1] / (p_hom[:, -1:] + 1e-7)
-
-    width, height = camera.image_width, camera.image_height
-    size = torch.tensor([[width, height]], device=xyz.device, dtype=xyz.dtype)
-    pixels = (p_proj[:, :2] + 1.0) * size * 0.5 - 0.5
-    valid_mask = (
-        (p_hom[:, -1] > 0)
-        & (pixels[:, 0] >= 0)
-        & (pixels[:, 0] < width)
-        & (pixels[:, 1] >= 0)
-        & (pixels[:, 1] < height)
-    )
-    return pixels, valid_mask
-
-
 def query_views_from_gaussians(
     datasets: Sequence[CameraDataset],
     gaussians: GaussianModel,
     init_dataset_index: int = 0,
     num_points: int = 256,
 ) -> Query:
-    n_views = len(datasets[init_dataset_index])
     xyz = gaussians.get_xyz.detach()
     chosen = torch.randperm(xyz.shape[0], device=xyz.device)[:num_points]
-    queries = []
-    for view_idx in range(n_views):
-        pixels, _ = project_points(xyz, datasets[init_dataset_index][view_idx])
-        queries.append(pixels[chosen].float())
-    frame_indices = torch.full((n_views, chosen.numel()), init_dataset_index, device=xyz.device, dtype=torch.long)
-    return Query(points=torch.stack(queries), frame_indices=frame_indices)
+    frame_indices = torch.full((chosen.numel(),), init_dataset_index, device=xyz.device, dtype=torch.long)
+    return Query.from_projection(xyz[chosen], datasets, frame_indices)
 
 
 @torch.no_grad()
