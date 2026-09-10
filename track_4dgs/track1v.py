@@ -27,11 +27,12 @@ def image_tensor_to_pil(image: torch.Tensor) -> Image.Image:
     return Image.fromarray(array)
 
 
-def rainbow_colors(n: int) -> list[tuple[int, int, int]]:
+def rainbow_colors(n: int, confidences=None) -> list[tuple[int, int, int]]:
     if n <= 0:
         return []
     return [
-        tuple(int(channel * 255) for channel in colorsys.hsv_to_rgb(i / max(n, 1), 1.0, 1.0))
+        tuple(int(channel * 255) for channel in colorsys.hsv_to_rgb(
+            (float(confidences[i]) if confidences is not None else 1.0) / 3, 1.0, 1.0))
         for i in range(n)
     ]
 
@@ -45,7 +46,7 @@ def draw_rainbow_tracks(
     draw = ImageDraw.Draw(canvas)
 
     points = track.points.detach().cpu()
-    colors = rainbow_colors(points.shape[1])
+    colors = rainbow_colors(points.shape[1], track.confidence[frame_idx].detach().cpu().clamp(0, 1))
 
     for point_idx, color in enumerate(colors):
         history_points = points[:frame_idx + 1, point_idx]

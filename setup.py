@@ -12,7 +12,7 @@ pypi_build = os.environ.get("PYPI_BUILD", "").lower() in {"1", "true", "yes", "o
 
 setup(
     name="track_4dgs",
-    version="0.3.0",
+    version="0.3.1",
     author="yindaheng98",
     author_email="yindaheng98@gmail.com",
     url="https://github.com/yindaheng98/track-4dgs",
