@@ -5,7 +5,7 @@ import torch
 import torch.nn.functional as F
 from vggt.models.vggt import VGGT
 
-from track_4dgs.tracker import AbstractViewPointTracker, Query, Track
+from track_4dgs.tracker import AbstractViewPointTracker, Track
 
 RESOLUTION = 518
 
@@ -96,21 +96,13 @@ class VGGTPointTracker(AbstractViewPointTracker):
     @torch.no_grad()
     def track_batch(
             self,
-            query: Query,
+            points: torch.Tensor,
+            frame_indices: torch.Tensor,
             frames: Sequence[torch.Tensor],
             frame_masks: Sequence[torch.Tensor | None]) -> Track:
-        """Track query points through a sequence of images.
-
-        Args:
-            query: Query points on the first frame, in original image pixels.
-            frames: Sequence of (C, H, W) tensors in [0, 1] range.
-
-        Returns:
-            Per-image tracked points with VGGT visibility and confidence scores.
-        """
         if any(frame.shape[0] != 3 for frame in frames):
             raise ValueError("VGGTPointTracker expects RGB frames with shape [3, H, W]")
-        assert torch.all(query.frame_indices == 0), "VGGT TrackHead expects query points from the first frame"
+        assert torch.all(frame_indices == 0), "VGGT TrackHead expects query points from the first frame"
         images = frames
 
         # 1. Preprocess each image: center-pad + bicubic to img_load_resolution
@@ -137,7 +129,7 @@ class VGGTPointTracker(AbstractViewPointTracker):
 
         # 3. Predict per-image tracks from TrackHead
         H, W = orig_sizes[0]
-        query_points = points_to_square(query.points, H, W).unsqueeze(0)
+        query_points = points_to_square(points, H, W).unsqueeze(0)
         with torch.cuda.amp.autocast(enabled=False):
             track_list, vis, conf = self.model.track_head(
                 aggregated_tokens_list,
@@ -156,4 +148,9 @@ class VGGTPointTracker(AbstractViewPointTracker):
             track_points.append(points_from_square(points[i], H, W))
         track_points = torch.stack(track_points)
 
-        return Track(points=track_points, visibility=visibility, confidence=confidence)
+        return Track(
+            points=track_points,
+            visibility=visibility,
+            confidence=confidence,
+            mask=torch.ones(visibility.shape, dtype=torch.bool, device=track_points.device),
+        )

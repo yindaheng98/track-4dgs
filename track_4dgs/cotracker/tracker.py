@@ -3,7 +3,7 @@ from collections.abc import Sequence
 import torch
 from cotracker.predictor import CoTrackerPredictor
 
-from track_4dgs.tracker import AbstractViewPointTracker, Query, Track
+from track_4dgs.tracker import AbstractViewPointTracker, Track
 
 
 class CoTrackerPredictorWithConfidence(CoTrackerPredictor):
@@ -42,18 +42,26 @@ class Cotracker3PointTracker(AbstractViewPointTracker):
         self.model.eval()
         return self
 
-    def track_batch(self, query: Query, frames: Sequence[torch.Tensor], frame_masks: Sequence[torch.Tensor | None]) -> Track:
+    def track_batch(
+            self,
+            points: torch.Tensor,
+            frame_indices: torch.Tensor,
+            frames: Sequence[torch.Tensor],
+            frame_masks: Sequence[torch.Tensor | None]) -> Track:
         assert all(frame.shape == frames[0].shape for frame in frames)
 
         video = torch.stack(frames, dim=0).unsqueeze(0)
-
-        queries = torch.cat([query.frame_indices[:, None].to(dtype=query.points.dtype), query.points], dim=-1).unsqueeze(0)
+        queries = torch.cat([frame_indices[:, None].to(dtype=points.dtype), points], dim=-1).unsqueeze(0)
 
         with torch.inference_mode():
             pred_tracks, pred_visibility, pred_confidence = self.model(video, queries=queries)
 
+        pred_tracks = pred_tracks.squeeze(0)
+        pred_visibility = pred_visibility.squeeze(0)
+        pred_confidence = pred_confidence.squeeze(0)
         return Track(
-            points=pred_tracks.squeeze(0),
-            visibility=pred_visibility.squeeze(0),
-            confidence=pred_confidence.squeeze(0),
+            points=pred_tracks,
+            visibility=pred_visibility,
+            confidence=pred_confidence,
+            mask=torch.ones(pred_visibility.shape, dtype=torch.bool, device=pred_tracks.device),
         )
