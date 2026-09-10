@@ -6,6 +6,8 @@ from typing import Optional, Union
 import torch
 from gaussian_splatting.dataset import CameraDataset
 
+from ..utils import project_points
+
 
 @dataclass(frozen=True)
 class Query:
@@ -44,6 +46,46 @@ class Query:
             points=self.points.to(device),
             frame_indices=self.frame_indices.to(device),
             in_image=self.in_image.to(device),
+        )
+
+    @classmethod
+    def from_projection(
+            cls,
+            xyz: torch.Tensor,
+            frames: Sequence[CameraDataset],
+            frame_indices: torch.Tensor) -> 'Query':
+        """Build a query by projecting world points into ``frames``.
+
+        ``xyz`` is ``[N, 3]``. ``frames`` is frame-major. ``frame_indices``
+        is ``[N]`` and names the video frame each point comes from; every view
+        uses that frame's camera. ``in_image`` comes from
+        :func:`~track_4dgs.utils.project_points`.
+        """
+        if xyz.ndim != 2 or xyz.shape[-1] != 3:
+            raise ValueError("xyz must have shape [N, 3]")
+        if frame_indices.ndim != 1:
+            raise ValueError("frame_indices must have shape [N]")
+        if frame_indices.shape[0] != xyz.shape[0]:
+            raise ValueError("frame_indices must match xyz point count N")
+        n_views = len(frames[0])
+        if any(len(dataset) != n_views for dataset in frames):
+            raise ValueError("frames must all contain the same number of cameras")
+        points = []
+        in_image = []
+        for view_idx in range(n_views):
+            uv = xyz.new_empty((xyz.shape[0], 2))
+            valid = torch.zeros(xyz.shape[0], dtype=torch.bool, device=xyz.device)
+            for frame_idx in frame_indices.unique().tolist():
+                sel = frame_indices == frame_idx
+                pixels, in_frustum = project_points(xyz[sel], frames[frame_idx][view_idx])
+                uv[sel] = pixels
+                valid[sel] = in_frustum
+            points.append(uv)
+            in_image.append(valid)
+        return cls(
+            points=torch.stack(points),
+            frame_indices=frame_indices.unsqueeze(0).expand(n_views, -1).contiguous(),
+            in_image=torch.stack(in_image),
         )
 
 
