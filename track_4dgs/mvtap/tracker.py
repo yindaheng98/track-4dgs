@@ -22,6 +22,9 @@ class MVTAPPointTracker(AbstractBatchPointTracker):
     Frames are expected to be RGB ``[3, H, W]`` tensors in ``[0, 1]`` and query
     points use pixel coordinates ``[x, y]`` in the original frame resolution.
     Camera ``K`` / ``R`` / ``T`` are read from the frame datasets.
+
+    ``visibility`` and ``confidence`` are CoTracker3-style sigmoid scores in
+    ``(0, 1)``. Confidence is trained as ``P(error <= 12 px)``.
     """
 
     def __init__(
@@ -101,6 +104,10 @@ class MVTAPPointTracker(AbstractBatchPointTracker):
 
         n_frames = video.shape[2]
         window_len = self.model.window_len
+        queries[..., 0].masked_fill_(
+            ~query.in_image.unsqueeze(0).to(self.device),
+            n_frames + window_len,
+        )
         if n_frames < window_len:
             pad = window_len - n_frames
             video = torch.cat([video, video[:, :, -1:].expand(-1, -1, pad, -1, -1, -1)], dim=2)

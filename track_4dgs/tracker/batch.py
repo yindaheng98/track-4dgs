@@ -28,11 +28,12 @@ class AbstractBatchPointTracker(AbstractPointTracker):
                     Query(
                         points=query.points[:, start:end],
                         frame_indices=query.frame_indices[:, start:end],
+                        in_image=query.in_image[:, start:end],
                     ),
                     frames,
                 ))
                 torch.cuda.empty_cache()
-            tracks = [
+            tracks: Sequence[Track] = [
                 Track(
                     points=torch.cat([item[view_idx].points for item in tracks], dim=1),
                     visibility=torch.cat([item[view_idx].visibility for item in tracks], dim=1),
@@ -42,7 +43,15 @@ class AbstractBatchPointTracker(AbstractPointTracker):
                 for view_idx in range(query.points.shape[0])
             ]
         torch.cuda.empty_cache()
-        return tracks
+        return [
+            Track(
+                points=track.points,
+                visibility=track.visibility,
+                confidence=track.confidence,
+                mask=track.mask & query.in_image[view_idx].unsqueeze(0),
+            )
+            for view_idx, track in enumerate(tracks)
+        ]
 
     @abstractmethod
     def track_batch(
