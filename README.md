@@ -249,13 +249,13 @@ print(camera_track.points.shape)
 
 ## Design: Point Tracker Registry
 
-`AbstractPointTracker.__call__` validates inputs, then calls `track`. It takes view-major queries and frame-major camera datasets, and returns one `Track` per view. `CameraDatasetTracker` attaches those tracks back onto the camera datasets:
+`AbstractPointTracker.__call__` validates inputs, then calls `track`. It takes a view-major `Query` (`points` `[V, N, 2]`, `frame_indices` `[V, N]`) and frame-major camera datasets, and returns one `Track` per view. `CameraDatasetTracker` attaches those tracks back onto the camera datasets:
 
 ```text
-view_queries + frame_datasets -> validate + track -> view_tracks -> tracked camera datasets
+query + frames -> validate + track -> view_tracks -> tracked camera datasets
 ```
 
-Single-view trackers (`AbstractViewPointTracker`, e.g. CoTracker3 / VGGT) implement `track_batch(query, frames, masks)` for one camera sequence. Their `track` loops `track_view` over views. Multi-view trackers (`AbstractMultiViewPointTracker`, e.g. MV-TAP) consume all views at once, using camera `K` / `R` / `T` when the model needs them.
+Single-view trackers (`AbstractViewPointTracker`, e.g. CoTracker3 / VGGT) split the query by view and implement `track_batch(points, frame_indices, frames, masks)` for one camera sequence. Joint trackers (`AbstractBatchPointTracker`, e.g. MV-TAP) consume all views at once and batch along the point dimension.
 
 ```text
 Frame 0 cameras --\
@@ -267,14 +267,14 @@ This keeps model-specific code isolated in tracker implementations while the 4DG
 
 ## Extending: Adding a New Point Tracker
 
-Single-view trackers return `Track(points=[D, N, 2], visibility=[D, N], confidence=[D, N])` from `track_batch`:
+Single-view trackers return `Track(points=[D, N, 2], visibility=[D, N], confidence=[D, N], mask=[D, N])` from `track_batch`:
 
 ```python
 from collections.abc import Sequence
 
 import torch
 
-from track_4dgs.tracker import AbstractViewPointTracker, Query, Track
+from track_4dgs.tracker import AbstractViewPointTracker, Track
 
 
 class MyPointTracker(AbstractViewPointTracker):
@@ -284,7 +284,8 @@ class MyPointTracker(AbstractViewPointTracker):
 
     def track_batch(
         self,
-        query: Query,
+        points: torch.Tensor,
+        frame_indices: torch.Tensor,
         frames: Sequence[torch.Tensor],
         frame_masks: Sequence[torch.Tensor | None],
     ) -> Track:
