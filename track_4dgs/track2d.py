@@ -36,17 +36,16 @@ def query_views_from_gaussians(
     gaussians: GaussianModel,
     init_dataset_index: int = 0,
     num_points: int = 256,
-) -> list[Query]:
+) -> Query:
     n_views = len(datasets[init_dataset_index])
     xyz = gaussians.get_xyz.detach()
-    order = torch.randperm(xyz.shape[0], device=xyz.device)
+    chosen = torch.randperm(xyz.shape[0], device=xyz.device)[:num_points]
     queries = []
     for view_idx in range(n_views):
-        pixels, valid_mask = project_points(xyz, datasets[init_dataset_index][view_idx])
-        chosen = order[valid_mask[order]][:num_points]
-        frame_indices = torch.full((chosen.numel(),), init_dataset_index, device=xyz.device, dtype=torch.long)
-        queries.append(Query(points=pixels[chosen].float(), frame_indices=frame_indices))
-    return queries
+        pixels, _ = project_points(xyz, datasets[init_dataset_index][view_idx])
+        queries.append(pixels[chosen].float())
+    frame_indices = torch.full((n_views, chosen.numel()), init_dataset_index, device=xyz.device, dtype=torch.long)
+    return Query(points=torch.stack(queries), frame_indices=frame_indices)
 
 
 @torch.no_grad()
@@ -59,6 +58,7 @@ def rendering(datasets: Sequence[CameraDataset], save: str) -> None:
             points=torch.stack([dataset[view_idx].custom_data["track"].points for dataset in datasets]),
             visibility=torch.stack([dataset[view_idx].custom_data["track"].visibility for dataset in datasets]),
             confidence=torch.stack([dataset[view_idx].custom_data["track"].confidence for dataset in datasets]),
+            mask=torch.stack([dataset[view_idx].custom_data["track"].mask for dataset in datasets]),
         )
 
         save_view = os.path.join(save, f"{view_idx:05d}")
