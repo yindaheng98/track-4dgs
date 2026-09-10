@@ -13,11 +13,13 @@ class Query:
 
     ``points`` stores ``N`` corresponding pixel coordinates for each of ``V``
     views as ``[x, y]`` float pairs. ``frame_indices`` stores the source frame
-    index for each point in each view.
+    index for each point in each view. ``in_image`` is ``[V, N]`` bool
+    validity (inside the image and, when known, in front of the camera).
     """
 
     points: torch.Tensor
     frame_indices: torch.Tensor
+    in_image: torch.Tensor
 
     def __post_init__(self):
         if self.points.ndim != 3 or self.points.shape[-1] != 2:
@@ -30,11 +32,18 @@ class Query:
             raise ValueError("Query.frame_indices must match Query.points first two dimensions")
         if self.frame_indices.dtype not in (torch.int8, torch.int16, torch.int32, torch.int64, torch.uint8):
             raise TypeError("Query.frame_indices must be an integer tensor")
+        if self.in_image.ndim != 2:
+            raise ValueError("Query.in_image must have shape [V, N]")
+        if self.in_image.shape != self.points.shape[:2]:
+            raise ValueError("Query.in_image must match Query.points first two dimensions")
+        if self.in_image.dtype != torch.bool:
+            raise TypeError("Query.in_image must be a boolean tensor")
 
     def to(self, device) -> 'Query':
         return Query(
             points=self.points.to(device),
             frame_indices=self.frame_indices.to(device),
+            in_image=self.in_image.to(device),
         )
 
 
