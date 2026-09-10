@@ -1,5 +1,5 @@
 from abc import ABCMeta, abstractmethod
-from collections.abc import Iterable, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Optional, Union
 
@@ -11,22 +11,23 @@ from gaussian_splatting.dataset import CameraDataset
 class Query:
     """Point queries in pixel coordinates.
 
-    ``points`` stores ``N`` pixel coordinates as ``[x, y]`` float pairs.
-    ``frame_indices`` stores the source frame index for each point.
+    ``points`` stores ``N`` corresponding pixel coordinates for each of ``V``
+    views as ``[x, y]`` float pairs. ``frame_indices`` stores the source frame
+    index for each point in each view.
     """
 
     points: torch.Tensor
     frame_indices: torch.Tensor
 
     def __post_init__(self):
-        if self.points.ndim != 2 or self.points.shape[-1] != 2:
-            raise ValueError("Query.points must have shape [N, 2]")
+        if self.points.ndim != 3 or self.points.shape[-1] != 2:
+            raise ValueError("Query.points must have shape [V, N, 2]")
         if not torch.is_floating_point(self.points):
             raise TypeError("Query.points must be a floating point tensor")
-        if self.frame_indices.ndim != 1:
-            raise ValueError("Query.frame_indices must have shape [N]")
-        if self.frame_indices.shape[0] != self.points.shape[0]:
-            raise ValueError("Query.frame_indices must have the same length as Query.points")
+        if self.frame_indices.ndim != 2:
+            raise ValueError("Query.frame_indices must have shape [V, N]")
+        if self.frame_indices.shape != self.points.shape[:2]:
+            raise ValueError("Query.frame_indices must match Query.points first two dimensions")
         if self.frame_indices.dtype not in (torch.int8, torch.int16, torch.int32, torch.int64, torch.uint8):
             raise TypeError("Query.frame_indices must be an integer tensor")
 
@@ -44,6 +45,7 @@ class CameraTrack:
     points: torch.Tensor
     visibility: torch.Tensor
     confidence: torch.Tensor
+    mask: torch.Tensor
 
     def __post_init__(self):
         if self.points.ndim != 2 or self.points.shape[-1] != 2:
@@ -56,22 +58,30 @@ class CameraTrack:
             raise ValueError("CameraTrack.confidence must have shape [N]")
         if self.confidence.shape[0] != self.points.shape[0]:
             raise ValueError("CameraTrack.confidence must match CameraTrack.points first dimension")
+        if self.mask.ndim != 1:
+            raise ValueError("CameraTrack.mask must have shape [N]")
+        if self.mask.shape[0] != self.points.shape[0]:
+            raise ValueError("CameraTrack.mask must match CameraTrack.points first dimension")
+        if self.mask.dtype != torch.bool:
+            raise TypeError("CameraTrack.mask must be a boolean tensor")
 
     def to(self, device) -> 'CameraTrack':
         return CameraTrack(
             points=self.points.to(device),
             visibility=self.visibility.to(device),
             confidence=self.confidence.to(device),
+            mask=self.mask.to(device),
         )
 
 
 @dataclass(frozen=True)
 class Track:
-    """Tracked query locations, visibility, and confidence over a frame sequence."""
+    """Tracked query locations and validity over a frame sequence."""
 
     points: torch.Tensor
     visibility: torch.Tensor
     confidence: torch.Tensor
+    mask: torch.Tensor
 
     def __post_init__(self):
         if self.points.ndim != 3 or self.points.shape[-1] != 2:
@@ -88,22 +98,30 @@ class Track:
             raise ValueError("Track.confidence must match Track.points first two dimensions")
         if not torch.is_floating_point(self.confidence):
             raise TypeError("Track.confidence must be a floating point tensor")
+        if self.mask.ndim != 2:
+            raise ValueError("Track.mask must have shape [D, N]")
+        if self.mask.shape != self.points.shape[:2]:
+            raise ValueError("Track.mask must match Track.points first two dimensions")
+        if self.mask.dtype != torch.bool:
+            raise TypeError("Track.mask must be a boolean tensor")
 
     def to(self, device) -> 'Track':
         return Track(
             points=self.points.to(device),
             visibility=self.visibility.to(device),
             confidence=self.confidence.to(device),
+            mask=self.mask.to(device),
         )
 
     def __getitem__(self, index) -> Union[CameraTrack, 'Track']:
         points = self.points[index]
         visibility = self.visibility[index]
         confidence = self.confidence[index]
+        mask = self.mask[index]
         if points.ndim == 2:
-            return CameraTrack(points=points, visibility=visibility, confidence=confidence)
+            return CameraTrack(points=points, visibility=visibility, confidence=confidence, mask=mask)
         if points.ndim == 3:
-            return Track(points=points, visibility=visibility, confidence=confidence)
+            return Track(points=points, visibility=visibility, confidence=confidence, mask=mask)
         raise TypeError("Track only supports indexing along the frame dimension")
 
 
@@ -115,38 +133,35 @@ class AbstractPointTracker(metaclass=ABCMeta):
 
     def __call__(
             self,
-            view_queries: Iterable[Query],
-            frame_datasets: Iterable[CameraDataset],
+            query: Query,
+            frame_datasets: Sequence[CameraDataset],
             batch_size: Optional[int] = None) -> Sequence[Track]:
         """Validate inputs, run tracking, and validate the returned tracks.
 
-        ``view_queries`` is view-major: one query per camera/view.
+        ``query`` is view-major with one row per camera/view.
         ``frame_datasets`` is frame-major: one CameraDataset per frame, and
         each dataset is expected to contain cameras/views in the same order as
-        ``view_queries``.  Returns one :class:`Track` per view.
+        ``query``. Returns one :class:`Track` per view.
 
         For each view, ``frames`` and ``frame_masks`` are frame-major:
         frames are ``[C, H, W]`` tensors, masks are optional ``[H, W]`` tensors.
-        ``query`` contains ``N`` points on these frames, and the returned
+        Each view in ``query`` contains ``N`` points on these frames, and the returned
         :class:`Track` must contain ``points`` with shape ``[D, N, 2]`` and
-        ``visibility`` / ``confidence`` with shape ``[D, N]``, where
+        ``visibility`` / ``confidence`` / ``mask`` with shape ``[D, N]``, where
         ``D == len(frames)``.
 
         Query points are forwarded to :meth:`track` in chunks of ``batch_size``.
         ``None`` tracks all points in one call.
         """
-        view_queries = list(view_queries)
         frame_datasets = list(frame_datasets)
         if len(frame_datasets) == 0:
             return []
-        if len(view_queries) == 0:
-            raise ValueError("view_queries must not be empty")
         n_views = len(frame_datasets[0])
         if any(len(dataset) != n_views for dataset in frame_datasets):
             raise ValueError("frame_datasets must all contain the same number of cameras")
-        if len(view_queries) != n_views:
-            raise ValueError("view_queries must have one query per camera/view")
-        for view_idx, query in enumerate(view_queries):
+        if query.points.shape[0] != n_views:
+            raise ValueError("Query must have one row per camera/view")
+        for view_idx in range(n_views):
             for dataset in frame_datasets:
                 camera = dataset[view_idx]
                 if camera.ground_truth_image is None:
@@ -161,35 +176,38 @@ class AbstractPointTracker(metaclass=ABCMeta):
                     if frame_mask.shape != frame.shape[-2:]:
                         raise ValueError("frame_masks entries must match their frame spatial dimensions")
 
-            if query.points.shape[0] == 0:
+            if query.points.shape[1] == 0:
                 raise ValueError("Query.points must not be empty")
-            if query.frame_indices.min().item() < 0:
+            if query.frame_indices[view_idx].min().item() < 0:
                 raise ValueError("Query.frame_indices must be non-negative")
-            if query.frame_indices.max().item() >= len(frame_datasets):
+            if query.frame_indices[view_idx].max().item() >= len(frame_datasets):
                 raise ValueError("Query.frame_indices must be within the frames sequence")
 
         if batch_size is not None and batch_size <= 0:
             raise ValueError("batch_size must be a positive integer")
 
-        view_tracks = self.track(view_queries, frame_datasets, batch_size)
-        if len(view_tracks) != len(view_queries):
+        view_tracks = self.track(query, frame_datasets, batch_size)
+        if len(view_tracks) != n_views:
             raise ValueError(f"AbstractPointTracker.track must return one Track per view, got {len(view_tracks)}")
-        for query, track in zip(view_queries, view_tracks):
-            if track.points.shape != (len(frame_datasets), query.points.shape[0], 2):
-                raise ValueError(f"Track.points must have shape {(len(frame_datasets), query.points.shape[0], 2)}")
-            if track.visibility.shape != (len(frame_datasets), query.points.shape[0]):
-                raise ValueError(f"Track.visibility must have shape {(len(frame_datasets), query.points.shape[0])}")
-            if track.confidence.shape != (len(frame_datasets), query.points.shape[0]):
-                raise ValueError(f"Track.confidence must have shape {(len(frame_datasets), query.points.shape[0])}")
+        n_points = query.points.shape[1]
+        for track in view_tracks:
+            if track.points.shape != (len(frame_datasets), n_points, 2):
+                raise ValueError(f"Track.points must have shape {(len(frame_datasets), n_points, 2)}")
+            if track.visibility.shape != (len(frame_datasets), n_points):
+                raise ValueError(f"Track.visibility must have shape {(len(frame_datasets), n_points)}")
+            if track.confidence.shape != (len(frame_datasets), n_points):
+                raise ValueError(f"Track.confidence must have shape {(len(frame_datasets), n_points)}")
+            if track.mask.shape != (len(frame_datasets), n_points):
+                raise ValueError(f"Track.mask must have shape {(len(frame_datasets), n_points)}")
         return view_tracks
 
     @abstractmethod
     def track(
             self,
-            view_queries: Sequence[Query],
+            query: Query,
             frame_datasets: Sequence[CameraDataset],
             batch_size: Optional[int] = None) -> Sequence[Track]:
-        """Track ``view_queries`` across ``frame_datasets``.
+        """Track ``query`` across ``frame_datasets``.
 
         Implementations should return one :class:`Track` per view.
         """
