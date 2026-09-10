@@ -6,7 +6,7 @@ import torch
 from PIL import Image, ImageDraw
 
 from track_4dgs.registry import build_point_tracker, get_available_point_trackers
-from track_4dgs.tracker import AbstractViewPointTracker, Query, Track
+from track_4dgs.tracker import AbstractViewPointTracker, Track
 
 
 def load_image(path: str, device: str) -> torch.Tensor:
@@ -46,11 +46,23 @@ def draw_rainbow_tracks(
     draw = ImageDraw.Draw(canvas)
 
     points = track.points.detach().cpu()
+    mask = track.mask.detach().cpu()
     colors = rainbow_colors(points.shape[1], track.confidence[frame_idx].detach().cpu().clamp(0, 1))
 
     for point_idx, color in enumerate(colors):
+        if not bool(mask[frame_idx, point_idx]):
+            continue
         history_points = points[:frame_idx + 1, point_idx]
-        line = [(float(point[0]), float(point[1])) for point in history_points]
+        history_mask = mask[:frame_idx + 1, point_idx]
+        line = []
+        for point, valid in zip(history_points, history_mask):
+            if bool(valid):
+                line.append((float(point[0]), float(point[1])))
+            elif len(line) > 1:
+                draw.line(line, fill=color, width=1)
+                line = []
+            else:
+                line = []
         if len(line) > 1:
             draw.line(line, fill=color, width=1)
 
@@ -60,14 +72,14 @@ def draw_rainbow_tracks(
     return canvas
 
 
-def sample_query(image: torch.Tensor, num_points: int) -> Query:
+def sample_query(image: torch.Tensor, num_points: int) -> tuple[torch.Tensor, torch.Tensor]:
     _, height, width = image.shape
     points = torch.stack([
         torch.rand(num_points, device=image.device) * (width - 1),
         torch.rand(num_points, device=image.device) * (height - 1),
     ], dim=-1)
     frame_indices = torch.zeros(num_points, device=image.device, dtype=torch.long)
-    return Query(points=points, frame_indices=frame_indices)
+    return points, frame_indices
 
 
 @torch.no_grad()
@@ -96,9 +108,12 @@ if __name__ == "__main__":
 
     with torch.no_grad():
         frames = [load_image(path, args.device) for path in args.sources]
-        query = sample_query(frames[0], args.num_points)
+        points, frame_indices = sample_query(frames[0], args.num_points)
         tracker = build_point_tracker(args.tracker, **tracker_configs).to(args.device)
         if not isinstance(tracker, AbstractViewPointTracker):
             raise TypeError("track1v requires an AbstractViewPointTracker")
-        track = tracker.track_view(query, frames, [None] * len(frames), batch_size=args.batch_size)
+        track = tracker.track_view(
+            points, frame_indices,
+            frames, [None] * len(frames), batch_size=args.batch_size,
+        )
         rendering(frames, track, args.destination)
