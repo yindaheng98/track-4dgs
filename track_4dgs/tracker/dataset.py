@@ -1,4 +1,4 @@
-from collections.abc import Iterable, Sequence
+from collections.abc import Sequence
 from typing import Optional
 
 from gaussian_splatting.dataset import CameraDataset
@@ -51,24 +51,23 @@ class CameraDatasetTracker:
 
     def __call__(
             self,
-            view_queries: Iterable[Query],
-            frame_datasets: Iterable[CameraDataset],
+            query: Query,
+            frames: Sequence[CameraDataset],
             batch_size: Optional[int] = None) -> list[TrackedCameraDataset]:
         """Track points for a frame-major collection of camera datasets.
 
-        ``view_queries`` is view-major: one query per camera/view.
-        ``frame_datasets`` is frame-major: one CameraDataset per frame, and
+        ``query`` is view-major: one row per camera/view.
+        ``frames`` is frame-major: one CameraDataset per frame, and
         each dataset is expected to contain cameras/views in the same order as
-        ``view_queries``.  The return value keeps the frame-major layout.
+        ``query``.  The return value keeps the frame-major layout.
         ``batch_size`` is forwarded to the underlying point tracker.
         """
-        view_queries = list(view_queries)
-        frame_datasets = list(frame_datasets)
-        if len(frame_datasets) == 0:
+        frames = list(frames)
+        if len(frames) == 0:
             return []
 
-        view_tracks = self.tracker(view_queries, frame_datasets, batch_size=batch_size)
-        frame_camera_tracks = [[] for _ in frame_datasets]
+        view_tracks = self.tracker(query, frames, batch_size=batch_size)
+        frame_camera_tracks = [[] for _ in frames]
         for track in view_tracks:
             for frame_idx, camera_tracks in enumerate(frame_camera_tracks):
                 camera_tracks.append(track[frame_idx])
@@ -78,5 +77,5 @@ class CameraDatasetTracker:
                 dataset=dataset,
                 camera_tracks=camera_tracks,
             )
-            for dataset, camera_tracks in zip(frame_datasets, frame_camera_tracks)
+            for dataset, camera_tracks in zip(frames, frame_camera_tracks)
         ]
