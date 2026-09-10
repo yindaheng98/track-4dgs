@@ -4,7 +4,7 @@ import torch
 import torch.nn.functional as F
 from gaussian_splatting.dataset import CameraDataset
 
-from track_4dgs.tracker import AbstractMultiViewPointTracker, Query, Track
+from track_4dgs.tracker import AbstractBatchPointTracker, Query, Track
 
 from .models.mvtap import MVTAP
 
@@ -16,7 +16,7 @@ def load_mvtap(checkpoint: str = "checkpoints/mvtap.ckpt", **model_kwargs) -> MV
     return model
 
 
-class MVTAPPointTracker(AbstractMultiViewPointTracker):
+class MVTAPPointTracker(AbstractBatchPointTracker):
     """Track queried points with MV-TAP.
 
     Frames are expected to be RGB ``[3, H, W]`` tensors in ``[0, 1]`` and query
@@ -52,20 +52,20 @@ class MVTAPPointTracker(AbstractMultiViewPointTracker):
     @torch.no_grad()
     def track_batch(
             self,
-            view_queries: Sequence[Query],
-            frame_datasets: Sequence[CameraDataset]) -> Sequence[Track]:
+            query: Query,
+            frames: Sequence[CameraDataset]) -> Sequence[Track]:
         height_out = self.model.model_resolution_H
         width_out = self.model.model_resolution_W
 
         videos, query_tensors, intrinsics, extrinsics, scales = [], [], [], [], []
-        for view_idx, query in enumerate(view_queries):
-            frames, Ks, w2cs, view_scales = [], [], [], []
-            for dataset in frame_datasets:
+        for view_idx in range(query.points.shape[0]):
+            images, Ks, w2cs, view_scales = [], [], [], []
+            for dataset in frames:
                 camera = dataset[view_idx]
                 _, orig_h, orig_w = camera.ground_truth_image.shape
                 query_scale = query.points.new_tensor([width_out / orig_w, height_out / orig_h])
                 view_scales.append(query_scale)
-                frames.append(F.interpolate(
+                images.append(F.interpolate(
                     camera.ground_truth_image.unsqueeze(0),
                     size=(height_out, width_out),
                     mode="bilinear",
@@ -84,12 +84,13 @@ class MVTAPPointTracker(AbstractMultiViewPointTracker):
 
             scale = torch.stack(view_scales)
             scales.append(scale)
-            videos.append(torch.stack(frames))
+            videos.append(torch.stack(images))
             intrinsics.append(torch.stack(Ks))
             extrinsics.append(torch.stack(w2cs))
+            frame_indices = query.frame_indices[view_idx]
             query_tensors.append(torch.cat([
-                query.frame_indices.to(dtype=query.points.dtype).unsqueeze(-1),
-                query.points * scale[query.frame_indices],
+                frame_indices.to(dtype=query.points.dtype).unsqueeze(-1),
+                query.points[view_idx] * scale[frame_indices],
             ], dim=-1))
 
         video = torch.stack(videos).unsqueeze(0).to(self.device)
@@ -113,10 +114,10 @@ class MVTAPPointTracker(AbstractMultiViewPointTracker):
         coords = coords[:, :, :n_frames]
         vis = vis[:, :, :n_frames]
         conf = conf[:, :, :n_frames]
+        points = coords[0] / scale[:, :, None, :]
+        mask = torch.ones(vis[0].shape, dtype=torch.bool, device=points.device)
 
         return [
-            Track(points=points, visibility=visibility, confidence=confidence)
-            for points, visibility, confidence in zip(
-                coords[0] / scale[:, :, None, :], vis[0], conf[0],
-            )
+            Track(points=p, visibility=visibility, confidence=confidence, mask=m)
+            for p, visibility, confidence, m in zip(points, vis[0], conf[0], mask)
         ]
