@@ -28,14 +28,7 @@ class AbstractViewPointTracker(AbstractPointTracker):
 
             points = query.points[view_idx]
             frame_indices = query.frame_indices[view_idx]
-            sizes = points.new_tensor([
-                [views[frame_idx].shape[-1], views[frame_idx].shape[-2]]
-                for frame_idx in frame_indices.tolist()
-            ])
-            valid = (
-                (points[:, 0] >= 0) & (points[:, 0] < sizes[:, 0])
-                & (points[:, 1] >= 0) & (points[:, 1] < sizes[:, 1])
-            )
+            valid = query.in_image[view_idx]
 
             n_frames = len(views)
             result_points = points.unsqueeze(0).expand(n_frames, -1, -1).clone()
@@ -51,17 +44,10 @@ class AbstractViewPointTracker(AbstractPointTracker):
                     frame_masks,
                     batch_size=batch_size,
                 )
-                in_view = torch.stack([
-                    (frame_points[:, 0] >= 0)
-                    & (frame_points[:, 0] < frame.shape[-1])
-                    & (frame_points[:, 1] >= 0)
-                    & (frame_points[:, 1] < frame.shape[-2])
-                    for frame_points, frame in zip(track.points, views)
-                ])
                 result_points[:, valid] = track.points
                 result_visibility[:, valid] = track.visibility
                 result_confidence[:, valid] = track.confidence
-                result_mask[:, valid] = track.mask & in_view
+                result_mask[:, valid] = track.mask
 
             view_tracks.append(Track(
                 points=result_points,
