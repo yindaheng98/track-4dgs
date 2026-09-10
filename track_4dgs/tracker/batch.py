@@ -4,6 +4,7 @@ from typing import Optional
 
 import torch
 from gaussian_splatting.dataset import CameraDataset
+from tqdm import tqdm
 
 from .tracker import AbstractPointTracker, Query, Track
 
@@ -22,7 +23,7 @@ class AbstractBatchPointTracker(AbstractPointTracker):
             tracks = self.track_batch(query, frames)
         else:
             tracks: list[Sequence[Track]] = []
-            for start in range(0, n_points, batch_size):
+            for start in tqdm(range(0, n_points, batch_size), desc="Tracking batches"):
                 end = min(start + batch_size, n_points)
                 tracks.append(self.track_batch(
                     Query(
