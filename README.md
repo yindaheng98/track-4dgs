@@ -96,6 +96,22 @@ mkdir -p checkpoints
 # save the downloaded file as checkpoints/mvtap.ckpt
 ```
 
+OpenD4RT checkpoint and model config:
+
+```shell
+# 48-frame model
+mkdir -p checkpoints/OpenD4RT_48CLIP_9Mix_NoCropAUG
+wget -P checkpoints/OpenD4RT_48CLIP_9Mix_NoCropAUG https://huggingface.co/Lijiaxin0111/OpenD4RT/resolve/main/checkpoints/OpenD4RT_48CLIP_9Mix_NoCropAUG/opend4rt.ckpt
+wget -P checkpoints/OpenD4RT_48CLIP_9Mix_NoCropAUG https://huggingface.co/Lijiaxin0111/OpenD4RT/resolve/main/checkpoints/OpenD4RT_48CLIP_9Mix_NoCropAUG/model.yaml
+
+# 32-frame model
+mkdir -p checkpoints/OpenD4RT_32CLIP_9Dataset_NoAUG
+wget -P checkpoints/OpenD4RT_32CLIP_9Dataset_NoAUG https://huggingface.co/Lijiaxin0111/OpenD4RT/resolve/main/checkpoints/OpenD4RT_32CLIP_9Dataset_NoAUG/opend4rt.ckpt
+wget -P checkpoints/OpenD4RT_32CLIP_9Dataset_NoAUG https://huggingface.co/Lijiaxin0111/OpenD4RT/resolve/main/checkpoints/OpenD4RT_32CLIP_9Dataset_NoAUG/model.yaml
+```
+
+Each model requires both `opend4rt.ckpt` and its adjacent `model.yaml`. Pass either the checkpoint file or its containing directory through the `checkpoint` tracker option.
+
 ## Command-Line Usage
 
 ### List Registered Point Trackers
