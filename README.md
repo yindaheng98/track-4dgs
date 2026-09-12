@@ -1,6 +1,6 @@
 # Point Tracking for 4DGS
 
-This repo is the **point tracking Python extension for 4D Gaussian Splatting**. It wraps sequence point trackers such as [CoTracker3](https://github.com/facebookresearch/co-tracker), [VGGT](https://github.com/facebookresearch/vggt), and [MV-TAP](https://github.com/cvlab-kaist/MV-TAP) behind one small registry, then applies them either to plain image sequences or to multi-timestep Gaussian Splatting camera datasets.
+This repo is the **point tracking Python extension for 4D Gaussian Splatting**. It wraps sequence point trackers such as [CoTracker3](https://github.com/facebookresearch/co-tracker), [VGGT](https://github.com/facebookresearch/vggt), [MV-TAP](https://github.com/cvlab-kaist/MV-TAP), and [OpenD4RT](https://github.com/Lijiaxin0111/Open-d4rt) behind one small registry, then applies them either to plain image sequences or to multi-timestep Gaussian Splatting camera datasets.
 
 The package provides two common workflows:
 
@@ -10,7 +10,7 @@ The package provides two common workflows:
 ## Features
 
 * [x] Organised as a standard Python package with `pip install` support
-* [x] Shared point tracker registry with `cotracker3`, `vggt`, and `mvtap` implementations
+* [x] Shared point tracker registry with `cotracker3`, `vggt`, `mvtap`, and `d4rt` implementations
 * [x] Single-view image sequence tracking and rendering
 * [x] Multi-timestep Gaussian Splatting camera dataset tracking
 * [x] Camera dataset reordering against a selected reference timestep
@@ -45,7 +45,7 @@ Install tracker dependencies used by this package:
 
 ```shell
 pip install --upgrade git+https://github.com/facebookresearch/co-tracker.git@main
-pip install --upgrade Pillow hydra-core omegaconf
+pip install --upgrade Pillow PyYAML hydra-core omegaconf
 pip install --upgrade git+https://github.com/facebookresearch/vggt.git@main
 pip install --upgrade git+https://github.com/jytime/LightGlue.git#egg=lightglue
 ```
@@ -127,6 +127,7 @@ The built-in trackers are:
 * `cotracker3`: CoTracker3 offline point tracker
 * `vggt`: VGGT TrackHead point tracker
 * `mvtap`: MV-TAP multi-view point tracker
+* `d4rt`: OpenD4RT 2D correspondence head
 
 ### Track One Image Sequence
 

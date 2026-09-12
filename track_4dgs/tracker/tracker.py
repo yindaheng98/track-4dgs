@@ -142,12 +142,11 @@ class Track:
     thresholds it to a bool.
 
     ``confidence`` is a localization score in ``(0, 1)``, not a calibrated
-    variance. Models emit unbounded logits (iterative residuals for CoTracker3
-    / MV-TAP, a linear head for VGGT) then apply ``sigmoid``. Training is
-    binary: 1 if the predicted location is within a pixel threshold of ground
-    truth, else 0. CoTracker3 and MV-TAP use 12 px; VGGT uses 3 px. The
-    stored value is therefore ``P(error < threshold)``. Well-tracked points
-    often saturate near 1.
+    variance. CoTracker3, MV-TAP, and VGGT train it as a binary fixed
+    pixel-error score (12 px for CoTracker3/MV-TAP and 3 px for VGGT).
+    D4RT instead optimizes its sigmoid confidence jointly with 3D localization
+    error and a ``-log(confidence)`` penalty, so its score has no fixed pixel
+    threshold interpretation.
 
     ``mask`` is implementation-defined boolean validity for each point.
     """
