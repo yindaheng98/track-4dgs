@@ -5,12 +5,12 @@ from .d4rt import D4RTPointTracker
 from .registry import register_point_tracker, get_available_point_trackers, build_point_tracker
 from .tracker import Query, Track, AbstractPointTracker
 from .tracker import AbstractViewPointTracker, AbstractBatchPointTracker
-from .tracker import CameraTrack, TrackedCameraDataset, CameraDatasetTracker
+from .tracker import CameraTrack, TrackedCameraDataset, CameraDatasetTracker, CachedCameraDatasetTracker
 
 __all__ = [
     "Query", "Track", "AbstractPointTracker",
     "AbstractViewPointTracker", "AbstractBatchPointTracker",
-    "CameraTrack", "TrackedCameraDataset", "CameraDatasetTracker",
+    "CameraTrack", "TrackedCameraDataset", "CameraDatasetTracker", "CachedCameraDatasetTracker",
     "register_point_tracker", "get_available_point_trackers", "build_point_tracker",
     "Cotracker3PointTracker", "VGGTPointTracker", "MVTAPPointTracker",
     "D4RTPointTracker",

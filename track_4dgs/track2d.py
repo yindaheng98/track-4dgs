@@ -67,6 +67,7 @@ if __name__ == "__main__":
     parser.add_argument("-m", "--option_tracker", default=[], action="append", type=str)
     parser.add_argument("--num-points", default=256, type=int)
     parser.add_argument("--batch-size", default=None, type=int)
+    parser.add_argument("--cache", default=None, type=str, help="Directory of cached tracks for identical query and frames.")
     args = parser.parse_args()
     load_ply = os.path.join(args.destination, "point_cloud", "iteration_" + str(args.iteration), "point_cloud.ply")
     save = os.path.join(args.destination, "ours_{}".format(args.iteration), f"track2d-{args.tracker}")
@@ -84,7 +85,7 @@ if __name__ == "__main__":
         gaussians = prepare_gaussians(
             sh_degree=args.sh_degree, source=args.sources[args.init_dataset_index], device=args.device,
             trainable_camera=args.mode == "camera", load_ply=load_ply)
-        dataset_tracker = prepare_tracker(tracker_name=args.tracker, device=args.device, tracker_configs=tracker_configs)
+        dataset_tracker = prepare_tracker(tracker_name=args.tracker, device=args.device, tracker_configs=tracker_configs, cache_dir=args.cache)
         queries = query_views_from_gaussians(
             datasets=datasets, gaussians=gaussians,
             init_dataset_index=args.init_dataset_index, num_points=args.num_points)
