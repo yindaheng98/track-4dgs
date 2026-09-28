@@ -4,7 +4,7 @@ from typing import Optional
 from gaussian_splatting.dataset import CameraDataset
 from gaussian_splatting.camera import Camera
 
-from .tracker import AbstractPointTracker, CameraTrack, Query
+from .tracker import AbstractPointTracker, CameraTrack, Query, Track
 
 
 class TrackedCameraDataset(CameraDataset):
@@ -67,7 +67,14 @@ class CameraDatasetTracker:
             return []
 
         view_tracks = self.tracker(query, frames, batch_size=batch_size)
-        frame_camera_tracks = [[] for _ in frames]
+        return self.attach_view_tracks(frames, view_tracks)
+
+    @staticmethod
+    def attach_view_tracks(
+            frames: Sequence[CameraDataset],
+            view_tracks: Sequence[Track]) -> list[TrackedCameraDataset]:
+        """Attach one view track onto each camera of each frame dataset."""
+        frame_camera_tracks: list[list[CameraTrack]] = [[] for _ in frames]
         for track in view_tracks:
             for frame_idx, camera_tracks in enumerate(frame_camera_tracks):
                 camera_tracks.append(track[frame_idx])
