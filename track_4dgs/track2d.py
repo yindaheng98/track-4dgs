@@ -67,7 +67,7 @@ if __name__ == "__main__":
     parser.add_argument("-m", "--option_tracker", default=[], action="append", type=str)
     parser.add_argument("--num-points", default=256, type=int)
     parser.add_argument("--batch-size", default=None, type=int)
-    parser.add_argument("--cache", default=None, type=str, help="Directory of cached tracks for identical query and frames.")
+    parser.add_argument("--cache", default=None, type=str, help="Directory of the point-track cache bank. Saved query points are reused; only new points are tracked.")
     args = parser.parse_args()
     load_ply = os.path.join(args.destination, "point_cloud", "iteration_" + str(args.iteration), "point_cloud.ply")
     save = os.path.join(args.destination, "ours_{}".format(args.iteration), f"track2d-{args.tracker}")
