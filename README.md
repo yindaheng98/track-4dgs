@@ -4,28 +4,28 @@ This repo is the **point tracking Python extension for 4D Gaussian Splatting**. 
 
 The package provides two common workflows:
 
-* track sampled 2D points through one ordered image sequence
-* project 3D Gaussians into a reference timestep, track those projected points across all timesteps, and attach the resulting tracks back to Gaussian Splatting camera datasets
+- track sampled 2D points through one ordered image sequence
+- project 3D Gaussians into a reference timestep, track those projected points across all timesteps, and attach the resulting tracks back to Gaussian Splatting camera datasets
 
 ## Features
 
-* [x] Organised as a standard Python package with `pip install` support
-* [x] Shared point tracker registry with `cotracker3`, `vggt`, `mvtap`, and `d4rt` implementations
-* [x] Single-view image sequence tracking and rendering
-* [x] Multi-timestep Gaussian Splatting camera dataset tracking
-* [x] Camera dataset reordering against a selected reference timestep
-* [ ] Port the motion estimation workflow from [TrackerSplat](https://github.com/yindaheng98/TrackerSplat) for point-tracker-driven motion synthesis
-* [ ] Regularize 3DGS training with point tracker trajectories
+- [x] Organised as a standard Python package with `pip install` support
+- [x] Shared point tracker registry with `cotracker3`, `vggt`, `vggsfm`, `mvtap`, and `d4rt` implementations
+- [x] Single-view image sequence tracking and rendering
+- [x] Multi-timestep Gaussian Splatting camera dataset tracking
+- [x] Camera dataset reordering against a selected reference timestep
+- [ ] Port the motion estimation workflow from [TrackerSplat](https://github.com/yindaheng98/TrackerSplat) for point-tracker-driven motion synthesis
+- [ ] Regularize 3DGS training with point tracker trajectories
 
 ## Install
 
 ### Prerequisites
 
-* [PyTorch](https://pytorch.org/) (CUDA build recommended)
-* [CUDA Toolkit](https://developer.nvidia.com/cuda-toolkit) matching your PyTorch installation
-* [`gaussian-splatting`](https://github.com/yindaheng98/gaussian-splatting)
-* [`CoTracker`](https://github.com/facebookresearch/co-tracker)
-* [`VGGT`](https://github.com/facebookresearch/vggt) for the optional `vggt` tracker
+- [PyTorch](https://pytorch.org/) (CUDA build recommended)
+- [CUDA Toolkit](https://developer.nvidia.com/cuda-toolkit) matching your PyTorch installation
+- [`gaussian-splatting`](https://github.com/yindaheng98/gaussian-splatting)
+- [`CoTracker`](https://github.com/facebookresearch/co-tracker)
+- [`VGGT`](https://github.com/facebookresearch/vggt) for the optional `vggt` tracker
 
 Install the core Gaussian Splatting dependency used by the 4DGS dataset utilities:
 
@@ -89,6 +89,15 @@ wget -P checkpoints https://huggingface.co/facebook/VGGT-1B-Commercial/resolve/m
 
 If the VGGT checkpoint is not present, `VGGTPointTracker` falls back to `VGGT.from_pretrained("facebook/VGGT-1B")`.
 
+VGGSfM tracker checkpoint:
+
+```shell
+mkdir -p checkpoints
+wget -P checkpoints https://huggingface.co/facebook/VGGSfM/resolve/main/vggsfm_v2_tracker.pt
+```
+
+If the checkpoint is not present, `load_vggsfm` downloads it from that URL.
+
 MV-TAP checkpoint (from the [MV-TAP release](https://drive.google.com/file/d/1sCml0BL6VQGy-MGgpidz2-BdymAJhboU/view?usp=sharing)):
 
 ```shell
@@ -124,10 +133,10 @@ python -c "import track_4dgs; print(track_4dgs.get_available_point_trackers())"
 
 The built-in trackers are:
 
-* `cotracker3`: CoTracker3 offline point tracker
-* `vggt`: VGGT TrackHead point tracker
-* `mvtap`: MV-TAP multi-view point tracker
-* `d4rt`: OpenD4RT 2D correspondence head
+- `cotracker3`: CoTracker3 offline point tracker
+- `vggt`: VGGT TrackHead point tracker
+- `mvtap`: MV-TAP multi-view point tracker
+- `d4rt`: OpenD4RT 2D correspondence head
 
 ### Track One Image Sequence
 

@@ -1,5 +1,6 @@
 from .cotracker import Cotracker3PointTracker
 from .vggt import VGGTPointTracker
+from .vggsfm import VGGSfMPointTracker
 from .mvtap import MVTAPPointTracker
 from .d4rt import D4RTPointTracker
 from .registry import register_point_tracker, get_available_point_trackers, build_point_tracker
@@ -12,6 +13,6 @@ __all__ = [
     "AbstractViewPointTracker", "AbstractBatchPointTracker",
     "CameraTrack", "TrackedCameraDataset", "CameraDatasetTracker", "CachedCameraDatasetTracker",
     "register_point_tracker", "get_available_point_trackers", "build_point_tracker",
-    "Cotracker3PointTracker", "VGGTPointTracker", "MVTAPPointTracker",
-    "D4RTPointTracker",
+    "Cotracker3PointTracker", "VGGTPointTracker", "VGGSfMPointTracker",
+    "MVTAPPointTracker", "D4RTPointTracker",
 ]
