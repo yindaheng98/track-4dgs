@@ -43,10 +43,6 @@ class VGGSfMPointTracker(AbstractViewPointTracker):
             fine_tracking: bool = True,
             max_points_num: int = 163840,
             fine_chunk: int = 40960):
-        if img_load_resolution % 8 != 0:
-            raise ValueError("img_load_resolution must be divisible by 8")
-        if max_points_num <= 0:
-            raise ValueError("max_points_num must be a positive integer")
         self.model = load_vggsfm(checkpoint)
         self.model.eval()
         self.img_load_resolution = img_load_resolution
