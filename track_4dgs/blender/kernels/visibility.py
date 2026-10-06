@@ -33,6 +33,7 @@ def ray_visibility(
         targets: torch.Tensor,
         world_verts: torch.Tensor,
         faces: torch.Tensor,
+        device: str,
         eps: float,
         valid: torch.Tensor) -> torch.Tensor:
     """Return ``(V, N)`` visibility in ``{0, 1}``.
@@ -40,18 +41,17 @@ def ray_visibility(
     ``centers`` is ``(V, 3)`` camera centers.
     ``targets`` is ``(N, 3)`` world points.
     ``world_verts`` is ``(P, 3)`` posed vertices, and ``faces`` is ``(T, 3)`` int32 triangles into those vertices.
+    ``device`` is a Warp device name such as ``cpu`` or ``cuda``, and Warp is already initialized.
     ``eps`` is the depth tolerance in world units.
     ``valid`` is ``(N,)`` int, and nonzero entries are the points to test.
     A point is visible when the camera-to-point segment does not hit the mesh before ``distance - eps``.
     ``valid == 0`` points are invisible.
     No faces, or a frame with no posed vertices, reports every nonzero ``valid`` point as visible.
-    The result lives on the Warp device chosen for the query.
+    The result lives on ``device``.
     """
     n_views, n_points = centers.shape[0], targets.shape[0]
     if faces.numel() == 0 or world_verts.shape[0] == 0 or n_points == 0:
         return valid.to(dtype=torch.float32).reshape(1, -1).expand(n_views, n_points).clone()
-    wp.init()
-    device = "cuda" if wp.is_cuda_available() else "cpu"
     world_verts = world_verts.to(device=device, dtype=torch.float32).contiguous()
     faces = faces.reshape(-1).to(device=device, dtype=torch.int32).contiguous()
     centers = centers.to(device=device, dtype=torch.float32).contiguous()

@@ -26,19 +26,19 @@ def closest_point_kernel(
 def closest_point(
         points: torch.Tensor,
         verts: torch.Tensor,
-        faces: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        faces: torch.Tensor,
+        device: str) -> tuple[torch.Tensor, torch.Tensor]:
     """Snap object-local points onto one mesh.
 
     ``points`` is ``(K, 3)``.
     ``verts`` is ``(V, 3)`` and ``faces`` is ``(T, 3)`` int32, both in the same object space.
+    ``device`` is a Warp device name such as ``cpu`` or ``cuda``, and Warp is already initialized.
     Returns ``ok`` ``(K,)`` bool and ``snapped`` ``(K, 3)``, both on CPU.
     A point farther than ``MAX_DISTANCE`` from the mesh is left unsnapped.
     A mesh with no triangles leaves every point unsnapped.
     """
     if faces.numel() == 0:
         return torch.zeros(points.shape[0], dtype=torch.bool), torch.zeros_like(points)
-    wp.init()
-    device = "cuda" if wp.is_cuda_available() else "cpu"
     verts = verts.to(device=device, dtype=torch.float32).contiguous()
     faces = faces.reshape(-1).to(device=device, dtype=torch.int32).contiguous()
     points = points.to(device=device, dtype=torch.float32).contiguous()

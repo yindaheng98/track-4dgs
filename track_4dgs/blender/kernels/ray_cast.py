@@ -26,19 +26,19 @@ def ray_cast(
         origins: torch.Tensor,
         directions: torch.Tensor,
         world_verts: torch.Tensor,
-        faces: torch.Tensor) -> torch.Tensor:
+        faces: torch.Tensor,
+        device: str) -> torch.Tensor:
     """Return the first triangle hit by each world ray.
 
     ``origins`` and ``directions`` are ``(R, 3)``, and directions are unit length.
     ``world_verts`` is ``(P, 3)`` posed vertices, and ``faces`` is ``(T, 3)`` int32 triangles into those vertices.
+    ``device`` is a Warp device name such as ``cpu`` or ``cuda``, and Warp is already initialized.
     Returns ``(R,)`` int32 triangle indices on CPU, with ``-1`` for a miss.
     A ray farther than ``MAX_DISTANCE`` misses.
     An empty mesh returns a miss for every ray.
     """
     if faces.numel() == 0 or world_verts.shape[0] == 0 or origins.shape[0] == 0:
         return torch.full((origins.shape[0],), -1, dtype=torch.int32)
-    wp.init()
-    device = "cuda" if wp.is_cuda_available() else "cpu"
     world_verts = world_verts.to(device=device, dtype=torch.float32).contiguous()
     faces = faces.reshape(-1).to(device=device, dtype=torch.int32).contiguous()
     origins = origins.to(device=device, dtype=torch.float32).contiguous()
