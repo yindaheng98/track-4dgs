@@ -8,7 +8,7 @@ import warp as wp
 def ray_visibility_kernel(
         mesh: wp.uint64,
         origins: wp.array(dtype=wp.vec3),
-        targets: wp.array(dtype=wp.vec3),
+        points: wp.array(dtype=wp.vec3),
         valid: wp.array(dtype=wp.int32),
         eps: float,
         n_points: int,
@@ -19,7 +19,7 @@ def ray_visibility_kernel(
     if valid[point] == 0:
         out[tid] = 0.0
         return
-    delta = targets[point] - origins[view]
+    delta = points[point] - origins[view]
     dist = wp.length(delta)
     if dist <= eps:
         out[tid] = 1.0
@@ -29,8 +29,8 @@ def ray_visibility_kernel(
 
 
 def ray_visibility(
-        centers: torch.Tensor,
-        targets: torch.Tensor,
+        camera_centers: torch.Tensor,
+        points: torch.Tensor,
         world_verts: torch.Tensor,
         faces: torch.Tensor,
         device: str,
@@ -38,8 +38,8 @@ def ray_visibility(
         valid: torch.Tensor) -> torch.Tensor:
     """Return ``(V, N)`` visibility in ``{0, 1}``.
 
-    ``centers`` is ``(V, 3)`` camera centers.
-    ``targets`` is ``(N, 3)`` world points.
+    ``camera_centers`` is ``(V, 3)`` camera centers.
+    ``points`` is ``(N, 3)`` world points.
     ``world_verts`` is ``(P, 3)`` posed vertices, and ``faces`` is ``(T, 3)`` int32 triangles into those vertices.
     ``device`` is a Warp device name such as ``cpu`` or ``cuda``, and Warp is already initialized.
     ``eps`` is the depth tolerance in world units.
@@ -49,13 +49,13 @@ def ray_visibility(
     No faces, or a frame with no posed vertices, reports every nonzero ``valid`` point as visible.
     The result lives on ``device``.
     """
-    n_views, n_points = centers.shape[0], targets.shape[0]
+    n_views, n_points = camera_centers.shape[0], points.shape[0]
     if faces.numel() == 0 or world_verts.shape[0] == 0 or n_points == 0:
         return valid.to(dtype=torch.float32).reshape(1, -1).expand(n_views, n_points).clone()
     world_verts = world_verts.to(device=device, dtype=torch.float32).contiguous()
     faces = faces.reshape(-1).to(device=device, dtype=torch.int32).contiguous()
-    centers = centers.to(device=device, dtype=torch.float32).contiguous()
-    targets = targets.to(device=device, dtype=torch.float32).contiguous()
+    camera_centers = camera_centers.to(device=device, dtype=torch.float32).contiguous()
+    points = points.to(device=device, dtype=torch.float32).contiguous()
     valid = valid.to(device=device, dtype=torch.int32).contiguous()
     mesh = wp.Mesh(
         points=wp.from_torch(world_verts, dtype=wp.vec3),
@@ -67,8 +67,8 @@ def ray_visibility(
         dim=n_views * n_points,
         inputs=[
             mesh.id,
-            wp.from_torch(centers, dtype=wp.vec3),
-            wp.from_torch(targets, dtype=wp.vec3),
+            wp.from_torch(camera_centers, dtype=wp.vec3),
+            wp.from_torch(points, dtype=wp.vec3),
             wp.from_torch(valid, dtype=wp.int32),
             float(eps),
             n_points,
