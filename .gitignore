@@ -2,6 +2,11 @@ data/
 output/
 checkpoints/
 *.dist-info/
+track_4dgs/matcha/dift/
+track_4dgs/matcha/dinov2/
+track_4dgs/matcha/dust3r/
+track_4dgs/matcha/geoaware_sc/
+track_4dgs/matcha/utils/
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]

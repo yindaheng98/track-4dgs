@@ -14,11 +14,12 @@ packages_dust3r = ["track_4dgs.matcha.dust3r"] + ["track_4dgs.matcha.dust3r." + 
 packages_geoaware_sc = ["track_4dgs.matcha.geoaware_sc"] + ["track_4dgs.matcha.geoaware_sc." + package for package in find_namespace_packages(where="submodules/matcha/third_party/geoaware_sc")]
 packages_dift = ["track_4dgs.matcha.dift"] + ["track_4dgs.matcha.dift." + package for package in find_namespace_packages(where="submodules/matcha/third_party/dift")]
 packages_dinov2 = ["track_4dgs.matcha.dinov2"] + ["track_4dgs.matcha.dinov2." + package for package in find_namespace_packages(where="submodules/matcha/third_party/dinov2")]
-packages_utils = ["track_4dgs.matcha.utils"] + ["track_4dgs.matcha.utils." + package for package in find_namespace_packages(where="submodules/matcha/matcha/utils")]
+# Single module, not a package: packages= would install every *.py in that directory.
+py_modules = ["track_4dgs.matcha.utils.category_list"]
 
 setup(
     name="track_4dgs",
-    version="0.7.1",
+    version="0.7.2",
     author="yindaheng98",
     author_email="yindaheng98@gmail.com",
     url="https://github.com/yindaheng98/track-4dgs",
@@ -28,7 +29,8 @@ setup(
     classifiers=[
         "Programming Language :: Python :: 3",
     ],
-    packages=packages + packages_dust3r + packages_geoaware_sc + packages_dift + packages_dinov2 + packages_utils,
+    packages=packages + packages_dust3r + packages_geoaware_sc + packages_dift + packages_dinov2,
+    py_modules=py_modules,
     package_dir={
         "track_4dgs": "track_4dgs",
         "track_4dgs.matcha.dust3r": "submodules/matcha/third_party/dust3r",

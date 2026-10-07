@@ -98,6 +98,13 @@ wget -P checkpoints https://huggingface.co/facebook/VGGSfM/resolve/main/vggsfm_v
 
 If the checkpoint is not present, `load_vggsfm` downloads it from that URL.
 
+MATCHA checkpoint (from the [MATCHA release](https://drive.google.com/file/d/17p0-ne4B9H60cC_AF6G284SetuImDUDO/view?usp=sharing)):
+
+```shell
+mkdir -p checkpoints
+# save the downloaded file as checkpoints/matcha_pretrained.pth
+```
+
 MV-TAP checkpoint (from the [MV-TAP release](https://drive.google.com/file/d/1sCml0BL6VQGy-MGgpidz2-BdymAJhboU/view?usp=sharing)):
 
 ```shell
