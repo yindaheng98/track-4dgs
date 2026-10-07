@@ -16,12 +16,13 @@ packages_matcha += ["track_4dgs.matcha.geoaware_sc"] + ["track_4dgs.matcha.geoaw
 packages_matcha += ["track_4dgs.matcha.dift"] + ["track_4dgs.matcha.dift." + package for package in find_namespace_packages(where="submodules/matcha/third_party/dift")]
 packages_matcha += ["track_4dgs.matcha.dinov2"] + ["track_4dgs.matcha.dinov2." + package for package in find_namespace_packages(where="submodules/matcha/third_party/dinov2")]
 packages_uniflowmatch = ["uniflowmatch"] + ["uniflowmatch." + package for package in find_namespace_packages(where="submodules/UFM/uniflowmatch")]
+packages_mvroma = ["mvroma"] + ["mvroma." + package for package in find_namespace_packages(where="submodules/MV-RoMa/src/mvroma")]
 # Single module, not a package: packages= would install every *.py in that directory.
 py_modules = ["track_4dgs.matcha.utils.category_list"]
 
 setup(
     name="track_4dgs",
-    version="0.7.3.1",
+    version="0.7.4",
     author="yindaheng98",
     author_email="yindaheng98@gmail.com",
     url="https://github.com/yindaheng98/track-4dgs",
@@ -31,7 +32,7 @@ setup(
     classifiers=[
         "Programming Language :: Python :: 3",
     ],
-    packages=packages + packages_matcha + packages_uniflowmatch,
+    packages=packages + packages_matcha + packages_uniflowmatch + packages_mvroma,
     py_modules=py_modules,
     package_dir={
         "track_4dgs": "track_4dgs",
@@ -41,6 +42,7 @@ setup(
         "track_4dgs.matcha.dinov2": "submodules/matcha/third_party/dinov2",
         "track_4dgs.matcha.utils": "submodules/matcha/matcha/utils",
         "uniflowmatch": "submodules/UFM/uniflowmatch",
+        "mvroma": "submodules/MV-RoMa/src/mvroma",
     },
     install_requires=[
         "gaussian-splatting >= 2.3.8",
