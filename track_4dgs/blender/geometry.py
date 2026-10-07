@@ -1,50 +1,8 @@
-"""World rays and rigid posing in a Blender scene.
-
-Cameras look along +Z, image +Y points downward, and ``R`` / ``T`` use the blend world.
-Pixel rays pass through the pixel center ``uv + 0.5``.
-"""
+"""Rigid posing of Blender object-space meshes."""
 
 from collections.abc import Sequence
 
 import torch
-from gaussian_splatting import Camera
-
-
-def camera_ray(uv: torch.Tensor, camera: Camera) -> tuple[torch.Tensor, torch.Tensor]:
-    """Cast one pixel into a unit world ray.
-
-    ``uv`` is ``(2,)`` pixel coordinates in ``(x, y)`` order.
-    ``camera.R`` is world-to-camera, so its transpose maps the camera-space direction into the blend world.
-    Returns the camera center and a unit direction, each ``(3,)``.
-    """
-    direction = torch.stack((
-        (uv[0] + 0.5 - camera.K[0, 2]) / camera.K[0, 0],
-        (uv[1] + 0.5 - camera.K[1, 2]) / camera.K[1, 1],
-        uv.new_tensor(1.0),
-    ))
-    direction = camera.R.T @ direction
-    return camera.camera_center, direction / direction.norm()
-
-
-def triangulate_rays(
-    origins: Sequence[torch.Tensor],
-    directions: Sequence[torch.Tensor],
-) -> torch.Tensor:
-    """Intersect world rays by least squares.
-
-    ``origins`` and ``directions`` are equal-length sequences of ``(3,)`` world vectors.
-    Directions are unit length.
-    Each ray contributes the projection onto the plane perpendicular to its direction.
-    Returns the ``(3,)`` point that minimizes squared distance to every ray.
-    """
-    eye = torch.eye(3, dtype=origins[0].dtype)
-    system = torch.zeros((3, 3), dtype=origins[0].dtype)
-    target = torch.zeros(3, dtype=origins[0].dtype)
-    for origin, direction in zip(origins, directions):
-        onto_plane = eye - direction[:, None] * direction[None, :]
-        system = system + onto_plane
-        target = target + onto_plane @ origin
-    return torch.linalg.solve(system, target)
 
 
 def object_points_to_world(
