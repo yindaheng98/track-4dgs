@@ -21,7 +21,7 @@ py_modules = ["track_4dgs.matcha.utils.category_list"]
 
 setup(
     name="track_4dgs",
-    version="0.7.3",
+    version="0.7.3.1",
     author="yindaheng98",
     author_email="yindaheng98@gmail.com",
     url="https://github.com/yindaheng98/track-4dgs",
@@ -61,5 +61,7 @@ setup(
         "omegaconf",
         "vggt @ git+https://github.com/facebookresearch/vggt.git@main",
         "lightglue @ git+https://github.com/jytime/LightGlue.git#egg=lightglue",
+        # UniCeption (UFM encoder / info-sharing / prediction heads)
+        "uniception @ git+https://github.com/castacks/UniCeption.git@ee7fa0b50d8295b3f0485e42c1d133fb534bfce7",
     ] if not pypi_build else []),
 )
