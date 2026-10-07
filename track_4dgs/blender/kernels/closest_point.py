@@ -1,4 +1,4 @@
-"""Closest-point snaps onto one object-local triangle mesh."""
+"""Closest-point snaps onto one posed triangle mesh."""
 
 import torch
 import warp as wp
@@ -25,27 +25,27 @@ def closest_point_kernel(
 
 def closest_point(
         points: torch.Tensor,
-        verts: torch.Tensor,
+        world_verts: torch.Tensor,
         faces: torch.Tensor,
         device: str) -> tuple[torch.Tensor, torch.Tensor]:
-    """Snap object-local points onto one mesh.
+    """Snap world points onto one posed mesh.
 
-    ``points`` is ``(K, 3)``.
-    ``verts`` is ``(V, 3)`` and ``faces`` is ``(T, 3)`` int32, both in the same object space.
+    ``points`` is ``(K, 3)`` in world coordinates.
+    ``world_verts`` is ``(V, 3)`` posed vertices, and ``faces`` is ``(T, 3)`` int32 triangles into those vertices.
     ``device`` is a Warp device name such as ``cpu`` or ``cuda``, and Warp is already initialized.
-    Returns ``ok`` ``(K,)`` bool and ``snapped`` ``(K, 3)``, both on CPU.
+    Returns ``ok`` ``(K,)`` bool and ``snapped`` ``(K, 3)`` world points, both on CPU.
     A point farther than ``MAX_DISTANCE`` from the mesh is left unsnapped.
     A mesh with no triangles leaves every point unsnapped.
     """
-    if faces.numel() == 0:
+    if faces.numel() == 0 or world_verts.shape[0] == 0:
         return torch.zeros(points.shape[0], dtype=torch.bool), torch.zeros_like(points)
-    verts = verts.to(device=device, dtype=torch.float32).contiguous()
+    world_verts = world_verts.to(device=device, dtype=torch.float32).contiguous()
     faces = faces.reshape(-1).to(device=device, dtype=torch.int32).contiguous()
     points = points.to(device=device, dtype=torch.float32).contiguous()
     snapped = torch.zeros_like(points)
     ok = torch.zeros(points.shape[0], dtype=torch.int32, device=device)
     mesh = wp.Mesh(
-        points=wp.from_torch(verts, dtype=wp.vec3),
+        points=wp.from_torch(world_verts, dtype=wp.vec3),
         indices=wp.from_torch(faces, dtype=wp.int32),
     )
     wp.launch(
