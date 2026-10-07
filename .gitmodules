@@ -1,3 +1,6 @@
 [submodule "submodules/matcha"]
 	path = submodules/matcha
 	url = https://github.com/nv-dvl/matcha
+[submodule "submodules/MV-RoMa"]
+	path = submodules/MV-RoMa
+	url = https://github.com/IceTea-CV/MV-RoMa
