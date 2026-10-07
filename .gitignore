@@ -1,6 +1,7 @@
 data/
 output/
 checkpoints/
+*.dist-info/
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
