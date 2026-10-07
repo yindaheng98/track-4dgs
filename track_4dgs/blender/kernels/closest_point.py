@@ -38,7 +38,10 @@ def closest_point(
     A mesh with no triangles leaves every point unsnapped.
     """
     if faces.numel() == 0 or world_verts.shape[0] == 0:
-        return torch.zeros(points.shape[0], dtype=torch.bool), torch.zeros_like(points)
+        return (
+            torch.zeros(points.shape[0], dtype=torch.bool),
+            torch.zeros((points.shape[0], 3), dtype=torch.float32),
+        )
     world_verts = world_verts.to(device=device, dtype=torch.float32).contiguous()
     faces = faces.reshape(-1).to(device=device, dtype=torch.int32).contiguous()
     points = points.to(device=device, dtype=torch.float32).contiguous()

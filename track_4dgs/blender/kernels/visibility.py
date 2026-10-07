@@ -57,7 +57,8 @@ def ray_visibility(
     """
     n_views, n_points = camera_centers.shape[0], points.shape[0]
     if faces.numel() == 0 or world_verts.shape[0] == 0 or n_points == 0:
-        return valid.to(dtype=torch.float32).reshape(1, -1).expand(n_views, n_points).clone()
+        visible = valid.to(dtype=torch.float32).reshape(1, -1).expand(n_views, n_points).clone()
+        return visible.to(device=device)
     world_verts = world_verts.to(device=device, dtype=torch.float32).contiguous()
     faces = faces.reshape(-1).to(device=device, dtype=torch.int32).contiguous()
     camera_centers = camera_centers.to(device=device, dtype=torch.float32).contiguous()

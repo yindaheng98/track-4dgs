@@ -18,7 +18,8 @@ def posed_scene_vertices(
     ``verts`` lists object-local ``(V_i, 3)`` vertices in export order.
     ``matrix_world`` is ``(M, 4, 4)`` for that frame, in the same order.
     Objects with no vertices are skipped.
-    Returns ``(sum V_i, 3)`` world vertices, or ``(0, 3)`` when every object is empty.
+    Returns ``(sum V_i, 3)`` world vertices.
+    A scene with no objects, or only empty objects, returns ``(0, 3)``.
     """
     parts = []
     for obj_verts, matrix in zip(verts, matrix_world):
@@ -27,7 +28,8 @@ def posed_scene_vertices(
         hom = torch.cat([obj_verts, torch.ones(obj_verts.shape[0], 1)], dim=1)
         parts.append(torch.einsum("ij,vj->vi", matrix, hom)[:, :3])
     if not parts:
-        return verts[0].new_zeros((0, 3))
+        reference = verts[0] if verts else matrix_world
+        return reference.new_zeros((0, 3))
     return torch.cat(parts)
 
 

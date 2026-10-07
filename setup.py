@@ -12,7 +12,7 @@ pypi_build = os.environ.get("PYPI_BUILD", "").lower() in {"1", "true", "yes", "o
 
 setup(
     name="track_4dgs",
-    version="0.7.0",
+    version="0.7.1",
     author="yindaheng98",
     author_email="yindaheng98@gmail.com",
     url="https://github.com/yindaheng98/track-4dgs",
@@ -30,6 +30,7 @@ setup(
         "PyYAML",
         "numpy",
         "opencv-python",
+        "warp-lang",
     ] + ([
         # CoTracker3
         "cotracker @ git+https://github.com/facebookresearch/co-tracker.git@main",
