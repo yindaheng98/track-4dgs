@@ -1,6 +1,5 @@
-from track_4dgs.registry import register_point_tracker
-
-from .dataset import BlenderPointTracker
+from ..registry import register_point_tracker
+from .tracker import BlenderPointTracker
 
 register_point_tracker("blender", BlenderPointTracker)
 
