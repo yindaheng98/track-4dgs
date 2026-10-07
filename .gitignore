@@ -7,6 +7,7 @@ track_4dgs/matcha/dinov2/
 track_4dgs/matcha/dust3r/
 track_4dgs/matcha/geoaware_sc/
 track_4dgs/matcha/utils/
+uniflowmatch/
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
