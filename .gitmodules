@@ -4,3 +4,6 @@
 [submodule "submodules/MV-RoMa"]
 	path = submodules/MV-RoMa
 	url = https://github.com/IceTea-CV/MV-RoMa
+[submodule "submodules/UFM"]
+	path = submodules/UFM
+	url = https://github.com/UniFlowMatch/UFM
