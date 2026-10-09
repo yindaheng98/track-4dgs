@@ -21,7 +21,7 @@
                 "-d",
                 "output/taekwondo/frame1",
                 "-i",
-                "0",
+                "10000",
                 "--num-points",
                 "1024",
             ]
@@ -46,7 +46,7 @@
                 "-d",
                 "output/taekwondo/frame1",
                 "-i",
-                "0",
+                "10000",
                 "--num-points",
                 "1024",
                 "--batch-size",
