@@ -10,10 +10,11 @@ The package provides two common workflows:
 ## Features
 
 - [x] Organised as a standard Python package with `pip install` support
-- [x] Shared point tracker registry with `cotracker3`, `vggt`, `vggsfm`, `mvtap`, and `d4rt` implementations
+- [x] Shared point tracker registry with `cotracker3`, `vggt`, `vggsfm`, `mvtap`, `d4rt`, and `blender` implementations
 - [x] Single-view image sequence tracking and rendering
 - [x] Multi-timestep Gaussian Splatting camera dataset tracking
 - [x] Camera dataset reordering against a selected reference timestep
+- [x] Blender rigid-mesh tracking for scenes rendered by [NVS2COLMAP](https://github.com/yindaheng98/NVS2COLMAP)
 - [ ] Port the motion estimation workflow from [TrackerSplat](https://github.com/yindaheng98/TrackerSplat) for point-tracker-driven motion synthesis
 - [ ] Regularize 3DGS training with point tracker trajectories
 
@@ -144,6 +145,7 @@ The built-in trackers are:
 - `vggt`: VGGT TrackHead point tracker
 - `mvtap`: MV-TAP multi-view point tracker
 - `d4rt`: OpenD4RT 2D correspondence head
+- `blender`: rigid-mesh tracker for a `.blend` file rendered by [NVS2COLMAP](https://github.com/yindaheng98/NVS2COLMAP). See [Blender mesh tracking](#blender-mesh-tracking).
 
 ### Track One Image Sequence
 
@@ -201,6 +203,57 @@ python -m track_4dgs.track2d \
     -i 30000 \
     --load_cameras output/frame_000/cameras.json output/frame_001/cameras.json \
     --mode camera
+```
+
+### Blender Mesh Tracking
+
+`track_4dgs.blender` (`--tracker blender`) binds query pixels to rigid meshes in a `.blend` file and carries them with each mesh `matrix_world`. Use it together with the Blender tools in [NVS2COLMAP](https://github.com/yindaheng98/NVS2COLMAP).
+
+[NVS2COLMAP](https://github.com/yindaheng98/NVS2COLMAP) renders that blend file into a Neural 3D Video scene (`poses_bounds.npy` and one video per camera), then `nvs2colmap.n3dv` writes one COLMAP camera dataset per frame. This tracker reads the same `.blend` file and those frame datasets. Cameras stay in the blend world, look along +Z, and treat image +Y as downward, which is the OpenCV camera NVS2COLMAP stores in `poses_bounds.npy`. Dataset frame `i` in `--sources` is Blender frame `frame_start + i * frame_step`. Leaving `frame_start` unset uses `scene.frame_start` from the blend file.
+
+Install NVS2COLMAP and keep a Blender executable on `PATH` as `blender`, or pass another path with `-m blender="'path/to/blender'"`. `warp-lang` is already installed with this package.
+
+`nvs2colmap-sample-cameras` can place the cameras and write `poses_bounds.npy`. Render the blend file from those cameras:
+
+```shell
+python -m nvs2colmap.blender \
+    --path data/scene \
+    --blend data/scene.blend \
+    --n-frames 300
+```
+
+Decode the rendered videos into per-frame COLMAP datasets:
+
+```shell
+python -m nvs2colmap.n3dv \
+    --path data/scene \
+    --ffmpeg ffmpeg \
+    --ffprobe ffprobe \
+    --n-frames 300
+```
+
+Track those frames with the same blend file:
+
+```shell
+python -m track_4dgs.track2d \
+    -s data/scene/frame1 data/scene/frame2 data/scene/frame3 \
+    -d output/scene \
+    -i 30000 \
+    --tracker blender \
+    -m blend="'data/scene.blend'"
+```
+
+The defaults line up when both NVS2COLMAP commands start at frame 1 and step by 1, and `--sources` lists `frame1`, `frame2`, ... in order. `nvs2colmap.blender --frame-step` already drops frames inside each camera video, so `nvs2colmap.n3dv` still writes consecutive `frame*` folders. If that render used `--start-number N` and `--frame-step S`, set `frame_start` to the blend file's `scene.frame_start + (N - 1)` and `frame_step` to `S`. A later `nvs2colmap.n3dv --start-number M` skips `M - 1` rendered frames, so add `(M - 1) * S` to `frame_start`. For a blend file whose `scene.frame_start` is 1, `--start-number 10 --frame-step 2` on the render and a default `n3dv` extract look like this:
+
+```shell
+python -m track_4dgs.track2d \
+    -s data/scene/frame1 data/scene/frame2 data/scene/frame3 \
+    -d output/scene \
+    -i 30000 \
+    --tracker blender \
+    -m blend="'data/scene.blend'" \
+    -m frame_start=10 \
+    -m frame_step=2
 ```
 
 ## API Usage
@@ -341,4 +394,4 @@ python -m track_4dgs.track1v --tracker mytracker -s frame0.png frame1.png -d out
 
 ## Acknowledgement
 
-This repo is developed based on [CoTracker](https://github.com/facebookresearch/co-tracker), [VGGT](https://github.com/facebookresearch/vggt), [MV-TAP](https://github.com/cvlab-kaist/MV-TAP), [LightGlue](https://github.com/jytime/LightGlue), and [gaussian-splatting (packaged)](https://github.com/yindaheng98/gaussian-splatting). Many thanks to the authors for open-sourcing their codebases.
+This repo is developed based on [CoTracker](https://github.com/facebookresearch/co-tracker), [VGGT](https://github.com/facebookresearch/vggt), [MV-TAP](https://github.com/cvlab-kaist/MV-TAP), [LightGlue](https://github.com/jytime/LightGlue), [gaussian-splatting (packaged)](https://github.com/yindaheng98/gaussian-splatting), and [NVS2COLMAP](https://github.com/yindaheng98/NVS2COLMAP). Many thanks to the authors for open-sourcing their codebases.
