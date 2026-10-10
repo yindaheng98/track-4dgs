@@ -2,8 +2,8 @@
 
 The blend file is already open when this script starts.
 Each mesh is rigid in object space, so triangles are written once and ``matrix_world`` is written per frame.
-Dataset frame ``i`` is Blender frame ``frame_start + i * frame_step``.
-A missing ``--frame-start`` uses ``scene.frame_start``.
+Dataset frame ``i`` is Blender frame ``scene.frame_start + (start_number - 1) + i * frame_step``.
+``--start-number`` and ``--frame-step`` match ``nvs2colmap.blender``.
 The export is written with pickle.
 """
 
@@ -49,12 +49,12 @@ def pose_matrices(scene, meshes, n_frames, frame_base, frame_step):
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--n-frames", type=int, required=True)
-    parser.add_argument("--frame-start", type=int)
+    parser.add_argument("--start-number", type=int, default=1)
     parser.add_argument("--frame-step", type=int, default=1)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args(sys.argv[sys.argv.index("--") + 1:])
     scene = bpy.context.scene
-    frame_base = scene.frame_start if args.frame_start is None else args.frame_start
+    frame_base = scene.frame_start + args.start_number - 1
     meshes = [obj for obj in scene.objects if obj.type == "MESH"]
     verts, faces = export_meshes(meshes)
     matrices = pose_matrices(scene, meshes, args.n_frames, frame_base, args.frame_step)

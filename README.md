@@ -209,7 +209,7 @@ python -m track_4dgs.track2d \
 
 `track_4dgs.blender` (`--tracker blender`) binds query pixels to rigid meshes in a `.blend` file and carries them with each mesh `matrix_world`. Use it together with the Blender tools in [NVS2COLMAP](https://github.com/yindaheng98/NVS2COLMAP).
 
-[NVS2COLMAP](https://github.com/yindaheng98/NVS2COLMAP) renders that blend file into a Neural 3D Video scene (`poses_bounds.npy` and one video per camera), then `nvs2colmap.n3dv` writes one COLMAP camera dataset per frame. This tracker reads the same `.blend` file and those frame datasets. Cameras stay in the blend world, look along +Z, and treat image +Y as downward, which is the OpenCV camera NVS2COLMAP stores in `poses_bounds.npy`. Dataset frame `i` in `--sources` is Blender frame `frame_start + i * frame_step`. Leaving `frame_start` unset uses `scene.frame_start` from the blend file.
+[NVS2COLMAP](https://github.com/yindaheng98/NVS2COLMAP) renders that blend file into a Neural 3D Video scene (`poses_bounds.npy` and one video per camera), then `nvs2colmap.n3dv` writes one COLMAP camera dataset per frame. This tracker reads the same `.blend` file and those frame datasets. Cameras stay in the blend world, look along +Z, and treat image +Y as downward, which is the OpenCV camera NVS2COLMAP stores in `poses_bounds.npy`. Dataset frame `i` in `--sources` is Blender frame `scene.frame_start + (start_number - 1) + i * frame_step`. `start_number` and `frame_step` are the same values as `nvs2colmap.blender --start-number` and `--frame-step`. `start_number` is 1-based and defaults to 1, so the first dataset frame is the blend file's `scene.frame_start`.
 
 Install NVS2COLMAP and keep a Blender executable on `PATH` as `blender`, or pass another path with `-m blender="'path/to/blender'"`. `warp-lang` is already installed with this package.
 
@@ -243,16 +243,23 @@ python -m track_4dgs.track2d \
     -m blend="'data/scene.blend'"
 ```
 
-The defaults line up when both NVS2COLMAP commands start at frame 1 and step by 1, and `--sources` lists `frame1`, `frame2`, ... in order. `nvs2colmap.blender --frame-step` already drops frames inside each camera video, so `nvs2colmap.n3dv` still writes consecutive `frame*` folders. If that render used `--start-number N` and `--frame-step S`, set `frame_start` to the blend file's `scene.frame_start + (N - 1)` and `frame_step` to `S`. A later `nvs2colmap.n3dv --start-number M` skips `M - 1` rendered frames, so add `(M - 1) * S` to `frame_start`. For a blend file whose `scene.frame_start` is 1, `--start-number 10 --frame-step 2` on the render and a default `n3dv` extract look like this:
+Copy `--start-number` and `--frame-step` from the render command onto the tracker. `nvs2colmap.blender --frame-step` already drops frames inside each camera video, and `nvs2colmap.n3dv` still writes consecutive `frame*` folders. Leave `nvs2colmap.n3dv --start-number` at its default of 1: that flag counts frames inside the rendered video, so `frame1` is the first frame the Blender render wrote. `--sources` then lists `frame1`, `frame2`, ... in order.
 
 ```shell
+python -m nvs2colmap.blender \
+    --path data/scene \
+    --blend data/scene.blend \
+    --start-number 10 \
+    --frame-step 2 \
+    --n-frames 300
+
 python -m track_4dgs.track2d \
     -s data/scene/frame1 data/scene/frame2 data/scene/frame3 \
     -d output/scene \
     -i 30000 \
     --tracker blender \
     -m blend="'data/scene.blend'" \
-    -m frame_start=10 \
+    -m start_number=10 \
     -m frame_step=2
 ```
 

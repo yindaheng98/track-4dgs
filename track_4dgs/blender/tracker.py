@@ -21,8 +21,9 @@ class BlenderPointTracker(AbstractBatchPointTracker):
     Rays, object votes, and surface snaps run against that posed mesh.
     Every view of a point shares one query frame.
     Visibility is an any-hit test from each camera to each posed point.
-    Dataset frame ``i`` is Blender frame ``frame_start + i * frame_step``.
-    ``frame_start`` left as ``None`` uses ``scene.frame_start`` from the blend file.
+    Dataset frame ``i`` is Blender frame ``scene.frame_start + (start_number - 1) + i * frame_step``.
+    ``start_number`` and ``frame_step`` match ``nvs2colmap.blender --start-number`` and ``--frame-step``.
+    ``start_number`` is 1-based and defaults to 1, so the first dataset frame is ``scene.frame_start``.
     Cameras use the blend world, look along +Z, and treat image +Y as downward.
     ``eps`` is the visibility depth tolerance in world units.
     """
@@ -32,12 +33,12 @@ class BlenderPointTracker(AbstractBatchPointTracker):
             blend: str,
             blender: str = "blender",
             eps: float = 1e-2,
-            frame_start: int | None = None,
+            start_number: int = 1,
             frame_step: int = 1):
         self.blend = blend
         self.blender = blender
         self.eps = eps
-        self.frame_start = frame_start
+        self.start_number = start_number
         self.frame_step = frame_step
 
     @torch.no_grad()
@@ -64,13 +65,13 @@ class BlenderPointTracker(AbstractBatchPointTracker):
                 "--",
                 "--n-frames",
                 str(n_frames),
+                "--start-number",
+                str(self.start_number),
                 "--frame-step",
                 str(self.frame_step),
                 "--output",
                 str(result_path),
             ]
-            if self.frame_start is not None:
-                command.extend(["--frame-start", str(self.frame_start)])
             subprocess.run(command, check=True)
             result = pickle.loads(result_path.read_bytes())
         verts = [torch.tensor(obj_verts, dtype=torch.float32).reshape(-1, 3) for obj_verts in result["verts"]]
