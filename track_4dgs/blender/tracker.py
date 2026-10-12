@@ -51,7 +51,7 @@ class BlenderPointTracker(AbstractBatchPointTracker):
         )
         n_views, n_points, _ = query.points.shape
         n_frames = len(frames)
-        script = Path(__file__).with_name("blender_worker.py")
+        script = Path(__file__).parent / "workers" / "export_rigid_meshes.py"
         with tempfile.TemporaryDirectory() as folder:
             result_path = Path(folder) / "result.pkl"
             command = [
