@@ -123,3 +123,42 @@ class BlenderScene:
         frame_indices = self.query.frame_indices
         if int(frame_indices.min()) < 0 or int(frame_indices.max()) >= n_frames:
             raise ValueError("Query.frame_indices must index c2w frames")
+
+    def build_render_request(self, view_index: int, frame_index: int) -> RenderRequest:
+        """One still: this view and frame, with the pose converted to Blender."""
+
+        c2w = self.c2w[view_index, frame_index].detach().cpu().numpy().astype(np.float64)
+        return RenderRequest(
+            blend=self.blend,
+            frame=self.frames[frame_index],
+            width=int(self.width[view_index, frame_index]),
+            height=int(self.height[view_index, frame_index]),
+            focal=float(self.focal[view_index, frame_index]),
+            c2w=c2w @ BLENDER_FROM_OPENCV,
+        )
+
+    def build_rendered_camera(self, view_index: int, frame_index: int, reply: RenderReply):
+        """One 3DGS camera from this OpenCV pose and one rendered still."""
+
+        c2w = self.c2w[view_index, frame_index]
+        height = int(self.height[view_index, frame_index])
+        width = int(self.width[view_index, frame_index])
+        focal = float(self.focal[view_index, frame_index])
+        w2c = torch.linalg.inv(c2w.detach().cpu().to(dtype=torch.float32))
+        rgb = torch.from_numpy(np.ascontiguousarray(reply.rgb)).permute(2, 0, 1).float()
+        # depth = torch.from_numpy(np.ascontiguousarray(reply.depth)).float()
+        # object_id = torch.from_numpy(np.ascontiguousarray(reply.object_id)).float()
+        camera = build_camera(
+            image_height=height,
+            image_width=width,
+            FoVx=focal2fov(focal, width),
+            FoVy=focal2fov(focal, height),
+            R=w2c[:3, :3].contiguous(),
+            T=w2c[:3, 3].contiguous(),
+            device="cpu",
+        )
+        return camera._replace(
+            ground_truth_image=rgb,
+            # ground_truth_depth=depth,
+            # custom_data={"object_id": object_id},
+        )
