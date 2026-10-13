@@ -1,9 +1,23 @@
-"""Keep one Blender process that renders stills."""
+"""Keep one Blender process that renders stills, and build supervision from those stills."""
 
 import subprocess
+from collections.abc import Sequence
+from dataclasses import dataclass
 from multiprocessing.connection import Listener
 from pathlib import Path
 
+import numpy as np
+import torch
+import warp as wp
+from gaussian_splatting.camera import build_camera
+from gaussian_splatting.dataset import CameraDataset
+from gaussian_splatting.utils import focal2fov
+
+from ..dataset import AbstractDataset
+from ..dataset.supervision import Supervision
+from ..tracker import Query, Track
+from .kernels import track_points
+from .tracker import BlenderPointTracker
 from .workers.render_server_protocol import AUTH, RenderReply, RenderRequest
 
 
@@ -59,3 +73,51 @@ class RenderServer:
         finally:
             if server is not None:
                 server.wait()
+
+
+@dataclass(frozen=True)
+class BlenderScene:
+    """One blend file, the query to supervise, and the cameras that film it.
+
+    ``c2w`` is OpenCV camera-to-world in the blend world: the camera looks along
+    ``+Z`` and image ``+Y`` points down. Shape is ``[V, D, 4, 4]``, one pose per
+    view per frame. ``V`` matches ``query``.
+    ``height``, ``width``, and ``focal`` are ``[V, D]``. ``focal`` is pixels,
+    ``fx = fy``, and the principal point is the image center.
+    ``frames`` is the absolute Blender frame for each column of ``c2w``, length ``D``.
+    """
+
+    blend: str
+    frames: Sequence[int]
+    query: Query
+    c2w: torch.Tensor
+    height: torch.Tensor
+    width: torch.Tensor
+    focal: torch.Tensor
+
+    def __post_init__(self):
+        c2w = self.c2w
+        n_views = self.query.points.shape[0]
+        if not torch.is_tensor(c2w) or not torch.is_floating_point(c2w):
+            raise TypeError("c2w must be a floating point tensor")
+        if c2w.ndim != 4 or c2w.shape[0] != n_views or c2w.shape[-2:] != (4, 4):
+            raise ValueError("c2w must be [V, D, 4, 4] with V matching Query")
+        if c2w.shape[1] < 1:
+            raise ValueError("c2w must contain at least one frame")
+        n_frames = c2w.shape[1]
+        if len(self.frames) != n_frames:
+            raise ValueError("frames must contain one Blender frame per c2w column")
+        if any(isinstance(frame, bool) or not isinstance(frame, int) for frame in self.frames):
+            raise TypeError("frames must be a sequence of ints")
+        shape = (n_views, n_frames)
+        for name in ("height", "width", "focal"):
+            value = getattr(self, name)
+            if not torch.is_tensor(value) or tuple(value.shape) != shape:
+                raise ValueError(f"{name} must be [V, D]")
+        if not _whole_numbers(self.height) or not _whole_numbers(self.width):
+            raise ValueError("height and width must be integers")
+        if int(self.height.min()) <= 0 or int(self.width.min()) <= 0 or float(self.focal.min()) <= 0:
+            raise ValueError("height, width, and focal must be positive")
+        frame_indices = self.query.frame_indices
+        if int(frame_indices.min()) < 0 or int(frame_indices.max()) >= n_frames:
+            raise ValueError("Query.frame_indices must index c2w frames")
