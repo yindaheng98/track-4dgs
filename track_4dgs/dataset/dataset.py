@@ -24,6 +24,18 @@ class AbstractDataset(Dataset[Supervision], ABC):
 
         return self
 
+    @classmethod
+    def from_kwargs(cls, **kwargs) -> 'AbstractDataset':
+        """Build a dataset from keyword arguments, separately from ``__init__``.
+
+        The only input is ``kwargs``. Callers can turn CLI options into that dict
+        and unpack it::
+
+            configs = {o.split("=", 1)[0]: eval(o.split("=", 1)[1]) for o in args.option}
+            dataset = DatasetClass.from_kwargs(**configs)
+        """
+        return cls(**kwargs)
+
     def dump(self, folder: str) -> None:
         """Save every sample to ``folder/supervision{i}`` via :meth:`Supervision.save`."""
         for i in range(len(self)):
