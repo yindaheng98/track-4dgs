@@ -23,9 +23,8 @@ class BlenderPointTracker(AbstractBatchPointTracker):
     Rays, object votes, and surface snaps run against that posed mesh.
     Every view of a point shares one query frame.
     Visibility is an any-hit test from each camera to each posed point.
-    Dataset frame ``i`` is Blender frame ``scene.frame_start + (start_number - 1) + i * frame_step``.
-    ``start_number`` and ``frame_step`` match ``nvs2colmap.blender --start-number`` and ``--frame-step``.
-    ``start_number`` is 1-based and defaults to 1, so the first dataset frame is ``scene.frame_start``.
+    Exported frames are ``start_number + i * frame_step`` for ``i`` in ``range(n_frames)``.
+    ``start_number`` is the first absolute Blender frame. ``n_frames`` defaults to 2.
     Cameras use the blend world, look along +Z, and treat image +Y as downward.
     ``eps`` is the visibility depth tolerance in world units.
     """
@@ -36,8 +35,10 @@ class BlenderPointTracker(AbstractBatchPointTracker):
             blender: str = "blender",
             eps: float = 1e-2,
             start_number: int = 1,
-            frame_step: int = 1):
+            frame_step: int = 1,
+            n_frames: int = 2):
         self.eps = eps
+        frames = [start_number + index * frame_step for index in range(n_frames)]
         script = Path(__file__).parent / "workers" / "export_rigid_meshes.py"
         listener = Listener(("127.0.0.1", 0), authkey=AUTH)
         server = None
@@ -53,10 +54,8 @@ class BlenderPointTracker(AbstractBatchPointTracker):
                 "--",
                 "--port",
                 str(listener.address[1]),
-                "--start-number",
-                str(start_number),
-                "--frame-step",
-                str(frame_step),
+                "--frames",
+                *[str(frame) for frame in frames],
             ]
             server = subprocess.Popen(command)
             connection = listener.accept()

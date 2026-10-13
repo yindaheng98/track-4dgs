@@ -2,9 +2,7 @@
 
 The blend file is already open when this script starts.
 Each mesh is rigid in object space, so triangles are written once and ``matrix_world`` is written per frame.
-Dataset frame ``i`` is Blender frame ``scene.frame_start + (start_number - 1) + i * frame_step``.
-``--start-number`` and ``--frame-step`` match ``nvs2colmap.blender``.
-Every such frame through ``scene.frame_end`` is exported.
+``--frames`` lists absolute Blender frames and is exported in that order.
 The export is one ``pickle.dumps`` byte string on the connection, then this process exits.
 """
 
@@ -30,14 +28,15 @@ def export_meshes(meshes):
     return verts, faces
 
 
-def pose_matrices(scene, meshes, n_frames, frame_base, frame_step):
-    """Write each mesh ``matrix_world`` for every dataset frame.
+def pose_matrices(scene, meshes, frames):
+    """Write each mesh ``matrix_world`` for every Blender frame in ``frames``.
 
     ``matrix_world`` is read after the depsgraph evaluates that frame.
     """
     matrices = []
-    for frame_index in range(n_frames):
-        scene.frame_set(frame_base + int(frame_index) * frame_step)
+    n_frames = len(frames)
+    for frame_index, frame in enumerate(frames):
+        scene.frame_set(int(frame))
         bpy.context.evaluated_depsgraph_get()
         frame_matrices = []
         for obj in meshes:
@@ -52,18 +51,13 @@ def pose_matrices(scene, meshes, n_frames, frame_base, frame_step):
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", type=int, required=True)
-    parser.add_argument("--start-number", type=int, default=1)
-    parser.add_argument("--frame-step", type=int, default=1)
+    parser.add_argument("--frames", type=int, nargs="+", required=True)
     args = parser.parse_args(sys.argv[sys.argv.index("--") + 1:])
     scene = bpy.context.scene
-    frame_base = scene.frame_start + args.start_number - 1
-    if frame_base > scene.frame_end:
-        n_frames = 0
-    else:
-        n_frames = (scene.frame_end - frame_base) // args.frame_step + 1
+    frames = list(args.frames)
     meshes = [obj for obj in scene.objects if obj.type == "MESH"]
     verts, faces = export_meshes(meshes)
-    matrices = pose_matrices(scene, meshes, n_frames, frame_base, args.frame_step)
+    matrices = pose_matrices(scene, meshes, frames)
     payload = pickle.dumps({
         "verts": verts,
         "faces": faces,
