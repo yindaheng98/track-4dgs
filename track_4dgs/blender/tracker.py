@@ -15,6 +15,54 @@ from .kernels import track_points
 AUTH = b"track-4dgs-export"
 
 
+def export_rigid_meshes(
+        blend: str,
+        frames: Sequence[int],
+        blender: str = "blender") -> tuple:
+    """Export rigid meshes and one ``matrix_world`` per frame from a blend file.
+
+    ``frames`` are absolute Blender frames, returned in that order.
+    Returns object-local ``verts`` and ``faces``, plus per-frame ``matrices``.
+    """
+
+    script = Path(__file__).parent / "workers" / "export_rigid_meshes.py"
+    listener = Listener(("127.0.0.1", 0), authkey=AUTH)
+    server = None
+    try:
+        command = [
+            blender,
+            str(Path(blend).absolute()),
+            "--background",
+            "--python-exit-code",
+            "1",
+            "--python",
+            str(script),
+            "--",
+            "--port",
+            str(listener.address[1]),
+            "--frames",
+            *[str(frame) for frame in frames],
+        ]
+        server = subprocess.Popen(command)
+        connection = listener.accept()
+        try:
+            payload = connection.recv()
+        finally:
+            connection.close()
+    except BaseException:
+        if server is not None and server.poll() is None:
+            server.kill()
+            server.wait()
+        raise
+    finally:
+        listener.close()
+    returncode = server.wait()
+    if returncode != 0:
+        raise subprocess.CalledProcessError(returncode, command)
+    result = pickle.loads(payload)
+    return result["verts"], result["faces"], result["matrices"]
+
+
 class BlenderPointTracker(AbstractBatchPointTracker):
     """Track query pixels by binding them to rigid meshes in a blend file.
 
@@ -24,6 +72,7 @@ class BlenderPointTracker(AbstractBatchPointTracker):
     Visibility is an any-hit test from each camera to each posed point.
     Exported frames are ``start_number + i * frame_step`` for ``i`` in ``range(n_frames)``.
     ``start_number`` is the first absolute Blender frame. ``n_frames`` defaults to 2.
+    ``from_frames`` exports the absolute Blender frames it is given, in that order.
     Cameras use the blend world, look along +Z, and treat image +Y as downward.
     ``eps`` is the visibility depth tolerance in world units.
     """
@@ -37,46 +86,30 @@ class BlenderPointTracker(AbstractBatchPointTracker):
             frame_step: int = 1,
             n_frames: int = 2):
         self.eps = eps
-        frames = [start_number + index * frame_step for index in range(n_frames)]
-        script = Path(__file__).parent / "workers" / "export_rigid_meshes.py"
-        listener = Listener(("127.0.0.1", 0), authkey=AUTH)
-        server = None
-        try:
-            command = [
-                blender,
-                str(Path(blend).absolute()),
-                "--background",
-                "--python-exit-code",
-                "1",
-                "--python",
-                str(script),
-                "--",
-                "--port",
-                str(listener.address[1]),
-                "--frames",
-                *[str(frame) for frame in frames],
-            ]
-            server = subprocess.Popen(command)
-            connection = listener.accept()
-            try:
-                payload = connection.recv()
-            finally:
-                connection.close()
-        except BaseException:
-            if server is not None and server.poll() is None:
-                server.kill()
-                server.wait()
-            raise
-        finally:
-            listener.close()
-        returncode = server.wait()
-        if returncode != 0:
-            raise subprocess.CalledProcessError(returncode, command)
-        result = pickle.loads(payload)
-        self.verts = [torch.tensor(obj_verts, dtype=torch.float32).reshape(-1, 3) for obj_verts in result["verts"]]
-        self.faces = [torch.tensor(obj_faces, dtype=torch.int32).reshape(-1, 3) for obj_faces in result["faces"]]
-        self.matrices = torch.tensor(result["matrices"], dtype=torch.float32)
         self.device = torch.device("cpu")
+        frames = [start_number + index * frame_step for index in range(n_frames)]
+        self.load_frames(blend, frames, blender)
+
+    @classmethod
+    def from_frames(
+            cls,
+            blend: str,
+            frames: Sequence[int],
+            blender: str = "blender",
+            eps: float = 1e-2) -> 'BlenderPointTracker':
+        """Export rigid meshes posed at the absolute Blender frames in ``frames``."""
+
+        self = cls.__new__(cls)
+        self.eps = eps
+        self.device = torch.device("cpu")
+        self.load_frames(blend, frames, blender)
+        return self
+
+    def load_frames(self, blend: str, frames: Sequence[int], blender: str) -> None:
+        verts, faces, matrices = export_rigid_meshes(blend, frames, blender)
+        self.verts = [torch.tensor(obj_verts, dtype=torch.float32).reshape(-1, 3) for obj_verts in verts]
+        self.faces = [torch.tensor(obj_faces, dtype=torch.int32).reshape(-1, 3) for obj_faces in faces]
+        self.matrices = torch.tensor(matrices, dtype=torch.float32)
 
     def to(self, device) -> 'BlenderPointTracker':
         """Move the exported meshes onto ``device`` and run Warp there."""
