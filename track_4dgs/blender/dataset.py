@@ -67,6 +67,25 @@ class BlenderScene:
         if int(frame_indices.min()) < 0 or int(frame_indices.max()) >= n_frames:
             raise ValueError("Query.frame_indices must index c2w frames")
 
+    @property
+    def device(self):
+        """Device of the query and the camera tensors."""
+
+        return self.query.points.device
+
+    def to(self, device) -> 'BlenderScene':
+        """Return this scene with the query and camera tensors on ``device``."""
+
+        return BlenderScene(
+            blend=self.blend,
+            frames=self.frames,
+            query=self.query.to(device),
+            c2w=self.c2w.to(device),
+            height=self.height.to(device),
+            width=self.width.to(device),
+            focal=self.focal.to(device),
+        )
+
     def build_render_request(self, view_index: int, frame_index: int) -> RenderRequest:
         """One still: this view and frame, with the pose converted to Blender."""
 
@@ -80,15 +99,15 @@ class BlenderScene:
             c2w=c2w @ BLENDER_FROM_OPENCV,
         )
 
-    def build_rendered_camera(self, view_index: int, frame_index: int, reply: RenderReply, device) -> Camera:
+    def build_rendered_camera(self, view_index: int, frame_index: int, reply: RenderReply) -> Camera:
         """One 3DGS camera from this OpenCV pose and one rendered still."""
 
         c2w = self.c2w[view_index, frame_index]
         height = int(self.height[view_index, frame_index])
         width = int(self.width[view_index, frame_index])
         focal = float(self.focal[view_index, frame_index])
-        w2c = torch.linalg.inv(c2w.detach().to(device=device, dtype=torch.float32))
-        rgb = torch.from_numpy(np.ascontiguousarray(reply.rgb)).permute(2, 0, 1).to(device=device, dtype=torch.float32)
+        w2c = torch.linalg.inv(c2w.detach().to(dtype=torch.float32))
+        rgb = torch.from_numpy(np.ascontiguousarray(reply.rgb)).permute(2, 0, 1).to(device=self.device, dtype=torch.float32)
         # depth = torch.from_numpy(np.ascontiguousarray(reply.depth)).to(device=device, dtype=torch.float32)
         # object_id = torch.from_numpy(np.ascontiguousarray(reply.object_id)).to(device=device, dtype=torch.float32)
         camera = build_camera(
@@ -98,7 +117,7 @@ class BlenderScene:
             FoVy=focal2fov(focal, height),
             R=w2c[:3, :3].contiguous(),
             T=w2c[:3, 3].contiguous(),
-            device=device,
+            device=self.device,
         )
         return camera._replace(
             ground_truth_image=rgb,
