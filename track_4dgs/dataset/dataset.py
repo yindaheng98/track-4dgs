@@ -22,3 +22,20 @@ class AbstractDataset(Dataset[Supervision], ABC):
         """Save every sample to ``folder/supervision{i}`` via :meth:`Supervision.save`."""
         for i in range(len(self)):
             self[i].save(os.path.join(folder, f"supervision{i}"))
+
+
+class SavedDataset(AbstractDataset):
+    """Load ``folder/supervision{i}`` samples written by :meth:`AbstractDataset.dump`."""
+
+    def __init__(self, folder: str):
+        self.folder = folder
+        index = 0
+        while os.path.isdir(os.path.join(folder, f"supervision{index}")):
+            index += 1
+        self.length = index
+
+    def __len__(self) -> int:
+        return self.length
+
+    def __getitem__(self, index: int) -> Supervision:
+        return Supervision.load(os.path.join(self.folder, f"supervision{index}"))
