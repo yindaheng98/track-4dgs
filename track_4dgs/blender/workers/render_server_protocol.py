@@ -8,6 +8,7 @@ A failed render is :meth:`RenderReply.encode_error`.
 The client sends ``None`` to stop the server.
 Array fields travel as raw bytes so the two NumPy builds do not share a pickle layout.
 The dtype and shape travel with each array.
+``frame`` is the Blender frame, so the server calls ``scene.frame_set``.
 ``focal`` is pixels. The server maps it to a lens on a 36 mm horizontal sensor.
 ``c2w`` is Blender camera-to-world, so the server assigns it to ``matrix_world``.
 """
@@ -78,6 +79,8 @@ class RenderRequest:
     """One still sent to ``render_server.py``.
 
     ``blend`` is the configured ``.blend`` path.
+    ``frame`` is the Blender frame to render. The server does not convert dataset indices.
+    Dataset frame ``i`` is Blender frame ``scene.frame_start + (start_number - 1) + i * frame_step``.
     ``width`` and ``height`` are the still size in pixels.
     ``focal`` is the pinhole focal length in pixels. The principal point is the image center.
     ``c2w`` is ``(4, 4)`` Blender camera-to-world.
@@ -86,6 +89,7 @@ class RenderRequest:
     """
 
     blend: str
+    frame: int
     width: int
     height: int
     focal: float
