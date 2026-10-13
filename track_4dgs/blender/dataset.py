@@ -114,8 +114,10 @@ class BlenderScene:
             value = getattr(self, name)
             if not torch.is_tensor(value) or tuple(value.shape) != shape:
                 raise ValueError(f"{name} must be [V, D]")
-        if not _whole_numbers(self.height) or not _whole_numbers(self.width):
-            raise ValueError("height and width must be integers")
+        if self.height.is_floating_point() or self.height.dtype == torch.bool:
+            raise TypeError("height must be an integer tensor")
+        if self.width.is_floating_point() or self.width.dtype == torch.bool:
+            raise TypeError("width must be an integer tensor")
         if int(self.height.min()) <= 0 or int(self.width.min()) <= 0 or float(self.focal.min()) <= 0:
             raise ValueError("height, width, and focal must be positive")
         frame_indices = self.query.frame_indices
