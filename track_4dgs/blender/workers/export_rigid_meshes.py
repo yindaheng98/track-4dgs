@@ -4,15 +4,18 @@ The blend file is already open when this script starts.
 Each mesh is rigid in object space, so triangles are written once and ``matrix_world`` is written per frame.
 Dataset frame ``i`` is Blender frame ``scene.frame_start + (start_number - 1) + i * frame_step``.
 ``--start-number`` and ``--frame-step`` match ``nvs2colmap.blender``.
-The export is written with pickle.
+Every such frame through ``scene.frame_end`` is exported.
+The export is one ``pickle.dumps`` byte string on the connection, then this process exits.
 """
 
 import argparse
 import pickle
 import sys
-from pathlib import Path
+from multiprocessing.connection import Client
 
 import bpy
+
+AUTH = b"track-4dgs-export"
 
 
 def export_meshes(meshes):
@@ -48,21 +51,29 @@ def pose_matrices(scene, meshes, n_frames, frame_base, frame_step):
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--n-frames", type=int, required=True)
+    parser.add_argument("--port", type=int, required=True)
     parser.add_argument("--start-number", type=int, default=1)
     parser.add_argument("--frame-step", type=int, default=1)
-    parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args(sys.argv[sys.argv.index("--") + 1:])
     scene = bpy.context.scene
     frame_base = scene.frame_start + args.start_number - 1
+    if frame_base > scene.frame_end:
+        n_frames = 0
+    else:
+        n_frames = (scene.frame_end - frame_base) // args.frame_step + 1
     meshes = [obj for obj in scene.objects if obj.type == "MESH"]
     verts, faces = export_meshes(meshes)
-    matrices = pose_matrices(scene, meshes, args.n_frames, frame_base, args.frame_step)
-    args.output.write_bytes(pickle.dumps({
+    matrices = pose_matrices(scene, meshes, n_frames, frame_base, args.frame_step)
+    payload = pickle.dumps({
         "verts": verts,
         "faces": faces,
         "matrices": matrices,
-    }, protocol=pickle.HIGHEST_PROTOCOL))
+    }, protocol=pickle.HIGHEST_PROTOCOL)
+    conn = Client(("127.0.0.1", args.port), authkey=AUTH)
+    try:
+        conn.send(payload)
+    finally:
+        conn.close()
 
 
 if __name__ == "__main__":
