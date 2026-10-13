@@ -5,7 +5,6 @@ from dataclasses import dataclass
 
 import numpy as np
 import torch
-import warp as wp
 from gaussian_splatting.camera import Camera, build_camera
 from gaussian_splatting.utils import focal2fov
 
@@ -16,6 +15,10 @@ from .kernels import track_points
 from .render_server import RenderServer
 from .tracker import BlenderPointTracker
 from .workers.render_server_protocol import RenderReply, RenderRequest
+
+
+# OpenCV camera (+Z forward, +Y down) to Blender camera (-Z forward, +Y up).
+BLENDER_FROM_OPENCV = np.diag([1.0, -1.0, -1.0, 1.0]).astype(np.float64)
 
 
 @dataclass(frozen=True)
@@ -124,3 +127,65 @@ class BlenderScene:
             # ground_truth_depth=depth,
             # custom_data={"object_id": object_id},
         )
+
+
+class BlenderDataset(AbstractDataset):
+    """Render each :class:`BlenderScene` into one :class:`Supervision` sample.
+
+    Images and depth come from :class:`RenderServer`.
+    Tracks bind the query to the blend's rigid meshes.
+    """
+
+    def __init__(self, *scenes: BlenderScene, blender: str = "blender"):
+        self.scenes = scenes
+        self.blender = blender
+        self.render_server = RenderServer(blender)
+
+    def __len__(self) -> int:
+        return len(self.scenes)
+
+    def to(self, device) -> 'BlenderDataset':
+        self.scenes = tuple(scene.to(device) for scene in self.scenes)
+        return self
+
+    def __getitem__(self, index: int) -> Supervision:
+        scene = self.scenes[index]
+        frames = [self.render_frame(scene, frame_index) for frame_index in range(scene.c2w.shape[1])]
+        return Supervision(query=scene.query, frames=frames, tracks=self.tracks(scene, frames))
+
+    def render_frame(self, scene: BlenderScene, frame_index: int) -> list[Camera]:
+        """Render every view of one frame."""
+
+        cameras = []
+        for view_index in range(scene.c2w.shape[0]):
+            request = scene.build_render_request(view_index, frame_index)
+            reply = self.render_server.render(request)
+            camera = scene.build_rendered_camera(view_index, frame_index, reply)
+            cameras.append(camera)
+        return cameras
+
+    def tracks(self, scene: BlenderScene, frames: Sequence[Sequence[Camera]]) -> list[Track]:
+        """Bind ``scene.query`` to the rigid meshes posed at ``scene.frames``."""
+
+        query = scene.query
+        tracker = BlenderPointTracker.from_frames(scene.blend, scene.frames, blender=self.blender).to(scene.device)
+        n_views, n_points, _ = query.points.shape
+        n_frames = len(frames)
+        if tracker.matrices.shape[0] != n_frames:
+            raise ValueError(
+                f"requested {n_frames} Blender frames but the blend exported {tracker.matrices.shape[0]}"
+            )
+        points, visibility, valid = track_points(
+            tracker.verts, tracker.faces, tracker.matrices, scene.query, frames, tracker.eps, str(tracker.device),
+        )
+        confidence = query.points.new_ones((n_views, n_frames, n_points))
+        mask = valid.to(device=query.points.device, dtype=torch.bool).expand(n_frames, n_points)
+        return [
+            Track(
+                points=points[view_index],
+                visibility=visibility[view_index],
+                confidence=confidence[view_index],
+                mask=mask,
+            )
+            for view_index in range(n_views)
+        ]
