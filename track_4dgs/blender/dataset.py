@@ -9,8 +9,7 @@ from pathlib import Path
 import numpy as np
 import torch
 import warp as wp
-from gaussian_splatting.camera import build_camera
-from gaussian_splatting.dataset import CameraDataset
+from gaussian_splatting.camera import Camera, build_camera
 from gaussian_splatting.utils import focal2fov
 
 from ..dataset import AbstractDataset
@@ -137,17 +136,17 @@ class BlenderScene:
             c2w=c2w @ BLENDER_FROM_OPENCV,
         )
 
-    def build_rendered_camera(self, view_index: int, frame_index: int, reply: RenderReply):
+    def build_rendered_camera(self, view_index: int, frame_index: int, reply: RenderReply, device) -> Camera:
         """One 3DGS camera from this OpenCV pose and one rendered still."""
 
         c2w = self.c2w[view_index, frame_index]
         height = int(self.height[view_index, frame_index])
         width = int(self.width[view_index, frame_index])
         focal = float(self.focal[view_index, frame_index])
-        w2c = torch.linalg.inv(c2w.detach().cpu().to(dtype=torch.float32))
-        rgb = torch.from_numpy(np.ascontiguousarray(reply.rgb)).permute(2, 0, 1).float()
-        # depth = torch.from_numpy(np.ascontiguousarray(reply.depth)).float()
-        # object_id = torch.from_numpy(np.ascontiguousarray(reply.object_id)).float()
+        w2c = torch.linalg.inv(c2w.detach().to(device=device, dtype=torch.float32))
+        rgb = torch.from_numpy(np.ascontiguousarray(reply.rgb)).permute(2, 0, 1).to(device=device, dtype=torch.float32)
+        # depth = torch.from_numpy(np.ascontiguousarray(reply.depth)).to(device=device, dtype=torch.float32)
+        # object_id = torch.from_numpy(np.ascontiguousarray(reply.object_id)).to(device=device, dtype=torch.float32)
         camera = build_camera(
             image_height=height,
             image_width=width,
@@ -155,7 +154,7 @@ class BlenderScene:
             FoVy=focal2fov(focal, height),
             R=w2c[:3, :3].contiguous(),
             T=w2c[:3, 3].contiguous(),
-            device="cpu",
+            device=device,
         )
         return camera._replace(
             ground_truth_image=rgb,
