@@ -1,5 +1,6 @@
 import os
 from abc import ABC, abstractmethod
+from argparse import ArgumentParser
 
 from torch.utils.data import Dataset
 
@@ -25,16 +26,24 @@ class AbstractDataset(Dataset[Supervision], ABC):
         return self
 
     @classmethod
-    def from_kwargs(cls, **kwargs) -> 'AbstractDataset':
-        """Build a dataset from keyword arguments, separately from ``__init__``.
+    @abstractmethod
+    def add_argument(cls, parser: ArgumentParser):
+        """Register this dataset's arguments on ``parser``.
 
-        The only input is ``kwargs``. Callers can turn CLI options into that dict
-        and unpack it::
+        Read ``--dataset`` before this runs, then parse in :meth:`from_args`::
 
-            configs = {o.split("=", 1)[0]: eval(o.split("=", 1)[1]) for o in args.option}
-            dataset = DatasetClass.from_kwargs(**configs)
+            known, _ = parser.parse_known_args()
+            cls = datasets[known.dataset]
+            cls.add_argument(parser)
+            dataset = cls.from_args(parser)
         """
-        return cls(**kwargs)
+        raise NotImplementedError
+
+    @classmethod
+    @abstractmethod
+    def from_args(cls, parser: ArgumentParser) -> 'AbstractDataset':
+        """Parse arguments added by :meth:`add_argument` and build this dataset."""
+        raise NotImplementedError
 
     def dump(self, folder: str) -> None:
         """Save every sample to ``folder/supervision{i}`` via :meth:`Supervision.save`."""
@@ -52,6 +61,14 @@ class SavedDataset(AbstractDataset):
         while os.path.isdir(os.path.join(folder, f"supervision{index}")):
             index += 1
         self.length = index
+
+    @classmethod
+    def add_argument(cls, parser: ArgumentParser):
+        parser.add_argument("--folder", required=True, type=str)
+
+    @classmethod
+    def from_args(cls, parser: ArgumentParser) -> 'SavedDataset':
+        return cls(parser.parse_args().folder)
 
     def __len__(self) -> int:
         return self.length
