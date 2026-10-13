@@ -11,98 +11,60 @@ from .tracker import Query, Track
 
 
 class QueryBank:
-    """Row-major cache of per-point tracks loaded from ``path``.
+    """Per-point tracks stored under ``path`` as ``{key}/{view}.pt``.
 
-    ``keys[i]`` names row ``i``. ``points`` is ``[M, V, D, 2]`` and
-    ``visibility`` / ``confidence`` / ``mask`` are ``[M, V, D]``.
-    ``bank[keys]`` returns one :class:`Track` per view for those query points.
-    :meth:`add` appends rows and writes the bank back to ``path``.
+    Each file is an ``N=1`` :class:`Track` written with :meth:`Track.save`.
+    :meth:`add` writes points from one :class:`Track` per view.
+    :meth:`missing` returns indices of keys that do not yet have every view.
+    ``bank[keys]`` loads them back as one :class:`Track` per view.
     """
 
-    def __init__(self, path: str):
+    def __init__(self, path: str, n_views: int):
         self.path = path
-        self.keys: list[str] = []
-        self.points = torch.empty((0, 0, 0, 2))
-        self.visibility = torch.empty((0, 0, 0))
-        self.confidence = torch.empty((0, 0, 0))
-        self.mask = torch.empty((0, 0, 0), dtype=torch.bool)
-        if os.path.isfile(path):
-            payload = torch.load(path, map_location="cpu", weights_only=True)
-            self.keys = list(payload["keys"])
-            self.points = payload["points"]
-            self.visibility = payload["visibility"]
-            self.confidence = payload["confidence"]
-            self.mask = payload["mask"]
-        self.key_index = {key: index for index, key in enumerate(self.keys)}
+        self.n_views = n_views
 
-    def add(self, keys: Sequence[str], tracked: Sequence[TrackedCameraDataset]) -> None:
-        view_points = []
-        view_visibility = []
-        view_confidence = []
-        view_mask = []
-        for view_idx in range(len(tracked[0].camera_tracks)):
-            camera_tracks = [dataset.camera_tracks[view_idx] for dataset in tracked]
-            view_points.append(torch.stack([track.points for track in camera_tracks]).detach().cpu())
-            view_visibility.append(torch.stack([track.visibility for track in camera_tracks]).detach().cpu())
-            view_confidence.append(torch.stack([track.confidence for track in camera_tracks]).detach().cpu())
-            view_mask.append(torch.stack([track.mask for track in camera_tracks]).detach().cpu())
-        points = torch.stack(view_points).permute(2, 0, 1, 3).contiguous()
-        visibility = torch.stack(view_visibility).permute(2, 0, 1).contiguous()
-        confidence = torch.stack(view_confidence).permute(2, 0, 1).contiguous()
-        mask = torch.stack(view_mask).permute(2, 0, 1).contiguous()
-        if points.shape[0] != len(keys):
+    def file(self, key: str, view_idx: int) -> str:
+        return os.path.join(self.path, key, f"{view_idx}.pt")
+
+    def add(self, keys: Sequence[str], view_tracks: Sequence[Track]) -> None:
+        if len(view_tracks) != self.n_views or any(track.points.shape[1] != len(keys) for track in view_tracks):
             raise ValueError("cache bank rows must match the number of new keys")
-        if len(self.keys) == 0:
-            self.points = points
-            self.visibility = visibility
-            self.confidence = confidence
-            self.mask = mask
-        else:
-            self.points = torch.cat((self.points, points), dim=0)
-            self.visibility = torch.cat((self.visibility, visibility), dim=0)
-            self.confidence = torch.cat((self.confidence, confidence), dim=0)
-            self.mask = torch.cat((self.mask, mask), dim=0)
-        for key in keys:
-            self.key_index[key] = len(self.keys)
-            self.keys.append(key)
-        directory = os.path.dirname(self.path)
-        if directory:
-            os.makedirs(directory, exist_ok=True)
-        temporary = self.path + ".tmp"
-        torch.save({
-            "keys": list(self.keys),
-            "points": self.points,
-            "visibility": self.visibility,
-            "confidence": self.confidence,
-            "mask": self.mask,
-        }, temporary)
-        os.replace(temporary, self.path)
+        for point_idx, key in enumerate(keys):
+            item = slice(point_idx, point_idx + 1)
+            for view_idx, track in enumerate(view_tracks):
+                path = self.file(key, view_idx)
+                os.makedirs(os.path.dirname(path), exist_ok=True)
+                temporary = path + ".tmp"
+                Track(
+                    points=track.points[:, item],
+                    visibility=track.visibility[:, item],
+                    confidence=track.confidence[:, item],
+                    mask=track.mask[:, item],
+                ).save(temporary)
+                os.replace(temporary, path)
 
     def missing(self, keys: Sequence[str]) -> list[int]:
         missing_index: list[int] = []
         seen: set[str] = set()
         for index, key in enumerate(keys):
-            if key in self.key_index or key in seen:
+            if key in seen:
                 continue
             seen.add(key)
-            missing_index.append(index)
+            if any(not os.path.isfile(self.file(key, view_idx)) for view_idx in range(self.n_views)):
+                missing_index.append(index)
         return missing_index
 
     def __getitem__(self, keys: Sequence[str]) -> list[Track]:
-        indices = torch.tensor([self.key_index[key] for key in keys], dtype=torch.long)
-        points = self.points[indices].permute(1, 2, 0, 3).contiguous()
-        visibility = self.visibility[indices].permute(1, 2, 0).contiguous()
-        confidence = self.confidence[indices].permute(1, 2, 0).contiguous()
-        mask = self.mask[indices].permute(1, 2, 0).contiguous()
-        return [
-            Track(
-                points=points[view_idx],
-                visibility=visibility[view_idx],
-                confidence=confidence[view_idx],
-                mask=mask[view_idx],
-            )
-            for view_idx in range(points.shape[0])
-        ]
+        loaded = []
+        for view_idx in range(self.n_views):
+            tracks = [Track.load(self.file(key, view_idx)) for key in keys]
+            loaded.append(Track(
+                points=torch.cat([track.points for track in tracks], dim=1),
+                visibility=torch.cat([track.visibility for track in tracks], dim=1),
+                confidence=torch.cat([track.confidence for track in tracks], dim=1),
+                mask=torch.cat([track.mask for track in tracks], dim=1),
+            ))
+        return loaded
 
 
 def hash_tensor(hasher: "hashlib._Hash", tensor: torch.Tensor) -> None:
@@ -115,16 +77,16 @@ def hash_tensor(hasher: "hashlib._Hash", tensor: torch.Tensor) -> None:
 
 
 class CachedCameraDatasetTracker(CameraDatasetTracker):
-    """Reuse per-point tracks from one cache-bank file per frames combination.
+    """Reuse per-point tracks from one cache directory per frames combination.
 
-    Each bank is ``{tracker class}-{hash_frames}.pt`` in ``cache_dir``. Rows are
-    query-point tracks, and ``bank[keys]`` is that query's view tracks. The
-    point hash covers coordinates, frame index, and ``in_image`` only; frames
-    identity is the filename. Saved points are loaded. Only points missing from
-    the bank are passed to :meth:`CameraDatasetTracker.__call__`. Their results are
-    added to the bank and placed back at the original query positions.
-    ``batch_size`` is not part of the key. Use a separate ``cache_dir`` for
-    each tracker configuration.
+    Each directory is ``{tracker class}-{hash_frames}`` in ``cache_dir``. A point
+    is ``{point hash}/{view}.pt``, an ``N=1`` :class:`Track` written with
+    :meth:`Track.save`. The point hash covers coordinates, frame index, and
+    ``in_image`` only; frames identity is the directory name. Saved points are
+    loaded with :meth:`Track.load`. Only points missing a view file are passed
+    to the tracker. Their results are saved and placed back at the original
+    query positions. ``batch_size`` is not part of the key. Use a separate
+    ``cache_dir`` for each tracker configuration.
     """
 
     def __init__(self, tracker, cache_dir: str):
@@ -160,7 +122,7 @@ class CachedCameraDatasetTracker(CameraDatasetTracker):
         """SHA-256 of one query point column.
 
         ``points`` is ``[V, 2]``, ``frame_indices`` and ``in_image`` are ``[V]``.
-        Frames are not included; they select the bank file.
+        Frames are not included; they select the cache directory.
         """
         hasher = hashlib.sha256()
         hash_tensor(hasher, points)
@@ -201,11 +163,11 @@ class CachedCameraDatasetTracker(CameraDatasetTracker):
             return super().__call__(query, frames, batch_size=batch_size)
 
         path = self.bank_path(self.hash_frames(frames))
-        bank = QueryBank(path)
+        bank = QueryBank(path, query.points.shape[0])
         keys = self.point_keys(query)
         missing_index = bank.missing(keys)
         if missing_index:
-            tracked = super().__call__(
+            tracked = self.tracker(
                 self.subset_query(query, missing_index),
                 frames,
                 batch_size=batch_size,
@@ -216,4 +178,4 @@ class CachedCameraDatasetTracker(CameraDatasetTracker):
         return self.attach_view_tracks(frames, [track.to(device) for track in bank[keys]])
 
     def bank_path(self, frames_hash: str) -> str:
-        return os.path.join(self.cache_dir, f"{type(self.tracker).__name__}-{frames_hash}.pt")
+        return os.path.join(self.cache_dir, f"{type(self.tracker).__name__}-{frames_hash}")
