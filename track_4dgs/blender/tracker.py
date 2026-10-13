@@ -7,7 +7,6 @@ from multiprocessing.connection import Listener
 from pathlib import Path
 
 import torch
-import warp as wp
 from gaussian_splatting.dataset import CameraDataset
 
 from ..tracker import AbstractBatchPointTracker, Query, Track
@@ -77,6 +76,16 @@ class BlenderPointTracker(AbstractBatchPointTracker):
         self.verts = [torch.tensor(obj_verts, dtype=torch.float32).reshape(-1, 3) for obj_verts in result["verts"]]
         self.faces = [torch.tensor(obj_faces, dtype=torch.int32).reshape(-1, 3) for obj_faces in result["faces"]]
         self.matrices = torch.tensor(result["matrices"], dtype=torch.float32)
+        self.device = torch.device("cpu")
+
+    def to(self, device) -> 'BlenderPointTracker':
+        """Move the exported meshes onto ``device`` and run Warp there."""
+
+        self.device = torch.device(device)
+        self.verts = [verts.to(self.device) for verts in self.verts]
+        self.faces = [faces.to(self.device) for faces in self.faces]
+        self.matrices = self.matrices.to(self.device)
+        return self
 
     @torch.no_grad()
     def track_batch(
@@ -88,10 +97,8 @@ class BlenderPointTracker(AbstractBatchPointTracker):
         )
         n_views, n_points, _ = query.points.shape
         n_frames = len(frames)
-        wp.init()
-        device = "cuda" if wp.is_cuda_available() else "cpu"
         points, visibility, valid = track_points(
-            self.verts, self.faces, self.matrices, query, frames, self.eps, device,
+            self.verts, self.faces, self.matrices, query, frames, self.eps, str(self.device),
         )
         confidence = query.points.new_ones((n_views, n_frames, n_points))
         mask = valid.to(device=query.points.device, dtype=torch.bool).expand(n_frames, n_points)

@@ -47,7 +47,7 @@ def ray_visibility(
     ``camera_centers`` is ``(V, 3)`` camera centers.
     ``points`` is ``(N, 3)`` world points.
     ``world_verts`` is ``(P, 3)`` posed vertices, and ``faces`` is ``(T, 3)`` int32 triangles into those vertices.
-    ``device`` is a Warp device name such as ``cpu`` or ``cuda``, and Warp is already initialized.
+    ``device`` is a Warp device name such as ``cpu`` or ``cuda``.
     ``eps`` is the depth tolerance in world units.
     ``valid`` is ``(N,)`` int, and nonzero entries are the points to test.
     A point is visible when the camera-to-point segment does not hit the mesh before ``distance - eps``.
@@ -64,6 +64,7 @@ def ray_visibility(
     camera_centers = camera_centers.to(device=device, dtype=torch.float32).contiguous()
     points = points.to(device=device, dtype=torch.float32).contiguous()
     valid = valid.to(device=device, dtype=torch.int32).contiguous()
+    wp.init()
     mesh = wp.Mesh(
         points=wp.from_torch(world_verts, dtype=wp.vec3),
         indices=wp.from_torch(faces, dtype=wp.int32),
@@ -100,7 +101,7 @@ def project_visibility(
     ``worlds`` is ``(F, N, 3)`` in blend world coordinates.
     ``world_verts`` is ``(F, P, 3)`` and ``scene_faces`` is ``(T, 3)`` into those vertices.
     ``valid`` is ``(N,)`` and is nonzero for points that were sent to binding.
-    ``device`` is a Warp device name, and Warp is already initialized.
+    ``device`` is a Warp device name.
     ``eps`` is the depth tolerance in world units.
     Returns ``points`` ``(V, F, N, 2)`` pixels and ``visibility`` ``(V, F, N)``.
     A point is visible when the camera-to-point segment is unoccluded and :func:`project_points` places it in the image.

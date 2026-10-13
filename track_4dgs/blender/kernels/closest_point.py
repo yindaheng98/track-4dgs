@@ -32,7 +32,7 @@ def closest_point(
 
     ``points`` is ``(K, 3)`` in world coordinates.
     ``world_verts`` is ``(V, 3)`` posed vertices, and ``faces`` is ``(T, 3)`` int32 triangles into those vertices.
-    ``device`` is a Warp device name such as ``cpu`` or ``cuda``, and Warp is already initialized.
+    ``device`` is a Warp device name such as ``cpu`` or ``cuda``.
     Returns ``ok`` ``(K,)`` bool and ``snapped`` ``(K, 3)`` world points, both on CPU.
     A point farther than ``MAX_DISTANCE`` from the mesh is left unsnapped.
     A mesh with no triangles leaves every point unsnapped.
@@ -47,6 +47,7 @@ def closest_point(
     points = points.to(device=device, dtype=torch.float32).contiguous()
     snapped = torch.zeros_like(points)
     ok = torch.zeros(points.shape[0], dtype=torch.int32, device=device)
+    wp.init()
     mesh = wp.Mesh(
         points=wp.from_torch(world_verts, dtype=wp.vec3),
         indices=wp.from_torch(faces, dtype=wp.int32),

@@ -32,7 +32,7 @@ def ray_cast(
 
     ``origins`` and ``directions`` are ``(R, 3)``, and directions are unit length.
     ``world_verts`` is ``(P, 3)`` posed vertices, and ``faces`` is ``(T, 3)`` int32 triangles into those vertices.
-    ``device`` is a Warp device name such as ``cpu`` or ``cuda``, and Warp is already initialized.
+    ``device`` is a Warp device name such as ``cpu`` or ``cuda``.
     Returns ``(R,)`` int32 triangle indices on CPU, with ``-1`` for a miss.
     A ray farther than ``MAX_DISTANCE`` misses.
     An empty mesh returns a miss for every ray.
@@ -44,6 +44,7 @@ def ray_cast(
     origins = origins.to(device=device, dtype=torch.float32).contiguous()
     directions = directions.to(device=device, dtype=torch.float32).contiguous()
     hit_face = torch.full((origins.shape[0],), -1, dtype=torch.int32, device=device)
+    wp.init()
     mesh = wp.Mesh(
         points=wp.from_torch(world_verts, dtype=wp.vec3),
         indices=wp.from_torch(faces, dtype=wp.int32),

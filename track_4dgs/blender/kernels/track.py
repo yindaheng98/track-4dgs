@@ -66,7 +66,7 @@ def track_points(
 
     ``verts`` and ``faces`` are per-object tensors in export order.
     ``matrices`` is ``(F, M, 4, 4)`` ``matrix_world``.
-    ``device`` is a Warp device name, and Warp is already initialized.
+    ``device`` is a Warp device name.
     ``eps`` is the visibility depth tolerance in world units.
     Returns ``points`` ``(V, F, N, 2)``, ``visibility`` ``(V, F, N)``, and ``valid`` ``(N,)`` int.
     """
