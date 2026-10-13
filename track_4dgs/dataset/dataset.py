@@ -18,6 +18,12 @@ class AbstractDataset(Dataset[Supervision], ABC):
     def __len__(self) -> int:
         raise NotImplementedError
 
+    @abstractmethod
+    def to(self, device) -> 'AbstractDataset':
+        """Move samples this dataset yields onto ``device`` and return this dataset."""
+
+        return self
+
     def dump(self, folder: str) -> None:
         """Save every sample to ``folder/supervision{i}`` via :meth:`Supervision.save`."""
         for i in range(len(self)):
@@ -29,6 +35,7 @@ class SavedDataset(AbstractDataset):
 
     def __init__(self, folder: str):
         self.folder = folder
+        self.device = "cpu"
         index = 0
         while os.path.isdir(os.path.join(folder, f"supervision{index}")):
             index += 1
@@ -37,5 +44,9 @@ class SavedDataset(AbstractDataset):
     def __len__(self) -> int:
         return self.length
 
+    def to(self, device) -> 'SavedDataset':
+        self.device = device
+        return self
+
     def __getitem__(self, index: int) -> Supervision:
-        return Supervision.load(os.path.join(self.folder, f"supervision{index}"))
+        return Supervision.load(os.path.join(self.folder, f"supervision{index}"), device=self.device)
