@@ -1,7 +1,16 @@
+import os
+import shutil
 from collections.abc import Sequence
 from dataclasses import dataclass
 
+import numpy as np
+import tifffile
+import torch
+from PIL import Image
 from gaussian_splatting.dataset import CameraDataset
+from gaussian_splatting.dataset.colmap.dataset import ColmapCameraDataset
+from gaussian_splatting.dataset.colmap.read_write_model import Camera as ColmapCamera, Image as ColmapImage, rotmat2qvec, write_model
+from gaussian_splatting.utils import fov2focal
 
 from ..tracker import Query, Track
 
@@ -53,3 +62,78 @@ class Supervision:
                 raise ValueError("Query.frame_indices must be non-negative")
             if frame_indices.max().item() >= n_frames:
                 raise ValueError("Query.frame_indices must be within the frames sequence")
+
+    def save(self, folder: str) -> None:
+        shutil.rmtree(folder, ignore_errors=True)
+        os.makedirs(folder)
+        torch.save(self.query.points.detach().cpu(), os.path.join(folder, "points.pt"))
+        torch.save(self.query.frame_indices.detach().cpu(), os.path.join(folder, "frame_indices.pt"))
+        torch.save(self.query.in_image.detach().cpu(), os.path.join(folder, "in_image.pt"))
+        for frame_idx, dataset in enumerate(self.frames):
+            frame_dir = os.path.join(folder, f"frame{frame_idx}")
+            cameras, images = {}, {}
+            for view_idx in range(len(dataset)):
+                camera = dataset[view_idx]
+                name = f"{view_idx:04d}.png"
+                os.makedirs(os.path.join(frame_dir, "images"), exist_ok=True)
+                Image.fromarray(
+                    (camera.ground_truth_image.detach().cpu()[:3].permute(1, 2, 0).numpy() * 255).round().astype(np.uint8)
+                ).save(os.path.join(frame_dir, "images", name))
+                if camera.ground_truth_image_mask is not None:
+                    os.makedirs(os.path.join(frame_dir, "image_masks"), exist_ok=True)
+                    tifffile.imwrite(os.path.join(frame_dir, "image_masks", name + ".tiff"),
+                                     camera.ground_truth_image_mask.detach().cpu().float().numpy())
+                if camera.ground_truth_depth is not None:
+                    os.makedirs(os.path.join(frame_dir, "depths"), exist_ok=True)
+                    tifffile.imwrite(os.path.join(frame_dir, "depths", name + ".tiff"),
+                                     camera.ground_truth_depth.detach().cpu().float().numpy())
+                if camera.ground_truth_depth_mask is not None:
+                    os.makedirs(os.path.join(frame_dir, "depth_masks"), exist_ok=True)
+                    tifffile.imwrite(os.path.join(frame_dir, "depth_masks", name + ".tiff"),
+                                     camera.ground_truth_depth_mask.detach().cpu().float().numpy())
+                camera_id = view_idx + 1
+                cameras[camera_id] = ColmapCamera(
+                    id=camera_id, model="PINHOLE", width=camera.image_width, height=camera.image_height,
+                    params=np.array([
+                        fov2focal(camera.FoVx, camera.image_width),
+                        fov2focal(camera.FoVy, camera.image_height),
+                        camera.image_width / 2, camera.image_height / 2,
+                    ]),
+                )
+                images[camera_id] = ColmapImage(
+                    id=camera_id, qvec=rotmat2qvec(camera.R.detach().cpu().numpy()),
+                    tvec=camera.T.detach().cpu().numpy(), camera_id=camera_id, name=name,
+                    xys=np.zeros((0, 2)), point3D_ids=np.zeros(0, dtype=np.int64),
+                )
+            os.makedirs(os.path.join(frame_dir, "sparse", "0"), exist_ok=True)
+            write_model(cameras, images, {}, os.path.join(frame_dir, "sparse", "0"), ext=".txt")
+        for view_idx, track in enumerate(self.tracks):
+            view_dir = os.path.join(folder, "tracks", f"{view_idx:04d}")
+            os.makedirs(view_dir)
+            torch.save(track.points.detach().cpu(), os.path.join(view_dir, "points.pt"))
+            torch.save(track.visibility.detach().cpu(), os.path.join(view_dir, "visibility.pt"))
+            torch.save(track.confidence.detach().cpu(), os.path.join(view_dir, "confidence.pt"))
+            torch.save(track.mask.detach().cpu(), os.path.join(view_dir, "mask.pt"))
+
+    @classmethod
+    def load(cls, folder: str, device="cpu") -> 'Supervision':
+        query = Query(
+            points=torch.load(os.path.join(folder, "points.pt"), map_location=device, weights_only=True),
+            frame_indices=torch.load(os.path.join(folder, "frame_indices.pt"), map_location=device, weights_only=True),
+            in_image=torch.load(os.path.join(folder, "in_image.pt"), map_location=device, weights_only=True),
+        )
+        frames = []
+        frame_idx = 0
+        while os.path.isdir(os.path.join(folder, f"frame{frame_idx}")):
+            frames.append(ColmapCameraDataset(os.path.join(folder, f"frame{frame_idx}")).to(device))
+            frame_idx += 1
+        tracks = []
+        for view_idx in range(len(frames[0])):
+            view_dir = os.path.join(folder, "tracks", f"{view_idx:04d}")
+            tracks.append(Track(
+                points=torch.load(os.path.join(view_dir, "points.pt"), map_location=device, weights_only=True),
+                visibility=torch.load(os.path.join(view_dir, "visibility.pt"), map_location=device, weights_only=True),
+                confidence=torch.load(os.path.join(view_dir, "confidence.pt"), map_location=device, weights_only=True),
+                mask=torch.load(os.path.join(view_dir, "mask.pt"), map_location=device, weights_only=True),
+            ))
+        return cls(query=query, frames=frames, tracks=tracks)
