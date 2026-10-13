@@ -1,6 +1,6 @@
 import os
 from abc import ABC, abstractmethod
-from argparse import ArgumentParser
+from argparse import ArgumentParser, Namespace
 
 from torch.utils.data import Dataset
 
@@ -25,25 +25,29 @@ class AbstractDataset(Dataset[Supervision], ABC):
 
         return self
 
+    @staticmethod
+    @abstractmethod
+    def add_argument(parser: ArgumentParser) -> None:
+        """Register this dataset's arguments on ``parser``."""
+        raise NotImplementedError
+
     @classmethod
     @abstractmethod
-    def add_argument(cls, parser: ArgumentParser):
-        """Register this dataset's arguments on ``parser``.
+    def from_args(cls, args: Namespace) -> 'AbstractDataset':
+        """Build this dataset from a parsed argument namespace."""
+        raise NotImplementedError
 
-        Read ``--dataset`` before this runs, then parse in :meth:`from_args`::
+    @classmethod
+    def from_argv(cls, argv: list[str] | None = None) -> tuple['AbstractDataset', list[str]]:
+        """Create a parser, parse ``argv``, and build this dataset.
 
-            known, _ = parser.parse_known_args()
-            cls = datasets[known.dataset]
-            cls.add_argument(parser)
-            dataset = cls.from_args(parser)
+        ``ArgumentParser.parse_known_args`` supplies :meth:`from_args`. The second
+        value is the unrecognized remainder of ``argv``.
         """
-        raise NotImplementedError
-
-    @classmethod
-    @abstractmethod
-    def from_args(cls, parser: ArgumentParser) -> 'AbstractDataset':
-        """Parse arguments added by :meth:`add_argument` and build this dataset."""
-        raise NotImplementedError
+        parser = ArgumentParser()
+        cls.add_argument(parser)
+        args, unknown = parser.parse_known_args(argv)
+        return cls.from_args(args), unknown
 
     def dump(self, folder: str) -> None:
         """Save every sample to ``folder/supervision{i}`` via :meth:`Supervision.save`."""
@@ -62,13 +66,13 @@ class SavedDataset(AbstractDataset):
             index += 1
         self.length = index
 
-    @classmethod
-    def add_argument(cls, parser: ArgumentParser):
+    @staticmethod
+    def add_argument(parser: ArgumentParser) -> None:
         parser.add_argument("--folder", required=True, type=str)
 
     @classmethod
-    def from_args(cls, parser: ArgumentParser) -> 'SavedDataset':
-        return cls(parser.parse_args().folder)
+    def from_args(cls, args: Namespace) -> 'SavedDataset':
+        return cls(args.folder)
 
     def __len__(self) -> int:
         return self.length
