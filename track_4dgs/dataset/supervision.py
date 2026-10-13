@@ -5,7 +5,6 @@ from dataclasses import dataclass
 
 import numpy as np
 import tifffile
-import torch
 from PIL import Image
 from gaussian_splatting.dataset import CameraDataset
 from gaussian_splatting.dataset.colmap.dataset import ColmapCameraDataset
@@ -66,9 +65,7 @@ class Supervision:
     def save(self, folder: str) -> None:
         shutil.rmtree(folder, ignore_errors=True)
         os.makedirs(folder)
-        torch.save(self.query.points.detach().cpu(), os.path.join(folder, "points.pt"))
-        torch.save(self.query.frame_indices.detach().cpu(), os.path.join(folder, "frame_indices.pt"))
-        torch.save(self.query.in_image.detach().cpu(), os.path.join(folder, "in_image.pt"))
+        self.query.save(os.path.join(folder, "query.pt"))
         for frame_idx, dataset in enumerate(self.frames):
             frame_dir = os.path.join(folder, f"frame{frame_idx}")
             cameras, images = {}, {}
@@ -105,48 +102,21 @@ class Supervision:
                     tvec=camera.T.detach().cpu().numpy(), camera_id=camera_id, name=name,
                     xys=np.zeros((0, 2)), point3D_ids=np.zeros(0, dtype=np.int64),
                 )
-                track_dir = os.path.join(frame_dir, "tracks", f"{view_idx:04d}")
-                os.makedirs(track_dir, exist_ok=True)
-                torch.save(self.tracks[view_idx].points[frame_idx].detach().cpu(), os.path.join(track_dir, "points.pt"))
-                torch.save(self.tracks[view_idx].visibility[frame_idx].detach().cpu(), os.path.join(track_dir, "visibility.pt"))
-                torch.save(self.tracks[view_idx].confidence[frame_idx].detach().cpu(), os.path.join(track_dir, "confidence.pt"))
-                torch.save(self.tracks[view_idx].mask[frame_idx].detach().cpu(), os.path.join(track_dir, "mask.pt"))
             os.makedirs(os.path.join(frame_dir, "sparse", "0"), exist_ok=True)
             write_model(cameras, images, {}, os.path.join(frame_dir, "sparse", "0"), ext=".txt")
+        for view_idx, track in enumerate(self.tracks):
+            track.save(os.path.join(folder, f"{view_idx:04d}.pt"))
 
     @classmethod
     def load(cls, folder: str, device="cpu") -> 'Supervision':
-        query = Query(
-            points=torch.load(os.path.join(folder, "points.pt"), map_location=device, weights_only=True),
-            frame_indices=torch.load(os.path.join(folder, "frame_indices.pt"), map_location=device, weights_only=True),
-            in_image=torch.load(os.path.join(folder, "in_image.pt"), map_location=device, weights_only=True),
-        )
+        query = Query.load(os.path.join(folder, "query.pt"), device=device)
         frames = []
-        view_points, view_visibility, view_confidence, view_mask = [], [], [], []
         frame_idx = 0
         while os.path.isdir(os.path.join(folder, f"frame{frame_idx}")):
-            frame_dir = os.path.join(folder, f"frame{frame_idx}")
-            frame = ColmapCameraDataset(frame_dir).to(device)
-            frames.append(frame)
-            for view_idx in range(len(frame)):
-                track_dir = os.path.join(frame_dir, "tracks", f"{view_idx:04d}")
-                if frame_idx == 0:
-                    view_points.append([])
-                    view_visibility.append([])
-                    view_confidence.append([])
-                    view_mask.append([])
-                view_points[view_idx].append(torch.load(os.path.join(track_dir, "points.pt"), map_location=device, weights_only=True))
-                view_visibility[view_idx].append(torch.load(os.path.join(track_dir, "visibility.pt"), map_location=device, weights_only=True))
-                view_confidence[view_idx].append(torch.load(os.path.join(track_dir, "confidence.pt"), map_location=device, weights_only=True))
-                view_mask[view_idx].append(torch.load(os.path.join(track_dir, "mask.pt"), map_location=device, weights_only=True))
+            frames.append(ColmapCameraDataset(os.path.join(folder, f"frame{frame_idx}")).to(device))
             frame_idx += 1
         tracks = [
-            Track(
-                points=torch.stack(view_points[view]),
-                visibility=torch.stack(view_visibility[view]),
-                confidence=torch.stack(view_confidence[view]),
-                mask=torch.stack(view_mask[view]),
-            )
-            for view in range(len(view_points))
+            Track.load(os.path.join(folder, f"{view_idx:04d}.pt"), device=device)
+            for view_idx in range(len(frames[0]))
         ]
         return cls(query=query, frames=frames, tracks=tracks)
