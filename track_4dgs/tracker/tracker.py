@@ -48,6 +48,18 @@ class Query:
             in_image=self.in_image.to(device),
         )
 
+    def save(self, path: str) -> None:
+        torch.save({
+            "points": self.points.detach().cpu(),
+            "frame_indices": self.frame_indices.detach().cpu(),
+            "in_image": self.in_image.detach().cpu(),
+        }, path)
+
+    @classmethod
+    def load(cls, path: str, device="cpu") -> 'Query':
+        data = torch.load(path, map_location=device, weights_only=True)
+        return cls(points=data["points"], frame_indices=data["frame_indices"], in_image=data["in_image"])
+
     @classmethod
     def from_projection(
             cls,
@@ -129,6 +141,19 @@ class CameraTrack:
             mask=self.mask.to(device),
         )
 
+    def save(self, path: str) -> None:
+        torch.save({
+            "points": self.points.detach().cpu(),
+            "visibility": self.visibility.detach().cpu(),
+            "confidence": self.confidence.detach().cpu(),
+            "mask": self.mask.detach().cpu(),
+        }, path)
+
+    @classmethod
+    def load(cls, path: str, device="cpu") -> 'CameraTrack':
+        data = torch.load(path, map_location=device, weights_only=True)
+        return cls(points=data["points"], visibility=data["visibility"], confidence=data["confidence"], mask=data["mask"])
+
 
 @dataclass(frozen=True)
 class Track:
@@ -185,6 +210,19 @@ class Track:
             confidence=self.confidence.to(device),
             mask=self.mask.to(device),
         )
+
+    def save(self, path: str) -> None:
+        torch.save({
+            "points": self.points.detach().cpu(),
+            "visibility": self.visibility.detach().cpu(),
+            "confidence": self.confidence.detach().cpu(),
+            "mask": self.mask.detach().cpu(),
+        }, path)
+
+    @classmethod
+    def load(cls, path: str, device="cpu") -> 'Track':
+        data = torch.load(path, map_location=device, weights_only=True)
+        return cls(points=data["points"], visibility=data["visibility"], confidence=data["confidence"], mask=data["mask"])
 
     def __getitem__(self, index) -> Union[CameraTrack, 'Track']:
         points = self.points[index]
