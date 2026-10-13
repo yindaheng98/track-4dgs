@@ -33,7 +33,7 @@ class AbstractDataset(Dataset[Supervision], ABC):
 
     @classmethod
     @abstractmethod
-    def from_args(cls, args: Namespace) -> 'AbstractDataset':
+    def from_namespace(cls, args: Namespace) -> 'AbstractDataset':
         """Build this dataset from a parsed argument namespace."""
         raise NotImplementedError
 
@@ -41,13 +41,13 @@ class AbstractDataset(Dataset[Supervision], ABC):
     def from_argv(cls, argv: list[str] | None = None) -> tuple['AbstractDataset', list[str]]:
         """Create a parser, parse ``argv``, and build this dataset.
 
-        ``ArgumentParser.parse_known_args`` supplies :meth:`from_args`. The second
+        ``ArgumentParser.parse_known_args`` supplies :meth:`from_namespace`. The second
         value is the unrecognized remainder of ``argv``.
         """
         parser = ArgumentParser()
         cls.add_argument(parser)
         args, unknown = parser.parse_known_args(argv)
-        return cls.from_args(args), unknown
+        return cls.from_namespace(args), unknown
 
     def dump(self, folder: str) -> None:
         """Save every sample to ``folder/supervision{i}`` via :meth:`Supervision.save`."""
@@ -71,7 +71,7 @@ class SavedDataset(AbstractDataset):
         parser.add_argument("--folder", required=True, type=str)
 
     @classmethod
-    def from_args(cls, args: Namespace) -> 'SavedDataset':
+    def from_namespace(cls, args: Namespace) -> 'SavedDataset':
         return cls(args.folder)
 
     def __len__(self) -> int:
