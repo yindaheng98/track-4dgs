@@ -14,6 +14,7 @@ from ..registry import get_available_point_trackers
 from ..tracker import AbstractPointTracker, Query
 from ..utils.sample import sample_uniform_xyz
 from .dataset import AbstractDataset
+from .registry import register_supervision_dataset
 from .supervision import Supervision
 
 
@@ -145,3 +146,6 @@ class PointTrackerDataset(AbstractDataset):
         sample = self.samples[index]
         tracks = self.tracker(sample.query, sample.frames, batch_size=self.batch_size)
         return Supervision(query=sample.query, frames=sample.frames, tracks=tracks)
+
+
+register_supervision_dataset("tracker", PointTrackerDataset)

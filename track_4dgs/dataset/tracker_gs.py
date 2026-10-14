@@ -10,6 +10,7 @@ from gaussian_splatting.dataset import CameraDataset
 from gaussian_splatting.prepare import prepare_gaussians
 
 from ..tracker import Query
+from .registry import register_supervision_dataset
 from .tracker import PointTrackerDataset, PointSample
 
 
@@ -57,3 +58,6 @@ class GaussianSplattingPointTrackerDataset(PointTrackerDataset):
                     init_dataset_index=init_dataset_index, num_points=args.num_points)
                 samples.append(PointSample(query=query, frames=frames))
         return cls(tracker, *samples, batch_size=args.batch_size)
+
+
+register_supervision_dataset("tracker_gs", GaussianSplattingPointTrackerDataset)
