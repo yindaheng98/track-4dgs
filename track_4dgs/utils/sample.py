@@ -2,9 +2,7 @@
 
 import numpy as np
 import torch
-from gaussian_splatting.camera import Camera, build_camera
 from gaussian_splatting.dataset import CameraDataset
-from gaussian_splatting.utils import focal2fov
 from tqdm import tqdm
 
 from .project import project_points
@@ -52,22 +50,17 @@ def cap_direction(axis, cap_angle_min, cap_angle_max, rng):
     return tangent * local[0] + bitangent * local[1] + axis * local[2]
 
 
-def sample_camera(
+def sample_c2ws(
         n_cameras: int,
         center: tuple[float, float, float],
         radius: tuple[float, float],
         axis: tuple[float, float],
         cap_angle: tuple[float, float],
         spacing: tuple[float, float],
-        height: int,
-        width: int,
-        focal: float,
-        device: str) -> tuple[torch.Tensor, list[Camera]]:
-    """Sample OpenCV cameras on a spherical cap.
+        device: str) -> torch.Tensor:
+    """Sample OpenCV camera-to-world poses on a spherical cap.
 
-    ``focal`` is pixels, ``fx = fy``, and the principal point is the image center.
-    Returns camera-to-world ``[V, 4, 4]`` and one 3DGS camera per pose. Stops after
-    100 proposals, so ``V`` may be smaller than ``n_cameras``.
+    Returns ``[V, 4, 4]``. Stops after 100 proposals, so ``V`` may be smaller than ``n_cameras``.
     """
 
     azimuth, elevation = np.deg2rad(axis)
@@ -115,17 +108,4 @@ def sample_camera(
         c2w[:3, 2] = forward
         c2w[:3, 3] = position
         c2ws.append(c2w)
-    c2ws = torch.tensor(np.stack(c2ws), dtype=torch.float32, device=device)
-    cameras = []
-    for c2w in c2ws:
-        w2c = torch.linalg.inv(c2w)
-        cameras.append(build_camera(
-            image_height=height,
-            image_width=width,
-            FoVx=focal2fov(focal, width),
-            FoVy=focal2fov(focal, height),
-            R=w2c[:3, :3].contiguous(),
-            T=w2c[:3, 3].contiguous(),
-            device=device,
-        ))
-    return c2w, cameras
+    return torch.tensor(np.stack(c2ws), dtype=torch.float32, device=device)
