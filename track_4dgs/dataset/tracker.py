@@ -31,7 +31,7 @@ class PointSample:
         )
 
 
-class AppendPointTrackerSample(Action):
+class AppendPointSample(Action):
     """Attach ``--load_cameras`` and ``--init-dataset-index`` to the preceding ``--sources``.
 
     Each ``--sources`` starts one sample. Each of those two options may follow it
@@ -74,9 +74,9 @@ class PointTrackerDataset(AbstractDataset):
         ``--load_cameras`` and ``--init-dataset-index`` belong to the preceding ``--sources``.
         Each may appear once in that group. ``--init-dataset-index`` defaults to 0.
         """
-        parser.add_argument("-s", "--sources", required=True, dest="samples", action=AppendPointTrackerSample, nargs="+", type=str, metavar="SOURCE", help="Source frames for one sample. Repeat to start another sample.")
-        parser.add_argument("--load_cameras", dest="samples", action=AppendPointTrackerSample, nargs="+", type=str, metavar="PATH", help="Camera file for each source in the preceding --sources. At most once.")
-        parser.add_argument("--init-dataset-index", dest="samples", action=AppendPointTrackerSample, type=int, metavar="INDEX", help="Index into the preceding --sources for the query frame. At most once. Defaults to 0.")
+        parser.add_argument("-s", "--sources", required=True, dest="samples", action=AppendPointSample, nargs="+", type=str, metavar="SOURCE", help="Source frames for one sample. Repeat to start another sample.")
+        parser.add_argument("--load_cameras", dest="samples", action=AppendPointSample, nargs="+", type=str, metavar="PATH", help="Camera file for each source in the preceding --sources. At most once.")
+        parser.add_argument("--init-dataset-index", dest="samples", action=AppendPointSample, type=int, metavar="INDEX", help="Index into the preceding --sources for the query frame. At most once. Defaults to 0.")
         parser.add_argument("--device", default="cuda", type=str)
         parser.add_argument("--tracker", type=str, default="cotracker3", choices=get_available_point_trackers())
         parser.add_argument("-m", "--option_tracker", default=[], action="append", type=str)
