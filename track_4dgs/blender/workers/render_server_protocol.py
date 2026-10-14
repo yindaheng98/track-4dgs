@@ -18,9 +18,6 @@ from dataclasses import dataclass
 import numpy as np
 
 
-AUTH = b"track-4dgs-render"
-
-
 @dataclass(frozen=True)
 class PackedArray:
     """One NumPy array as raw bytes.

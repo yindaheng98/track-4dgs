@@ -20,6 +20,7 @@ from mathutils import Matrix
 
 protocol = sys.path.insert(0, str(Path(__file__).resolve().parent)) or __import__("render_server_protocol")
 
+AUTH = b"track-4dgs-render" # same as in ../render_server.py
 SENSOR_WIDTH_MM = 36.0
 
 
@@ -124,7 +125,7 @@ def main() -> None:
     parser.add_argument("--port", type=int, required=True)
     args = parser.parse_args(sys.argv[sys.argv.index("--") + 1:])
     scratch = Path(tempfile.mkdtemp(prefix="track4dgs-render-"))
-    conn = Client(("127.0.0.1", args.port), authkey=protocol.AUTH)
+    conn = Client(("127.0.0.1", args.port), authkey=AUTH)
     loaded_blend = None
     try:
         while True:

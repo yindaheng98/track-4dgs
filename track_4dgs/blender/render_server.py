@@ -4,14 +4,16 @@ import subprocess
 from multiprocessing.connection import Listener
 from pathlib import Path
 
-from .workers.render_server_protocol import AUTH, RenderReply, RenderRequest
+from .workers.render_server_protocol import RenderReply, RenderRequest
+
+AUTH = b"track-4dgs-render" # same as in workers/render_server.py
 
 
 class RenderServer:
     """One background Blender process serving :class:`RenderRequest`.
 
     ``__init__`` listens on ``127.0.0.1`` and starts ``workers/render_server.py``.
-    Blender connects back with the protocol auth key.
+    Blender connects back with ``AUTH``.
     :meth:`render` sends one request and returns the reply.
     :meth:`__del__` sends ``None`` and waits for Blender to exit.
     """
