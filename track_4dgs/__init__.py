@@ -13,12 +13,12 @@ from .dataset import PointTrackerDataset, GaussianSplattingPointTrackerDataset
 from .registry import register_point_tracker, get_available_point_trackers, build_point_tracker
 from .tracker import Query, Track, AbstractPointTracker
 from .tracker import AbstractViewPointTracker, AbstractBatchPointTracker
-from .tracker import CameraTrack, TrackedCameraDataset, CameraDatasetTracker, CachedCameraDatasetTracker
+from .tracker import CameraTrack, TrackedCameraDataset, CameraDatasetTracker
 
 __all__ = [
     "Query", "Track", "AbstractPointTracker",
     "AbstractViewPointTracker", "AbstractBatchPointTracker",
-    "CameraTrack", "TrackedCameraDataset", "CameraDatasetTracker", "CachedCameraDatasetTracker",
+    "CameraTrack", "TrackedCameraDataset", "CameraDatasetTracker",
     "register_point_tracker", "get_available_point_trackers", "build_point_tracker",
     "Cotracker3PointTracker", "VGGTPointTracker", "VGGSfMPointTracker",
     "MVTAPPointTracker", "D4RTPointTracker", "MatchaPointTracker",

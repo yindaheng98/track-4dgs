@@ -4,7 +4,7 @@ from gaussian_splatting.dataset import CameraDataset
 from gaussian_splatting.prepare import prepare_dataset
 
 from .registry import build_point_tracker
-from .tracker import CachedCameraDatasetTracker, CameraDatasetTracker, ReorderedCameraDataset
+from .tracker import CameraDatasetTracker, ReorderedCameraDataset
 
 
 def prepare_datasets(
@@ -52,11 +52,6 @@ def prepare_tracker(
         tracker_name: str,
         device: str,
         tracker_configs: dict = {},
-        cache_dir: Optional[str] = None,
 ) -> CameraDatasetTracker:
     tracker = build_point_tracker(tracker_name, **tracker_configs)
-    if cache_dir is None:
-        dataset_tracker = CameraDatasetTracker(tracker)
-    else:
-        dataset_tracker = CachedCameraDatasetTracker(tracker, cache_dir)
-    return dataset_tracker.to(device)
+    return CameraDatasetTracker(tracker).to(device)
