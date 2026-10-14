@@ -2,7 +2,8 @@
 
 The blend file is already open when this script starts.
 Each mesh is rigid in object space, so triangles are written once and ``matrix_world`` is written per frame.
-``--frames`` lists absolute Blender frames and is exported in that order.
+Frames are ``range(frame_start, frame_end + 1, frame_step)``.
+``frame_start`` defaults to 1. ``frame_end`` and ``frame_step`` default to the open scene.
 The export is one ``pickle.dumps`` byte string on the connection, then this process exits.
 """
 
@@ -43,18 +44,27 @@ def pose_matrices(scene, meshes, frames):
             world = obj.matrix_world
             frame_matrices.append([[world[row][col] for col in range(4)] for row in range(4)])
         matrices.append(frame_matrices)
-        if frame_index % 25 == 0:
-            print(f"posed frame {frame_index + 1}/{n_frames}", flush=True)
     return matrices
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", type=int, required=True)
-    parser.add_argument("--frames", type=int, nargs="+", required=True)
+    parser.add_argument("--frame_start", type=int, default=1)
+    parser.add_argument("--frame_end", type=int)
+    parser.add_argument("--frame_step", type=int)
     args = parser.parse_args(sys.argv[sys.argv.index("--") + 1:])
     scene = bpy.context.scene
-    frames = list(args.frames)
+    scene.frame_start = args.frame_start
+    if args.frame_end is not None:
+        scene.frame_end = args.frame_end
+    if args.frame_step is not None:
+        scene.frame_step = args.frame_step
+    frames = list(range(scene.frame_start, scene.frame_end + 1, scene.frame_step))
+    if not frames:
+        raise SystemExit(
+            f"no Blender frames from {scene.frame_start} to {scene.frame_end} step {scene.frame_step}"
+        )
     meshes = [obj for obj in scene.objects if obj.type == "MESH"]
     verts, faces = export_meshes(meshes)
     matrices = pose_matrices(scene, meshes, frames)

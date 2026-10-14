@@ -5,6 +5,7 @@ import subprocess
 from collections.abc import Sequence
 from multiprocessing.connection import Listener
 from pathlib import Path
+from typing import Optional
 
 import torch
 from gaussian_splatting.dataset import CameraDataset
@@ -17,11 +18,14 @@ AUTH = b"track-4dgs-export"
 
 def export_rigid_meshes(
         blend: str,
-        frames: Sequence[int],
-        blender: str = "blender") -> tuple:
+        blender: str = "blender",
+        frame_start: int = 1,
+        frame_end: Optional[int] = None,
+        frame_step: Optional[int] = None) -> tuple:
     """Export rigid meshes and one ``matrix_world`` per frame from a blend file.
 
-    ``frames`` are absolute Blender frames, returned in that order.
+    Frames are ``range(frame_start, frame_end + 1, frame_step)``.
+    ``frame_start`` defaults to 1. ``frame_end`` and ``frame_step`` default to the blend scene.
     Returns object-local ``verts`` and ``faces``, plus per-frame ``matrices``.
     """
 
@@ -40,8 +44,10 @@ def export_rigid_meshes(
             "--",
             "--port",
             str(listener.address[1]),
-            "--frames",
-            *[str(frame) for frame in frames],
+            "--frame_start",
+            str(frame_start),
+            *(["--frame_end", str(frame_end)] if frame_end is not None else []),
+            *(["--frame_step", str(frame_step)] if frame_step is not None else []),
         ]
         server = subprocess.Popen(command)
         connection = listener.accept()
@@ -70,9 +76,8 @@ class BlenderPointTracker(AbstractBatchPointTracker):
     Rays, object votes, and surface snaps run against that posed mesh.
     Every view of a point shares one query frame.
     Visibility is an any-hit test from each camera to each posed point.
-    Exported frames are ``start_number + i * frame_step`` for ``i`` in ``range(n_frames)``.
-    ``start_number`` is the first absolute Blender frame. ``n_frames`` defaults to 2.
-    ``from_frames`` exports the absolute Blender frames it is given, in that order.
+    Exported frames are ``range(frame_start, frame_end + 1, frame_step)``.
+    ``frame_start`` defaults to 1. ``frame_end`` and ``frame_step`` default to the blend scene.
     Cameras use the blend world, look along +Z, and treat image +Y as downward.
     ``eps`` is the visibility depth tolerance in world units.
     """
@@ -82,31 +87,22 @@ class BlenderPointTracker(AbstractBatchPointTracker):
             blend: str,
             blender: str = "blender",
             eps: float = 1e-2,
-            start_number: int = 1,
-            frame_step: int = 1,
-            n_frames: int = 2):
+            frame_start: int = 1,
+            frame_end: Optional[int] = None,
+            frame_step: Optional[int] = None):
         self.eps = eps
         self.device = torch.device("cpu")
-        frames = [start_number + index * frame_step for index in range(n_frames)]
-        self.load_frames(blend, frames, blender)
+        self.load_frames(blend, blender, frame_start, frame_end, frame_step)
 
-    @classmethod
-    def from_frames(
-            cls,
+    def load_frames(
+            self,
             blend: str,
-            frames: Sequence[int],
             blender: str = "blender",
-            eps: float = 1e-2) -> 'BlenderPointTracker':
-        """Export rigid meshes posed at the absolute Blender frames in ``frames``."""
-
-        self = cls.__new__(cls)
-        self.eps = eps
-        self.device = torch.device("cpu")
-        self.load_frames(blend, frames, blender)
-        return self
-
-    def load_frames(self, blend: str, frames: Sequence[int], blender: str) -> None:
-        verts, faces, matrices = export_rigid_meshes(blend, frames, blender)
+            frame_start: int = 1,
+            frame_end: Optional[int] = None,
+            frame_step: Optional[int] = None) -> None:
+        verts, faces, matrices = export_rigid_meshes(
+            blend, blender, frame_start, frame_end, frame_step)
         self.verts = [torch.tensor(obj_verts, dtype=torch.float32).reshape(-1, 3) for obj_verts in verts]
         self.faces = [torch.tensor(obj_faces, dtype=torch.int32).reshape(-1, 3) for obj_faces in faces]
         self.matrices = torch.tensor(matrices, dtype=torch.float32)
