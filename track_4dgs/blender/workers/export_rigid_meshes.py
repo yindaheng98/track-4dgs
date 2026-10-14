@@ -72,7 +72,9 @@ def main() -> None:
         "verts": verts,
         "faces": faces,
         "matrices": matrices,
-        "frames": frames,
+        "frame_start": scene.frame_start,
+        "frame_end": scene.frame_end,
+        "frame_step": scene.frame_step,
     }, protocol=pickle.HIGHEST_PROTOCOL)
     conn = Client(("127.0.0.1", args.port), authkey=AUTH)
     try:

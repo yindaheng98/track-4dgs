@@ -26,7 +26,7 @@ def export_rigid_meshes(
 
     Frames are ``range(frame_start, frame_end + 1, frame_step)``.
     ``frame_start`` defaults to 1. ``frame_end`` and ``frame_step`` default to the blend scene.
-    Returns object-local ``verts`` and ``faces``, per-frame ``matrices``, and the absolute Blender frames.
+    Returns object-local ``verts`` and ``faces``, per-frame ``matrices``, and the resolved ``frame_start``, ``frame_end``, and ``frame_step``.
     """
 
     script = Path(__file__).parent / "workers" / "export_rigid_meshes.py"
@@ -66,7 +66,7 @@ def export_rigid_meshes(
     if returncode != 0:
         raise subprocess.CalledProcessError(returncode, command)
     result = pickle.loads(payload)
-    return result["verts"], result["faces"], result["matrices"], result["frames"]
+    return result["verts"], result["faces"], result["matrices"], int(result["frame_start"]), int(result["frame_end"]), int(result["frame_step"])
 
 
 class BlenderPointTracker(AbstractBatchPointTracker):
@@ -76,7 +76,8 @@ class BlenderPointTracker(AbstractBatchPointTracker):
     Rays, object votes, and surface snaps run against that posed mesh.
     Every view of a point shares one query frame.
     Visibility is an any-hit test from each camera to each posed point.
-    Exported frames are ``range(frame_start, frame_end + 1, frame_step)`` and are stored on ``frames``.
+    Exported frames are ``range(frame_start, frame_end + 1, frame_step)``.
+    The resolved bounds are stored on ``frame_start``, ``frame_end``, and ``frame_step``.
     ``frame_start`` defaults to 1. ``frame_end`` and ``frame_step`` default to the blend scene.
     Cameras use the blend world, look along +Z, and treat image +Y as downward.
     ``eps`` is the visibility depth tolerance in world units.
@@ -101,12 +102,11 @@ class BlenderPointTracker(AbstractBatchPointTracker):
             frame_start: int = 1,
             frame_end: Optional[int] = None,
             frame_step: Optional[int] = None) -> None:
-        verts, faces, matrices, frames = export_rigid_meshes(
+        verts, faces, matrices, self.frame_start, self.frame_end, self.frame_step = export_rigid_meshes(
             blend, blender, frame_start, frame_end, frame_step)
         self.verts = [torch.tensor(obj_verts, dtype=torch.float32).reshape(-1, 3) for obj_verts in verts]
         self.faces = [torch.tensor(obj_faces, dtype=torch.int32).reshape(-1, 3) for obj_faces in faces]
         self.matrices = torch.tensor(matrices, dtype=torch.float32)
-        self.frames = [int(frame) for frame in frames]
 
     def to(self, device) -> 'BlenderPointTracker':
         """Move the exported meshes onto ``device`` and run Warp there."""
