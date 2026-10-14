@@ -113,7 +113,7 @@ class PointTrackerDataset(AbstractDataset):
         """Register tracker inputs, how many points to draw, and the visible-camera limit."""
         cls.add_tracker_argument(parser)
         parser.add_argument("--num-points", default=256, type=int)
-        parser.add_argument("--visible-cameras", default=0, type=int, help="Keep a point only when more cameras than this see it.")
+        parser.add_argument("--visible-cameras", default=2, type=int, help="Keep a point only when more cameras than this see it.")
 
     @classmethod
     def from_namespace(cls, args: Namespace) -> 'PointTrackerDataset':
