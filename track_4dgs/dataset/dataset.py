@@ -49,30 +49,36 @@ class AbstractDataset(Dataset[Supervision], ABC):
         args, unknown = parser.parse_known_args(argv)
         return cls.from_namespace(args), unknown
 
-    def dump(self, folder: str) -> None:
-        """Save every sample to ``folder/supervision{i}`` via :meth:`Supervision.save`."""
+    def dump(self, folder: str, start: int = 0) -> None:
+        """Save sample ``i`` to ``folder/supervision{start + i}`` via :meth:`Supervision.save`."""
+        if start < 0:
+            raise ValueError("start must be non-negative")
         for i in range(len(self)):
-            self[i].save(os.path.join(folder, f"supervision{i}"))
+            self[i].save(os.path.join(folder, f"supervision{start + i}"))
 
 
 class SavedDataset(AbstractDataset):
-    """Load ``folder/supervision{i}`` samples written by :meth:`AbstractDataset.dump`."""
+    """Load ``folder/supervision{start + i}`` samples written by :meth:`AbstractDataset.dump`."""
 
-    def __init__(self, folder: str):
+    def __init__(self, folder: str, start: int = 0):
+        if start < 0:
+            raise ValueError("start must be non-negative")
         self.folder = folder
+        self.start = start
         self.device = "cpu"
-        index = 0
+        index = start
         while os.path.isdir(os.path.join(folder, f"supervision{index}")):
             index += 1
-        self.length = index
+        self.length = index - start
 
     @classmethod
     def add_argument(cls, parser: ArgumentParser) -> None:
         parser.add_argument("--folder", required=True, type=str)
+        parser.add_argument("--start", type=int, default=0)
 
     @classmethod
     def from_namespace(cls, args: Namespace) -> 'SavedDataset':
-        return cls(args.folder)
+        return cls(args.folder, args.start)
 
     def __len__(self) -> int:
         return self.length
@@ -82,4 +88,4 @@ class SavedDataset(AbstractDataset):
         return self
 
     def __getitem__(self, index: int) -> Supervision:
-        return Supervision.load(os.path.join(self.folder, f"supervision{index}"), device=self.device)
+        return Supervision.load(os.path.join(self.folder, f"supervision{self.start + index}"), device=self.device)
