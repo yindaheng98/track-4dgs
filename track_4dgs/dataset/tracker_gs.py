@@ -10,7 +10,7 @@ from gaussian_splatting.dataset import CameraDataset
 from gaussian_splatting.prepare import prepare_gaussians
 
 from ..tracker import Query
-from .tracker import PointTrackerDataset, PointTrackerSample
+from .tracker import PointTrackerDataset, PointSample
 
 
 def query_views_from_gaussians(
@@ -55,5 +55,5 @@ class GaussianSplattingPointTrackerDataset(PointTrackerDataset):
                 query = query_views_from_gaussians(
                     datasets=frames, gaussians=gaussians,
                     init_dataset_index=init_dataset_index, num_points=args.num_points)
-                samples.append(PointTrackerSample(query=query, frames=frames))
+                samples.append(PointSample(query=query, frames=frames))
         return cls(tracker, *samples, batch_size=args.batch_size)

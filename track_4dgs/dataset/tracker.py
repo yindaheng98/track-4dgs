@@ -18,14 +18,14 @@ from .supervision import Supervision
 
 
 @dataclass(frozen=True)
-class PointTrackerSample:
+class PointSample:
     """One tracker input: a view-major query and frame-major camera datasets."""
 
     query: Query
     frames: Sequence[CameraDataset]
 
-    def to(self, device) -> 'PointTrackerSample':
-        return PointTrackerSample(
+    def to(self, device) -> 'PointSample':
+        return PointSample(
             query=self.query.to(device),
             frames=tuple(dataset.to(device) for dataset in self.frames),
         )
@@ -62,7 +62,7 @@ class PointTrackerDataset(AbstractDataset):
     ``batch_size`` is forwarded to every sample; ``None`` tracks all points at once.
     """
 
-    def __init__(self, tracker: AbstractPointTracker, *samples: PointTrackerSample, batch_size: Optional[int] = None):
+    def __init__(self, tracker: AbstractPointTracker, *samples: PointSample, batch_size: Optional[int] = None):
         self.tracker = tracker
         self.samples = samples
         self.batch_size = batch_size
@@ -130,7 +130,7 @@ class PointTrackerDataset(AbstractDataset):
                 dataset = frames[init_dataset_index]
                 xyz = sample_uniform_xyz(dataset, args.num_points, args.visible_cameras, args.device)
                 frame_indices = torch.full((args.num_points,), init_dataset_index, dtype=torch.long, device=args.device)
-                samples.append(PointTrackerSample(query=Query.from_projection(xyz, frames, frame_indices), frames=frames))
+                samples.append(PointSample(query=Query.from_projection(xyz, frames, frame_indices), frames=frames))
         return cls(tracker, *samples, batch_size=args.batch_size)
 
     def __len__(self) -> int:
