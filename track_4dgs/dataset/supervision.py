@@ -71,7 +71,7 @@ class Supervision:
             cameras, images = {}, {}
             for view_idx in range(len(dataset)):
                 camera = dataset[view_idx]
-                name = f"{view_idx:04d}.png"
+                name = f"{view_idx}.png"
                 os.makedirs(os.path.join(frame_dir, "images"), exist_ok=True)
                 Image.fromarray(
                     (camera.ground_truth_image.detach().cpu()[:3].permute(1, 2, 0).numpy() * 255).round().astype(np.uint8)
@@ -105,7 +105,7 @@ class Supervision:
             os.makedirs(os.path.join(frame_dir, "sparse", "0"), exist_ok=True)
             write_model(cameras, images, {}, os.path.join(frame_dir, "sparse", "0"), ext=".txt")
         for view_idx, track in enumerate(self.tracks):
-            track.save(os.path.join(folder, f"{view_idx:04d}.pt"))
+            track.save(os.path.join(folder, f"{view_idx}.pt"))
 
     @classmethod
     def load(cls, folder: str, device="cpu") -> 'Supervision':
@@ -116,7 +116,7 @@ class Supervision:
             frames.append(ColmapCameraDataset(os.path.join(folder, f"frame{frame_idx}")).to(device))
             frame_idx += 1
         tracks = [
-            Track.load(os.path.join(folder, f"{view_idx:04d}.pt"), device=device)
+            Track.load(os.path.join(folder, f"{view_idx}.pt"), device=device)
             for view_idx in range(len(frames[0]))
         ]
         return cls(query=query, frames=frames, tracks=tracks)
