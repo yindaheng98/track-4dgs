@@ -152,8 +152,6 @@
                 "32",
                 "--save-folder",
                 "output/taekwondo/frame1/ours_10000/dataset-mvtap",
-                "--save-start",
-                "1",
                 "--vis-folder",
                 "output/taekwondo/frame1/ours_10000/dataset-mvtap-vis/",
             ]
@@ -210,8 +208,6 @@
                 "blender='C:/Program Files (x86)/Steam/steamapps/common/Blender/blender.exe'",
                 "--save-folder",
                 "output/point_odyssey_robot/ours_0/dataset-blender",
-                "--save-start",
-                "1"
             ]
         }
     ]
