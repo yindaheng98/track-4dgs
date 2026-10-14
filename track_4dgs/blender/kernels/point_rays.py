@@ -16,12 +16,12 @@ def camera_ray(uv: torch.Tensor, cameras: Sequence[Camera]) -> tuple[torch.Tenso
 
     ``uv`` is ``(V, ..., 2)`` pixel coordinates in ``(x, y)`` order, one leading row per camera.
     ``camera.R`` is world-to-camera, so its transpose maps the camera-space direction into the blend world.
-    Returns origins and directions, each ``(V, ..., 3)``, on CPU.
+    Returns origins and directions, each ``(V, ..., 3)``.
     """
-    intrinsics = torch.stack([camera.K.detach().cpu() for camera in cameras])
-    rotations = torch.stack([camera.R.detach().cpu() for camera in cameras])
-    centers = torch.stack([camera.camera_center.detach().cpu() for camera in cameras])
-    uv = uv.detach().cpu().to(dtype=intrinsics.dtype)
+    intrinsics = torch.stack([camera.K.detach() for camera in cameras])
+    rotations = torch.stack([camera.R.detach() for camera in cameras])
+    centers = torch.stack([camera.camera_center.detach() for camera in cameras])
+    uv = uv.detach().to(dtype=intrinsics.dtype)
     focal = torch.stack([intrinsics[:, 0, 0], intrinsics[:, 1, 1]], dim=-1)
     principal = torch.stack([intrinsics[:, 0, 2], intrinsics[:, 1, 2]], dim=-1)
     broadcast = (uv.shape[0],) + (1,) * (uv.ndim - 2) + (2,)
@@ -86,7 +86,7 @@ class PointRays:
         origins, directions = camera_ray(uv, cameras)
         origins = origins.transpose(0, 1).contiguous()
         directions = directions.transpose(0, 1).contiguous()
-        ray_mask = mask.detach().cpu().transpose(0, 1).contiguous()
+        ray_mask = mask.detach().transpose(0, 1).contiguous()
         valid = ray_mask.sum(dim=-1) >= 2
         xyz = torch.zeros(origins.shape[0], 3, dtype=origins.dtype, device=origins.device)
         if bool(valid.any()):

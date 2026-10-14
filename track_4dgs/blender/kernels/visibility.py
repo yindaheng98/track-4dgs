@@ -53,17 +53,16 @@ def ray_visibility(
     A point is visible when the camera-to-point segment does not hit the mesh before ``distance - eps``.
     ``valid == 0`` points are invisible.
     No faces, or a frame with no posed vertices, reports every nonzero ``valid`` point as visible.
-    The result lives on ``device``.
+    The result stays on the device of the inputs.
     """
     n_views, n_points = camera_centers.shape[0], points.shape[0]
     if faces.numel() == 0 or world_verts.shape[0] == 0 or n_points == 0:
-        visible = valid.to(dtype=torch.float32).reshape(1, -1).expand(n_views, n_points).clone()
-        return visible.to(device=device)
-    world_verts = world_verts.to(device=device, dtype=torch.float32).contiguous()
-    faces = faces.reshape(-1).to(device=device, dtype=torch.int32).contiguous()
-    camera_centers = camera_centers.to(device=device, dtype=torch.float32).contiguous()
-    points = points.to(device=device, dtype=torch.float32).contiguous()
-    valid = valid.to(device=device, dtype=torch.int32).contiguous()
+        return valid.to(dtype=torch.float32).reshape(1, -1).expand(n_views, n_points).clone()
+    world_verts = world_verts.contiguous()
+    faces = faces.reshape(-1).contiguous()
+    camera_centers = camera_centers.contiguous()
+    points = points.contiguous()
+    valid = valid.contiguous()
     wp.init()
     mesh = wp.Mesh(
         points=wp.from_torch(world_verts, dtype=wp.vec3),
@@ -113,7 +112,7 @@ def project_visibility(
     visibility = query.points.new_zeros((n_views, n_frames, n_points))
     for frame_index, dataset in enumerate(frames):
         centers = torch.stack([
-            dataset[view_index].camera_center.detach().cpu()
+            dataset[view_index].camera_center.detach()
             for view_index in range(n_views)
         ])
         ray_visible = ray_visibility(
@@ -121,9 +120,8 @@ def project_visibility(
         )
         for view_index in range(n_views):
             camera = dataset[view_index]
-            world_xyz = worlds[frame_index].to(device=camera.R.device, dtype=camera.R.dtype)
-            uv, in_frustum = project_points(world_xyz, camera)
-            hit = ray_visible[view_index].to(device=in_frustum.device)
-            points[view_index, frame_index] = uv.to(points.device)
-            visibility[view_index, frame_index] = (hit * in_frustum.to(dtype=hit.dtype)).to(visibility.device)
+            uv, in_frustum = project_points(worlds[frame_index], camera)
+            hit = ray_visible[view_index]
+            points[view_index, frame_index] = uv
+            visibility[view_index, frame_index] = hit * in_frustum.to(dtype=hit.dtype)
     return points, visibility

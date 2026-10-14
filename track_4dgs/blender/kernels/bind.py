@@ -35,10 +35,10 @@ def bind_points(
     Returns ``worlds`` ``(F, N, 3)`` and ``valid`` ``(N,)`` int.
     """
     n_points = query.points.shape[1]
-    obj_index = torch.full((n_points,), -1, dtype=torch.long)
-    local = torch.zeros((n_points, 3))
-    valid = torch.zeros((n_points,), dtype=torch.int32)
-    frame = query.frame_indices[0].detach().cpu().to(dtype=torch.long)
+    obj_index = torch.full((n_points,), -1, dtype=torch.long, device=matrices.device)
+    local = torch.zeros((n_points, 3), dtype=matrices.dtype, device=matrices.device)
+    valid = torch.zeros((n_points,), dtype=torch.int32, device=matrices.device)
+    frame = query.frame_indices[0].detach().to(dtype=torch.long)
     n_views = query.points.shape[0]
     for frame_index in frame.unique().tolist():
         selected = torch.where(frame == frame_index)[0]
@@ -53,7 +53,7 @@ def bind_points(
         origins = rays.origins[local_ids][view_mask]
         directions = rays.directions[local_ids][view_mask]
         hit_faces = ray_cast(origins, directions, posed_verts, scene_faces, device)
-        object_ids = torch.full((hit_faces.shape[0],), -1, dtype=torch.long)
+        object_ids = torch.full((hit_faces.shape[0],), -1, dtype=torch.long, device=hit_faces.device)
         hit = hit_faces >= 0
         if face_owner.numel() > 0:
             object_ids[hit] = face_owner[hit_faces[hit].long()]
@@ -72,11 +72,7 @@ def bind_points(
         for obj, items in pending.items():
             xyz = torch.stack([item[1] for item in items])
             snapped_ok, snapped = closest_point(xyz, posed_verts, scene_faces[face_owner == obj], device)
-            snapped = snapped.to(dtype=matrix_world.dtype)
-            hom_snap = torch.cat([
-                snapped,
-                torch.ones(snapped.shape[0], 1, dtype=snapped.dtype, device=snapped.device),
-            ], dim=1)
+            hom_snap = torch.cat([snapped, snapped.new_ones(snapped.shape[0], 1)], dim=1)
             snapped = torch.einsum("ij,bj->bi", torch.linalg.inv(matrix_world[obj]), hom_snap)[:, :3]
             for (point_index, world_xyz), ok, snapped_xyz in zip(items, snapped_ok, snapped):
                 if ok.item():
@@ -84,7 +80,7 @@ def bind_points(
                     local[point_index] = snapped_xyz
                 else:
                     local[point_index] = world_xyz
-    hom = torch.cat([local, torch.ones(n_points, 1)], dim=1)
+    hom = torch.cat([local, local.new_ones(n_points, 1)], dim=1)
     worlds = hom[:, :3].unsqueeze(0).expand(matrices.shape[0], -1, -1).clone()
     bound = obj_index >= 0
     if bool(bound.any()):

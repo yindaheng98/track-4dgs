@@ -228,7 +228,8 @@ class BlenderDataset(AbstractDataset):
                 init_dataset_index = 0 if spec.init_dataset_index is None else spec.init_dataset_index
                 mesh = BlenderPointTracker(
                     blend, blender=args.blender,
-                    frame_start=frame_start, frame_end=spec.frame_end, frame_step=spec.frame_step)
+                    frame_start=frame_start, frame_end=spec.frame_end, frame_step=spec.frame_step,
+                ).to(args.device)
                 n_frames = mesh.matrices.shape[0]
                 assert n_frames, "the blend scene produced no frames."
                 assert 0 <= init_dataset_index < n_frames, "--init-dataset-index must index one Blender frame."
@@ -250,7 +251,7 @@ class BlenderDataset(AbstractDataset):
                     ))
                 xyz = sample_near_surface(
                     mesh.verts, mesh.faces, query_matrix, cameras,
-                    args.num_points, args.visible_cameras, args.surface_distance, args.device)
+                    args.num_points, args.visible_cameras, args.surface_distance)
                 frame_indices = torch.full((args.num_points,), init_dataset_index, dtype=torch.long, device=args.device)
                 query = Query.from_projection(xyz, [cameras] * n_frames, frame_indices)
                 n_views = c2ws.shape[0]
@@ -304,7 +305,7 @@ class BlenderDataset(AbstractDataset):
             tracker.verts, tracker.faces, tracker.matrices, scene.query, frames, tracker.eps, str(tracker.device),
         )
         confidence = query.points.new_ones((n_views, n_frames, n_points))
-        mask = valid.to(device=query.points.device, dtype=torch.bool).expand(n_frames, n_points)
+        mask = valid.to(dtype=torch.bool).expand(n_frames, n_points)
         return [
             Track(
                 points=points[view_index],

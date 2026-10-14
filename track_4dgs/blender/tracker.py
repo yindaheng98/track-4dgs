@@ -131,7 +131,7 @@ class BlenderPointTracker(AbstractBatchPointTracker):
             self.verts, self.faces, self.matrices, query, frames, self.eps, str(self.device),
         )
         confidence = query.points.new_ones((n_views, n_frames, n_points))
-        mask = valid.to(device=query.points.device, dtype=torch.bool).expand(n_frames, n_points)
+        mask = valid.to(dtype=torch.bool).expand(n_frames, n_points)
         return [
             Track(
                 points=points[view_index],

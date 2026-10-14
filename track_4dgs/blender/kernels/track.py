@@ -25,11 +25,10 @@ def posed_scene_vertices(
     for obj_verts, matrix in zip(verts, matrix_world):
         if obj_verts.shape[0] == 0:
             continue
-        hom = torch.cat([obj_verts, torch.ones(obj_verts.shape[0], 1)], dim=1)
+        hom = torch.cat([obj_verts, obj_verts.new_ones(obj_verts.shape[0], 1)], dim=1)
         parts.append(torch.einsum("ij,vj->vi", matrix, hom)[:, :3])
     if not parts:
-        reference = verts[0] if verts else matrix_world
-        return reference.new_zeros((0, 3))
+        return matrix_world.new_zeros((0, 3))
     return torch.cat(parts)
 
 
@@ -47,10 +46,15 @@ def pack_object_faces(
     for obj_index, (obj_verts, obj_faces) in enumerate(zip(verts, faces)):
         if obj_faces.numel() > 0:
             parts.append(obj_faces + offset)
-            owners.append(torch.full((obj_faces.shape[0],), obj_index, dtype=torch.long))
+            owners.append(obj_faces.new_full((obj_faces.shape[0],), obj_index, dtype=torch.long))
         offset += obj_verts.shape[0]
     if not parts:
-        return torch.zeros((0, 3), dtype=torch.int32), torch.zeros((0,), dtype=torch.long)
+        reference = faces[0] if faces else (verts[0] if verts else None)
+        device = None if reference is None else reference.device
+        return (
+            torch.zeros((0, 3), dtype=torch.int32, device=device),
+            torch.zeros((0,), dtype=torch.long, device=device),
+        )
     return torch.cat(parts), torch.cat(owners)
 
 
