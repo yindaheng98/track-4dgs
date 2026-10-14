@@ -12,12 +12,12 @@ def rendering(dataset: SavedDataset, save: str) -> None:
         sample = dataset[index]
         sample_dir = os.path.join(save, f"supervision{dataset.start + index}")
         print(f"Saving {sample.tracks[0].points.shape[1]} tracked points to {sample_dir}")
-        for frame_idx, frame in enumerate(sample.frames):
+        for frame_idx, frame in enumerate(sample.frames, start=1):
             for view_idx, track in enumerate(sample.tracks):
                 canvas = draw_rainbow_tracks(
                     image=frame[view_idx].ground_truth_image,
                     track=track,
-                    frame_idx=frame_idx,
+                    frame_idx=frame_idx - 1,
                 )
                 path = os.path.join(sample_dir, f"frame{frame_idx}", f"{view_idx}.png")
                 os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -34,7 +34,7 @@ if __name__ == "__main__":
 
     parser = ArgumentParser()
     parser.add_argument("--save-folder", required=True, type=str)
-    parser.add_argument("--save-start", default=0, type=int)
+    parser.add_argument("--save-start", default=1, type=int)
     parser.add_argument("--vis-folder", default=None, type=str)
     args = parser.parse_args(unknown)
 

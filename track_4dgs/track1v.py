@@ -90,7 +90,7 @@ def rendering(frames: Sequence[torch.Tensor], track: Track, save: str) -> None:
 
     for frame_idx, frame in enumerate(frames):
         canvas = draw_rainbow_tracks(frame, track, frame_idx)
-        canvas.save(os.path.join(save, f"{frame_idx:05d}.png"))
+        canvas.save(os.path.join(save, f"{frame_idx + 1:05d}.png"))
 
 
 if __name__ == "__main__":

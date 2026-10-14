@@ -48,7 +48,7 @@ def rendering(datasets: Sequence[CameraDataset], save: str) -> None:
                 track=track,
                 frame_idx=frame_idx,
             )
-            canvas.save(os.path.join(save_view, f"{frame_idx:05d}.png"))
+            canvas.save(os.path.join(save_view, f"{frame_idx + 1:05d}.png"))
 
 
 if __name__ == "__main__":

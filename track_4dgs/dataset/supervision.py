@@ -66,7 +66,7 @@ class Supervision:
         shutil.rmtree(folder, ignore_errors=True)
         os.makedirs(folder)
         self.query.save(os.path.join(folder, "query.pt"))
-        for frame_idx, dataset in enumerate(self.frames):
+        for frame_idx, dataset in enumerate(self.frames, start=1):
             frame_dir = os.path.join(folder, f"frame{frame_idx}")
             cameras, images = {}, {}
             for view_idx in range(len(dataset)):
@@ -111,9 +111,13 @@ class Supervision:
     def load(cls, folder: str, device="cpu") -> 'Supervision':
         query = Query.load(os.path.join(folder, "query.pt"), device=device)
         frames = []
-        frame_idx = 0
+        frame_idx = 1
         while os.path.isdir(os.path.join(folder, f"frame{frame_idx}")):
-            frames.append(ColmapCameraDataset(os.path.join(folder, f"frame{frame_idx}")).to(device))
+            frames.append(ColmapCameraDataset(
+                os.path.join(folder, f"frame{frame_idx}"),
+                load_mask=False,
+                load_depth=False,
+            ).to(device))
             frame_idx += 1
         tracks = [
             Track.load(os.path.join(folder, f"{view_idx}.pt"), device=device)
