@@ -30,11 +30,13 @@ class BlenderScene:
     view per frame. ``V`` matches ``query``.
     ``height``, ``width``, and ``focal`` are ``[V, D]``. ``focal`` is pixels,
     ``fx = fy``, and the principal point is the image center.
-    ``frames`` is the absolute Blender frame for each column of ``c2w``, length ``D``.
+    Columns of ``c2w`` are ``range(frame_start, frame_end + 1, frame_step)``.
     """
 
     blend: str
-    frames: Sequence[int]
+    frame_start: int
+    frame_end: int
+    frame_step: int
     query: Query
     c2w: torch.Tensor
     height: torch.Tensor
@@ -51,10 +53,12 @@ class BlenderScene:
         if c2w.shape[1] < 1:
             raise ValueError("c2w must contain at least one frame")
         n_frames = c2w.shape[1]
+        if not all(isinstance(value, int) for value in (self.frame_start, self.frame_end, self.frame_step)):
+            raise TypeError("frame_start, frame_end, and frame_step must be ints")
+        if self.frame_step == 0:
+            raise ValueError("frame_step must not be 0")
         if len(self.frames) != n_frames:
-            raise ValueError("frames must contain one Blender frame per c2w column")
-        if any(isinstance(frame, bool) or not isinstance(frame, int) for frame in self.frames):
-            raise TypeError("frames must be a sequence of ints")
+            raise ValueError("c2w columns must match range(frame_start, frame_end + 1, frame_step)")
         shape = (n_views, n_frames)
         for name in ("height", "width", "focal"):
             value = getattr(self, name)
@@ -76,12 +80,20 @@ class BlenderScene:
 
         return self.query.points.device
 
+    @property
+    def frames(self) -> range:
+        """Absolute Blender frames, one per column of ``c2w``."""
+
+        return range(self.frame_start, self.frame_end + 1, self.frame_step)
+
     def to(self, device) -> 'BlenderScene':
         """Return this scene with the query and camera tensors on ``device``."""
 
         return BlenderScene(
             blend=self.blend,
-            frames=self.frames,
+            frame_start=self.frame_start,
+            frame_end=self.frame_end,
+            frame_step=self.frame_step,
             query=self.query.to(device),
             c2w=self.c2w.to(device),
             height=self.height.to(device),
