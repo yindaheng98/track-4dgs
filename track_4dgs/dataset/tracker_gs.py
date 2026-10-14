@@ -40,16 +40,17 @@ class GaussianSplattingPointTrackerDataset(PointTrackerDataset):
     @classmethod
     def from_namespace(cls, args: Namespace) -> 'GaussianSplattingPointTrackerDataset':
         """Project a random subset of each sample's Gaussian positions."""
-        assert len(args.destination) == len(args.sources), "--destination must appear once per --sources."
-        assert len(args.iteration) == len(args.sources), "--iteration must appear once per --sources."
+        assert len(args.destination) == len(args.samples), "--destination must appear once per --sources."
+        assert len(args.iteration) == len(args.samples), "--iteration must appear once per --sources."
         tracker, sample_frames = cls.tracker_frames_from_namespace(args)
         samples = []
         with torch.no_grad():
-            for sources, frames, destination, iteration, init_dataset_index in zip(
-                    args.sources, sample_frames, args.destination, args.iteration, args.init_dataset_indices):
+            for spec, frames, destination, iteration in zip(
+                    args.samples, sample_frames, args.destination, args.iteration):
+                init_dataset_index = spec.init_dataset_index
                 load_ply = os.path.join(destination, "point_cloud", "iteration_" + str(iteration), "point_cloud.ply")
                 gaussians = prepare_gaussians(
-                    sh_degree=args.sh_degree, source=sources[init_dataset_index], device=args.device,
+                    sh_degree=args.sh_degree, source=spec.sources[init_dataset_index], device=args.device,
                     trainable_camera=False, load_ply=load_ply)
                 query = query_views_from_gaussians(
                     datasets=frames, gaussians=gaussians,

@@ -1,6 +1,6 @@
 """Build supervision by running a point tracker."""
 
-from argparse import ArgumentParser, Namespace
+from argparse import Action, ArgumentParser, Namespace
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Optional
@@ -31,6 +31,30 @@ class PointTrackerSample:
         )
 
 
+class AppendPointTrackerSample(Action):
+    """Attach ``--load_cameras`` and ``--init-dataset-index`` to the preceding ``--sources``.
+
+    Each ``--sources`` starts one sample. Each of those two options may follow it
+    once. A second copy, or either option before the first ``--sources``, is an error.
+    """
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        samples = getattr(namespace, "samples", None)
+        if samples is None:
+            samples = []
+            namespace.samples = samples
+        if option_string in ("-s", "--sources"):
+            samples.append(Namespace(sources=values, load_cameras=None, init_dataset_index=None))
+            return
+        if not samples:
+            parser.error(f"{option_string} must follow --sources")
+        sample = samples[-1]
+        field = "load_cameras" if option_string == "--load_cameras" else "init_dataset_index"
+        if getattr(sample, field) is not None:
+            parser.error(f"{option_string} already set for this --sources")
+        setattr(sample, field, values)
+
+
 class PointTrackerDataset(AbstractDataset):
     """Turn each :class:`PointTrackerSample` into one :class:`Supervision`.
 
@@ -45,10 +69,14 @@ class PointTrackerDataset(AbstractDataset):
 
     @staticmethod
     def add_tracker_argument(parser: ArgumentParser) -> ArgumentParser:
-        """Register the tracker and camera flags shared by tracker datasets."""
-        parser.add_argument("-s", "--sources", required=True, nargs="+", action="append", type=str, help="Source frames for one sample. Repeat for each sample.")
-        parser.add_argument("--load_cameras", default=None, nargs="+", action="append", type=str)
-        parser.add_argument("--init-dataset-indices", action="append", type=int, default=None, help="Index into one --sources group for the query frame. Repeat once per --sources. Defaults to 0 for every sample.")
+        """Register the tracker and camera flags shared by tracker datasets.
+
+        ``--load_cameras`` and ``--init-dataset-index`` belong to the preceding ``--sources``.
+        Each may appear once in that group. ``--init-dataset-index`` defaults to 0.
+        """
+        parser.add_argument("-s", "--sources", required=True, dest="samples", action=AppendPointTrackerSample, nargs="+", type=str, metavar="SOURCE", help="Source frames for one sample. Repeat to start another sample.")
+        parser.add_argument("--load_cameras", dest="samples", action=AppendPointTrackerSample, nargs="+", type=str, metavar="PATH", help="Camera file for each source in the preceding --sources. At most once.")
+        parser.add_argument("--init-dataset-index", dest="samples", action=AppendPointTrackerSample, type=int, metavar="INDEX", help="Index into the preceding --sources for the query frame. At most once. Defaults to 0.")
         parser.add_argument("--device", default="cuda", type=str)
         parser.add_argument("--tracker", type=str, default="cotracker3", choices=get_available_point_trackers())
         parser.add_argument("-m", "--option_tracker", default=[], action="append", type=str)
@@ -58,17 +86,21 @@ class PointTrackerDataset(AbstractDataset):
 
     @staticmethod
     def tracker_frames_from_namespace(args: Namespace) -> tuple[AbstractPointTracker, list[CameraDataset]]:
-        """Build the tracker and one camera-dataset sequence per ``--sources`` group."""
-        load_cameras = args.load_cameras if args.load_cameras is not None else [None] * len(args.sources)
-        if args.init_dataset_indices is None:
-            args.init_dataset_indices = [0] * len(args.sources)
-        assert len(load_cameras) == len(args.sources), "--load_cameras must appear once per --sources."
-        assert len(args.init_dataset_indices) == len(args.sources), "--init-dataset-indices must appear once per --sources."
+        """Build the tracker and one camera-dataset sequence per ``--sources`` group.
+
+        Fills a missing ``init_dataset_index`` on each sample with 0.
+        """
+        assert args.samples, "at least one --sources is required"
         configs = {o.split("=", 1)[0]: eval(o.split("=", 1)[1]) for o in args.option_tracker}
         tracker = prepare_tracker(tracker_name=args.tracker, device=args.device, tracker_configs=configs, cache_dir=args.cache)
         frames: list[CameraDataset] = []
-        for sources, cameras, init_dataset_index in zip(args.sources, load_cameras, args.init_dataset_indices):
-            assert 0 <= init_dataset_index < len(sources), "--init-dataset-indices must point to one of the values in --sources."
+        for spec in args.samples:
+            if spec.init_dataset_index is None:
+                spec.init_dataset_index = 0
+            sources = spec.sources
+            cameras = spec.load_cameras
+            init_dataset_index = spec.init_dataset_index
+            assert 0 <= init_dataset_index < len(sources), "--init-dataset-index must point to one of the values in --sources."
             if cameras is not None:
                 assert len(cameras) == len(sources), "--load_cameras must have the same number of values as --sources."
             frames.append(prepare_datasets(
@@ -91,9 +123,10 @@ class PointTrackerDataset(AbstractDataset):
         tracker, sample_frames = cls.tracker_frames_from_namespace(args)
         samples = []
         with torch.no_grad():
-            for frames, init_dataset_index in tqdm(
-                    zip(sample_frames, args.init_dataset_indices),
+            for frames, spec in tqdm(
+                    zip(sample_frames, args.samples),
                     total=len(sample_frames), desc="Samples", position=0):
+                init_dataset_index = spec.init_dataset_index
                 dataset = frames[init_dataset_index]
                 xyz = sample_uniform_xyz(dataset, args.num_points, args.visible_cameras, args.device)
                 frame_indices = torch.full((args.num_points,), init_dataset_index, dtype=torch.long, device=args.device)
