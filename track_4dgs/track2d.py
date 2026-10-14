@@ -37,18 +37,18 @@ def rendering(datasets: Sequence[CameraDataset], save: str) -> None:
             mask=torch.stack([dataset[view_idx].custom_data["track"].mask for dataset in datasets]),
         )
 
-        save_view = os.path.join(save, f"{view_idx:05d}")
-        os.makedirs(save_view, exist_ok=True)
-        print(f"Saving {track.points.shape[1]} tracked points in view {view_idx} to {save_view}")
+        print(f"Saving {track.points.shape[1]} tracked points in view {view_idx} to {save}")
 
-        for frame_idx, dataset in enumerate(datasets):
+        for frame_idx, dataset in enumerate(datasets, start=1):
             camera = dataset[view_idx]
             canvas = draw_rainbow_tracks(
                 image=camera.ground_truth_image,
                 track=track,
-                frame_idx=frame_idx,
+                frame_idx=frame_idx - 1,
             )
-            canvas.save(os.path.join(save_view, f"{frame_idx + 1:05d}.png"))
+            path = os.path.join(save, f"frame{frame_idx}", f"{view_idx}.png")
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            canvas.save(path)
 
 
 if __name__ == "__main__":
