@@ -191,10 +191,6 @@
                 "data/point_odyssey/robot/frame361",
                 "data/point_odyssey/robot/frame381",
                 "-m",
-                "frame_start=1",
-                "-m",
-                "frame_end=1141",
-                "-m",
                 "frame_step=60",
                 "-d",
                 "output/point_odyssey_robot",
@@ -208,6 +204,8 @@
                 "blender='C:/Program Files (x86)/Steam/steamapps/common/Blender/blender.exe'",
                 "--save-folder",
                 "output/point_odyssey_robot/ours_0/dataset-blender",
+                "--vis-folder",
+                "output/point_odyssey_robot/ours_0/dataset-blender-vis/",
             ]
         }
     ]
