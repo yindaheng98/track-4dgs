@@ -25,9 +25,9 @@ class AbstractDataset(Dataset[Supervision], ABC):
 
         return self
 
-    @staticmethod
+    @classmethod
     @abstractmethod
-    def add_argument(parser: ArgumentParser) -> None:
+    def add_argument(cls, parser: ArgumentParser) -> None:
         """Register this dataset's arguments on ``parser``."""
         raise NotImplementedError
 
@@ -66,8 +66,8 @@ class SavedDataset(AbstractDataset):
             index += 1
         self.length = index
 
-    @staticmethod
-    def add_argument(parser: ArgumentParser) -> None:
+    @classmethod
+    def add_argument(cls, parser: ArgumentParser) -> None:
         parser.add_argument("--folder", required=True, type=str)
 
     @classmethod
