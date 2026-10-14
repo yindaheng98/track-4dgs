@@ -110,8 +110,6 @@
                 "data/point_odyssey/robot/frame361",
                 "data/point_odyssey/robot/frame381",
                 "-m",
-                "start_number=1",
-                "-m",
                 "frame_step=60",
                 "-d",
                 "output/point_odyssey_robot",
