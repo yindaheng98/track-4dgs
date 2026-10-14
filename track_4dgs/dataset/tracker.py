@@ -78,7 +78,7 @@ class PointTrackerDataset(AbstractDataset):
         """Register the tracker and camera flags shared by tracker datasets."""
         parser.add_argument("-s", "--sources", required=True, nargs="+", action="append", type=str, help="Source frames for one sample. Repeat for each sample.")
         parser.add_argument("--load_cameras", default=None, nargs="+", action="append", type=str)
-        parser.add_argument("--init-dataset-indices", required=True, action="append", type=int, help="Index into one --sources group for the query frame. Repeat once per --sources.")
+        parser.add_argument("--init-dataset-indices", action="append", type=int, default=None, help="Index into one --sources group for the query frame. Repeat once per --sources. Defaults to 0 for every sample.")
         parser.add_argument("--device", default="cuda", type=str)
         parser.add_argument("--tracker", type=str, default="cotracker3", choices=get_available_point_trackers())
         parser.add_argument("-m", "--option_tracker", default=[], action="append", type=str)
@@ -90,6 +90,8 @@ class PointTrackerDataset(AbstractDataset):
     def tracker_frames_from_namespace(args: Namespace) -> tuple[AbstractPointTracker, list[CameraDataset]]:
         """Build the tracker and one camera-dataset sequence per ``--sources`` group."""
         load_cameras = args.load_cameras if args.load_cameras is not None else [None] * len(args.sources)
+        if args.init_dataset_indices is None:
+            args.init_dataset_indices = [0] * len(args.sources)
         assert len(load_cameras) == len(args.sources), "--load_cameras must appear once per --sources."
         assert len(args.init_dataset_indices) == len(args.sources), "--init-dataset-indices must appear once per --sources."
         configs = {o.split("=", 1)[0]: eval(o.split("=", 1)[1]) for o in args.option_tracker}
