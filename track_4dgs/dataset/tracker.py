@@ -9,8 +9,8 @@ import torch
 from gaussian_splatting.dataset import CameraDataset
 from tqdm import tqdm
 
-from ..prepare import prepare_datasets, prepare_tracker
-from ..registry import get_available_point_trackers
+from ..prepare import prepare_datasets
+from ..registry import build_point_tracker, get_available_point_trackers
 from ..tracker import AbstractPointTracker, Query
 from ..utils.sample import sample_uniform_xyz
 from .dataset import AbstractDataset
@@ -82,7 +82,6 @@ class PointTrackerDataset(AbstractDataset):
         parser.add_argument("--tracker", type=str, default="cotracker3", choices=get_available_point_trackers())
         parser.add_argument("-m", "--option_tracker", default=[], action="append", type=str)
         parser.add_argument("--batch-size", default=None, type=int)
-        parser.add_argument("--cache", default=None, type=str, help="Directory of the point-track cache bank. Saved query points are reused; only new points are tracked.")
         return parser
 
     @staticmethod
@@ -93,7 +92,7 @@ class PointTrackerDataset(AbstractDataset):
         """
         assert args.samples, "at least one --sources is required"
         configs = {o.split("=", 1)[0]: eval(o.split("=", 1)[1]) for o in args.option_tracker}
-        tracker = prepare_tracker(tracker_name=args.tracker, device=args.device, tracker_configs=configs, cache_dir=args.cache)
+        tracker = build_point_tracker(args.tracker, **configs).to(args.device)
         frames: list[CameraDataset] = []
         for spec in args.samples:
             if spec.init_dataset_index is None:
