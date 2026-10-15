@@ -6,8 +6,7 @@ from gaussian_splatting import GaussianModel
 from gaussian_splatting.dataset import CameraDataset
 from gaussian_splatting.prepare import prepare_gaussians
 
-from track_4dgs.dataset import build_camera_dataset_tracker, prepare_datasets
-from track_4dgs.registry import get_available_point_trackers
+from track_4dgs.dataset import CameraDatasetTracker, PointTrackerDataset
 from track_4dgs.track1v import draw_rainbow_tracks
 from track_4dgs.tracker import Query, Track
 
@@ -55,39 +54,29 @@ if __name__ == "__main__":
     from argparse import ArgumentParser
 
     parser = ArgumentParser()
+    PointTrackerDataset.add_tracker_argument(parser)
     parser.add_argument("--sh_degree", default=3, type=int)
-    parser.add_argument("-s", "--sources", required=True, nargs="+", type=str, help="Source frames for the sequence.")
     parser.add_argument("-d", "--destination", required=True, type=str)
     parser.add_argument("-i", "--iteration", required=True, type=int)
-    parser.add_argument("--load_cameras", default=None, nargs="+", type=str)
-    parser.add_argument("--init-dataset-index", default=0, type=int, help="Index into --sources for the query frame.")
     parser.add_argument("--mode", choices=["base", "camera"], default="base")
-    parser.add_argument("--device", default="cuda", type=str)
-    parser.add_argument("--tracker", type=str, default="cotracker3", choices=get_available_point_trackers())
-    parser.add_argument("-m", "--option_tracker", default=[], action="append", type=str)
     parser.add_argument("--num-points", default=256, type=int)
-    parser.add_argument("--batch-size", default=None, type=int)
     args = parser.parse_args()
+    if len(args.samples) != 1:
+        parser.error("track2d accepts a single --sources group")
+    spec = args.samples[0]
     load_ply = os.path.join(args.destination, "point_cloud", "iteration_" + str(args.iteration), "point_cloud.ply")
     save = os.path.join(args.destination, "ours_{}".format(args.iteration), f"track2d-{args.tracker}")
-    tracker_configs = {o.split("=", 1)[0]: eval(o.split("=", 1)[1]) for o in args.option_tracker}
-    assert 0 <= args.init_dataset_index < len(args.sources), "--init-dataset-index must point to one of the values in --sources."
-    if args.load_cameras is not None:
-        assert len(args.load_cameras) == len(args.sources), "--load_cameras must have the same number of values as --sources."
 
     with torch.no_grad():
-        datasets = prepare_datasets(
-            sources=args.sources, device=args.device,
-            trainable_camera=args.mode == "camera", load_cameras=args.load_cameras,
-            load_mask=False, load_depth=False,
-            reorder_reference_idx=args.init_dataset_index)
+        tracker, sample_frames = PointTrackerDataset.tracker_frames_from_namespace(args)
+        datasets = sample_frames[0]
         gaussians = prepare_gaussians(
-            sh_degree=args.sh_degree, source=args.sources[args.init_dataset_index], device=args.device,
+            sh_degree=args.sh_degree, source=spec.sources[spec.init_dataset_index], device=args.device,
             trainable_camera=args.mode == "camera", load_ply=load_ply)
-        dataset_tracker = build_camera_dataset_tracker(tracker_name=args.tracker, device=args.device, tracker_configs=tracker_configs)
+        dataset_tracker = CameraDatasetTracker(tracker)
         queries = query_views_from_gaussians(
             datasets=datasets, gaussians=gaussians,
-            init_dataset_index=args.init_dataset_index, num_points=args.num_points)
+            init_dataset_index=spec.init_dataset_index, num_points=args.num_points)
         tracked_datasets = dataset_tracker(queries, datasets, batch_size=args.batch_size)
 
         rendering(
