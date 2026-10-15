@@ -25,6 +25,9 @@ class MVTAPPointTracker(AbstractBatchPointTracker):
 
     ``visibility`` and ``confidence`` are CoTracker3-style sigmoid scores in
     ``(0, 1)``. Confidence is trained as ``P(error <= 12 px)``.
+
+    ``batch_size`` chunks query points after ``fnet``. ``None`` tracks every
+    point in one call.
     """
 
     def __init__(
@@ -34,7 +37,11 @@ class MVTAPPointTracker(AbstractBatchPointTracker):
             view_att: bool = True,
             use_cam_embed: bool = True,
             bilinear_mode: str = "border",
-            use_checkpoint: bool = False):
+            use_checkpoint: bool = False,
+            batch_size: int | None = None):
+        if batch_size is not None and batch_size <= 0:
+            raise ValueError("batch_size must be a positive integer")
+        self.batch_size = batch_size
         self.model = load_mvtap(
             checkpoint,
             view_att=view_att,
@@ -114,10 +121,53 @@ class MVTAPPointTracker(AbstractBatchPointTracker):
             intrinsic = torch.cat([intrinsic, intrinsic[:, :, -1:].expand(-1, -1, pad, -1, -1)], dim=2)
             extrinsic = torch.cat([extrinsic, extrinsic[:, :, -1:].expand(-1, -1, pad, -1, -1)], dim=2)
 
-        coords, vis, conf, _ = self.model(
-            video, queries.clone(), intrinsic, extrinsic,
-            iters=self.iters, is_train=False, fmaps_chunk_size=1,
-        )
+        queries = queries.clone()
+        n_points = queries.shape[2]
+        if self.batch_size is None or n_points <= self.batch_size:
+            coords, vis, conf, _ = self.model(
+                video, queries, intrinsic, extrinsic,
+                iters=self.iters, is_train=False, fmaps_chunk_size=1,
+            )
+        else:
+            # fnet reads only the video, but MVTAP calls it from inside forward.
+            # The first point chunk runs fnet and stores every output. Each later
+            # chunk hands those tensors back in the same order.
+            fnet = self.model.fnet
+            fnet_forward = fnet.forward
+            encoded = []
+
+            def fnet_record(*args, **kwargs):
+                features = fnet_forward(*args, **kwargs)
+                encoded.append(features)
+                return features
+
+            replay_index = 0
+
+            def fnet_replay(*args, **kwargs):
+                nonlocal replay_index
+                features = encoded[replay_index]
+                replay_index += 1
+                return features
+
+            coords_parts, vis_parts, conf_parts = [], [], []
+            try:
+                fnet.forward = fnet_record
+                for start in range(0, n_points, self.batch_size):
+                    end = min(start + self.batch_size, n_points)
+                    coords, vis, conf, _ = self.model(
+                        video, queries[:, :, start:end], intrinsic, extrinsic,
+                        iters=self.iters, is_train=False, fmaps_chunk_size=1,
+                    )
+                    coords_parts.append(coords)
+                    vis_parts.append(vis)
+                    conf_parts.append(conf)
+                    replay_index = 0
+                    fnet.forward = fnet_replay
+            finally:
+                fnet.forward = fnet_forward
+            coords = torch.cat(coords_parts, dim=3)
+            vis = torch.cat(vis_parts, dim=3)
+            conf = torch.cat(conf_parts, dim=3)
         coords = coords[:, :, :n_frames]
         vis = vis[:, :, :n_frames]
         conf = conf[:, :, :n_frames]
