@@ -169,7 +169,7 @@ python -c "import track_4dgs; print(track_4dgs.get_available_point_trackers())"
 | `mvtap` | `MVTAPPointTracker` | joint multi-view | no |
 | `blender` | `BlenderPointTracker` | joint rigid-mesh | no |
 
-`track1v` accepts an `AbstractViewPointTracker`. Joint trackers run through `track2d` and `build_dataset`. `blender` is documented in [Blender mesh tracking](#blender-mesh-tracking).
+`track1v` accepts an `AbstractViewPointTracker`. Joint trackers run through `build_dataset`. `blender` is documented in [Blender mesh tracking](#blender-mesh-tracking).
 
 ### Track One Image Sequence
 
@@ -195,45 +195,9 @@ python -m track_4dgs.track1v \
     -m iters=4
 ```
 
-### Track 4DGS Camera Datasets
-
-```shell
-python -m track_4dgs.track2d \
-    -s data/sequence/frame_000 data/sequence/frame_001 data/sequence/frame_002 \
-    -d output/sequence \
-    -i 30000 \
-    --tracker cotracker3 \
-    --init-dataset-index 0 \
-    --num-points 256 \
-    --batch-size 128
-```
-
-`track2d` loads a trained Gaussian point cloud from:
-
-```text
-<destination>/point_cloud/iteration_<iteration>/point_cloud.ply
-```
-
-It projects a random subset of Gaussian centers into every camera of the reference timestep, tracks those projected points across the same camera views in all timesteps, and saves visualisations under:
-
-```text
-<destination>/ours_<iteration>/track2d-<tracker>/
-```
-
-If cameras were saved outside the source scene folders, pass one camera path per source:
-
-```shell
-python -m track_4dgs.track2d \
-    -s data/sequence/frame_000 data/sequence/frame_001 \
-    -d output/sequence \
-    -i 30000 \
-    --load_cameras output/frame_000/cameras.json output/frame_001/cameras.json \
-    --mode camera
-```
-
 ### Build a Supervision Dataset
 
-`python -m track_4dgs.build_dataset` runs a registered supervision dataset and writes one folder per sample:
+`python -m track_4dgs.build_dataset` runs a registered supervision dataset. `--save-folder` and `--vis-folder` are both optional, and at least one is required. With `--save-folder`, it writes one folder per sample:
 
 ```text
 <save-folder>/supervision<index>/
@@ -242,7 +206,7 @@ python -m track_4dgs.track2d \
     0.pt 1.pt ...        # one Track per view
 ```
 
-`--save-start` is the first index and defaults to 1, so the first sample is `supervision1`. `--vis-folder` writes the same rainbow overlays as `track2d`.
+`--save-start` is the first index and defaults to 1, so the first saved sample is `supervision1`. `--vis-folder` writes rainbow overlays. If `--save-folder` is set, the overlays are drawn from the saved samples. If it is omitted, `build_dataset` draws the in-memory dataset directly and does not write it to disk. Omit `--vis-folder` to save without overlays.
 
 List the dataset names:
 
@@ -251,7 +215,7 @@ python -c "import track_4dgs; from track_4dgs.dataset.registry import get_availa
 ```
 
 - `tracker`: sample points uniformly inside the scene cube, keep those seen by more cameras than `--visible-cameras` (default 2), project them, and track
-- `tracker_gs`: sample a random subset of a trained 3DGS point cloud, as `track2d` does, then save the tracks
+- `tracker_gs`: sample a random subset of a trained 3DGS point cloud, then track those points
 - `blender`: render a `.blend` file from sampled cameras and track the query on its rigid meshes. See [Blender mesh tracking](#blender-mesh-tracking)
 
 Uniform scene points:
@@ -267,7 +231,11 @@ python -m track_4dgs.build_dataset \
     --vis-folder output/sequence/dataset-cotracker3-vis
 ```
 
-Gaussian point cloud. `-d` and `-i` name the same run `track2d` would read:
+Gaussian point cloud. `-d` and `-i` name the run whose checkpoint is sampled:
+
+```text
+<destination>/point_cloud/iteration_<iteration>/point_cloud.ply
+```
 
 ```shell
 python -m track_4dgs.build_dataset \
@@ -307,15 +275,17 @@ python -m nvs2colmap.n3dv \
     --ffprobe ffprobe
 ```
 
-Track those frames with the same blend file:
+Track those frames with the same blend file. This only writes overlays:
 
 ```shell
-python -m track_4dgs.track2d \
+python -m track_4dgs.build_dataset \
+    --dataset tracker_gs \
+    --tracker blender \
     -s data/scene/frame1 data/scene/frame2 data/scene/frame3 \
     -d output/scene \
     -i 30000 \
-    --tracker blender \
-    -m blend="'data/scene.blend'"
+    -m blend="'data/scene.blend'" \
+    --vis-folder output/scene/track-blender-vis
 ```
 
 Copy `--frame_start`, `--frame_end`, and `--frame_step` from the render command onto the tracker. `nvs2colmap.blender --frame_step` already drops frames inside each camera video, and `nvs2colmap.n3dv` still writes consecutive `frame*` folders. Leave `nvs2colmap.n3dv --start-number` at its default of 1: that flag counts frames inside the rendered video, so `frame1` is the first frame the Blender render wrote. `--sources` then lists `frame1`, `frame2`, ... in order.
@@ -328,15 +298,17 @@ python -m nvs2colmap.blender \
     --frame_end 14 \
     --frame_step 2
 
-python -m track_4dgs.track2d \
+python -m track_4dgs.build_dataset \
+    --dataset tracker_gs \
+    --tracker blender \
     -s data/scene/frame1 data/scene/frame2 data/scene/frame3 \
     -d output/scene \
     -i 30000 \
-    --tracker blender \
     -m blend="'data/scene.blend'" \
     -m frame_start=10 \
     -m frame_end=14 \
-    -m frame_step=2
+    -m frame_step=2 \
+    --vis-folder output/scene/track-blender-vis
 ```
 
 `build_dataset --dataset blender` can skip the COLMAP export and render supervision directly. It samples OpenCV cameras on a spherical cap, samples the query near the mesh at `--init-dataset-index`, renders every view, and binds the tracks to the rigid meshes. `--frame_start`, `--frame_end`, `--frame_step`, and `--init-dataset-index` attach to the preceding `--blend`. Repeat `--blend` for another sample.
@@ -399,11 +371,12 @@ print(track.confidence.shape)  # [num_frames, num_points]
 
 ### Track Gaussian Splatting Camera Datasets
 
+`build_camera_dataset_tracker` and `CameraDatasetTracker` are reserved. They attach each view's track onto the cameras as `camera.custom_data["track"]`. `build_dataset` does not call them; it keeps the view-major `Supervision` tracks.
+
 ```python
 from gaussian_splatting.prepare import prepare_gaussians
 
-from track_4dgs.dataset import build_camera_dataset_tracker, prepare_datasets
-from track_4dgs.track2d import query_views_from_gaussians
+from track_4dgs.dataset import build_camera_dataset_tracker, prepare_datasets, query_views_from_gaussians
 
 sources = [
     "data/sequence/frame_000",
@@ -455,7 +428,9 @@ print(sample.tracks[0].points.shape)    # [num_frames, num_points, 2]
 
 ## Design: Point Tracker Registry
 
-`AbstractPointTracker.__call__` validates inputs, then calls `track`. It takes a view-major `Query` (`points` `[V, N, 2]`, `frame_indices` `[V, N]`, `in_image` `[V, N]`) and frame-major camera datasets, and returns one `Track` per view. `batch_size` splits the point dimension; `None` tracks every point in one call. `CameraDatasetTracker` attaches those tracks back onto the camera datasets as a per-frame `CameraTrack` on `camera.custom_data["track"]`:
+`AbstractPointTracker.__call__` validates inputs, then calls `track`. It takes a view-major `Query` (`points` `[V, N, 2]`, `frame_indices` `[V, N]`, `in_image` `[V, N]`) and frame-major camera datasets, and returns one `Track` per view. `batch_size` splits the point dimension; `None` tracks every point in one call. `build_dataset` keeps that view-major `Supervision` layout.
+
+`CameraDatasetTracker` and `build_camera_dataset_tracker` are reserved for a later step that hangs those tracks back on the cameras. `build_camera_dataset_tracker(tracker_name, device, tracker_configs)` builds a registered point tracker and wraps it. Calling the wrapper with a view-major `Query` and frame-major camera datasets returns one `TrackedCameraDataset` per frame. Each camera then carries its `CameraTrack` on `camera.custom_data["track"]`. `build_dataset` does not call this path:
 
 ```text
 query + frames -> validate + track -> view_tracks -> tracked camera datasets
