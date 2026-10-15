@@ -77,17 +77,24 @@ class VGGTPointTracker(AbstractViewPointTracker):
 
     ``visibility`` and ``confidence`` are independent sigmoid scores in
     ``(0, 1)``. Confidence is trained as ``P(error < 3 px)``.
+
+    ``batch_size`` chunks query points after the aggregator and DPT feature
+    extractor. ``None`` tracks every point in one call.
     """
 
     def __init__(
             self,
             checkpoint: str = "checkpoints/vggt_1B_commercial.pt",
             img_load_resolution: int = 1024,
-            iters: int = 4):
+            iters: int = 4,
+            batch_size: int | None = None):
+        if batch_size is not None and batch_size <= 0:
+            raise ValueError("batch_size must be a positive integer")
         self.model = load_vggt(checkpoint)
         self.model.eval()
         self.img_load_resolution = img_load_resolution
         self.iters = iters
+        self.batch_size = batch_size
         self.device = torch.device("cpu")
 
     def to(self, device) -> 'VGGTPointTracker':
@@ -130,20 +137,28 @@ class VGGTPointTracker(AbstractViewPointTracker):
         with torch.cuda.amp.autocast(dtype=dtype):
             aggregated_tokens_list, ps_idx = self.model.aggregator(batch)
 
-        # 3. Predict per-image tracks from TrackHead
+        # 3. DPT features once, then track query points in batches.
         H, W = orig_sizes[0]
         query_points = points_to_square(points, H, W).unsqueeze(0)
+        head = self.model.track_head
+        tracks, visibilities, confidences = [], [], []
         with torch.cuda.amp.autocast(enabled=False):
-            track_list, vis, conf = self.model.track_head(
-                aggregated_tokens_list,
-                images=batch,
-                patch_start_idx=ps_idx,
-                query_points=query_points,
-                iters=self.iters,
-            )
-        points = track_list[-1].squeeze(0)
-        visibility = vis.squeeze(0)
-        confidence = conf.squeeze(0)
+            feature_maps = head.feature_extractor(aggregated_tokens_list, batch, ps_idx)
+            point_count = query_points.shape[1]
+            step = point_count if self.batch_size is None else self.batch_size
+            for start in range(0, point_count, step):
+                end = min(start + step, point_count)
+                track_list, vis, conf = head.tracker(
+                    query_points=query_points[:, start:end],
+                    fmaps=feature_maps,
+                    iters=self.iters,
+                )
+                tracks.append(track_list[-1])
+                visibilities.append(vis)
+                confidences.append(conf)
+        points = torch.cat(tracks, dim=2).squeeze(0)
+        visibility = torch.cat(visibilities, dim=2).squeeze(0)
+        confidence = torch.cat(confidences, dim=2).squeeze(0)
 
         # 4. Restore original pixel coordinates for each image
         track_points = []
