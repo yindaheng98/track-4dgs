@@ -402,7 +402,7 @@ print(track.confidence.shape)  # [num_frames, num_points]
 ```python
 from gaussian_splatting.prepare import prepare_gaussians
 
-from track_4dgs.prepare import prepare_datasets, prepare_tracker
+from track_4dgs.dataset import build_camera_dataset_tracker, prepare_datasets
 from track_4dgs.track2d import query_views_from_gaussians
 
 sources = [
@@ -420,7 +420,7 @@ gaussians = prepare_gaussians(
     device="cuda",
     load_ply="output/sequence/point_cloud/iteration_30000/point_cloud.ply",
 )
-dataset_tracker = prepare_tracker(
+dataset_tracker = build_camera_dataset_tracker(
     tracker_name="cotracker3",
     device="cuda",
     tracker_configs={"checkpoint": "checkpoints/scaled_offline.pth"},

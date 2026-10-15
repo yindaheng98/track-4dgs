@@ -6,7 +6,7 @@ from gaussian_splatting import GaussianModel
 from gaussian_splatting.dataset import CameraDataset
 from gaussian_splatting.prepare import prepare_gaussians
 
-from track_4dgs.prepare import prepare_datasets, prepare_tracker
+from track_4dgs.dataset import build_camera_dataset_tracker, prepare_datasets
 from track_4dgs.registry import get_available_point_trackers
 from track_4dgs.track1v import draw_rainbow_tracks
 from track_4dgs.tracker import Query, Track
@@ -84,7 +84,7 @@ if __name__ == "__main__":
         gaussians = prepare_gaussians(
             sh_degree=args.sh_degree, source=args.sources[args.init_dataset_index], device=args.device,
             trainable_camera=args.mode == "camera", load_ply=load_ply)
-        dataset_tracker = prepare_tracker(tracker_name=args.tracker, device=args.device, tracker_configs=tracker_configs)
+        dataset_tracker = build_camera_dataset_tracker(tracker_name=args.tracker, device=args.device, tracker_configs=tracker_configs)
         queries = query_views_from_gaussians(
             datasets=datasets, gaussians=gaussians,
             init_dataset_index=args.init_dataset_index, num_points=args.num_points)

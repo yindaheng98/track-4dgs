@@ -4,6 +4,7 @@ from typing import Optional
 from gaussian_splatting.dataset import CameraDataset
 from gaussian_splatting.camera import Camera
 
+from ..registry import build_point_tracker
 from ..tracker import AbstractPointTracker, CameraTrack, Query, Track
 
 
@@ -86,3 +87,13 @@ class CameraDatasetTracker:
             )
             for dataset, camera_tracks in zip(frames, frame_camera_tracks)
         ]
+
+
+def build_camera_dataset_tracker(
+        tracker_name: str,
+        device: str,
+        tracker_configs: dict = {},
+) -> CameraDatasetTracker:
+    """Build a camera-dataset tracker from a registered point tracker."""
+    tracker = build_point_tracker(tracker_name, **tracker_configs)
+    return CameraDatasetTracker(tracker).to(device)
