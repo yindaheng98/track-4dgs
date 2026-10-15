@@ -422,15 +422,19 @@ sample = dataset[0]
 print(sample.query.points.shape)       # [num_views, num_points, 2]
 print(len(sample.frames))               # num_frames
 print(sample.tracks[0].points.shape)    # [num_frames, num_points, 2]
+
+frame = sample.tracked_camera_dataset(0)
+camera_track = frame[0].custom_data["track"]
+print(camera_track.points.shape)        # [num_points, 2] for this camera in this frame
 ```
 
-`Supervision` holds a view-major `Query`, one camera dataset per frame, and one `Track` per view. `AbstractDataset.dump` writes that layout; `SavedDataset` reads it back.
+`Supervision` holds a view-major `Query`, one camera dataset per frame, and one `Track` per view. `AbstractDataset.dump` writes that layout; `SavedDataset` reads it back. `tracked_camera_dataset(index)` returns that frame as a `TrackedCameraDataset`: each camera's `custom_data["track"]` is the `CameraTrack` sliced from the matching view track. This does not run a tracker; the tracks are already stored on the sample.
 
 ## Design: Point Tracker Registry
 
 `AbstractPointTracker.__call__` validates inputs, then calls `track`. It takes a view-major `Query` (`points` `[V, N, 2]`, `frame_indices` `[V, N]`, `in_image` `[V, N]`) and frame-major camera datasets, and returns one `Track` per view. `batch_size` splits the point dimension; `None` tracks every point in one call. `build_dataset` keeps that view-major `Supervision` layout.
 
-`CameraDatasetTracker` and `build_camera_dataset_tracker` are reserved for a later step that hangs those tracks back on the cameras. `build_camera_dataset_tracker(tracker_name, device, tracker_configs)` builds a registered point tracker and wraps it. Calling the wrapper with a view-major `Query` and frame-major camera datasets returns one `TrackedCameraDataset` per frame. Each camera then carries its `CameraTrack` on `camera.custom_data["track"]`. `build_dataset` does not call this path:
+`CameraDatasetTracker` and `build_camera_dataset_tracker` are reserved for a later step that hangs those tracks back on the cameras. `build_camera_dataset_tracker(tracker_name, device, tracker_configs)` builds a registered point tracker and wraps it. Calling the wrapper with a view-major `Query` and frame-major camera datasets returns one `TrackedCameraDataset` per frame. Each camera then carries its `CameraTrack` on `camera.custom_data["track"]`. A saved sample can rebuild one frame of that layout with `Supervision.tracked_camera_dataset(index)` without running the tracker again. `build_dataset` does not call this path:
 
 ```text
 query + frames -> validate + track -> view_tracks -> tracked camera datasets

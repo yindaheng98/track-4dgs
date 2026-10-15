@@ -12,6 +12,7 @@ from gaussian_splatting.dataset.colmap.read_write_model import Camera as ColmapC
 from gaussian_splatting.utils import fov2focal
 
 from ..tracker import Query, Track
+from .tracker_camera_dataset import TrackedCameraDataset
 
 
 @dataclass(frozen=True)
@@ -61,6 +62,17 @@ class Supervision:
                 raise ValueError("Query.frame_indices must be non-negative")
             if frame_indices.max().item() >= n_frames:
                 raise ValueError("Query.frame_indices must be within the frames sequence")
+
+    def tracked_camera_dataset(self, index: int) -> TrackedCameraDataset:
+        """Return frame ``index`` with one :class:`~track_4dgs.tracker.tracker.CameraTrack` per camera.
+
+        ``index`` selects a frame. Each view track contributes that frame's slice,
+        in the same camera order as ``frames[index]``.
+        """
+        return TrackedCameraDataset(
+            dataset=self.frames[index],
+            camera_tracks=[track[index] for track in self.tracks],
+        )
 
     def save(self, folder: str) -> None:
         shutil.rmtree(folder, ignore_errors=True)
