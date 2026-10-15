@@ -4,7 +4,7 @@ from typing import Optional
 from gaussian_splatting.dataset import CameraDataset
 from gaussian_splatting.camera import Camera
 
-from .tracker import AbstractPointTracker, CameraTrack, Query, Track
+from ..tracker import AbstractPointTracker, CameraTrack, Query, Track
 
 
 class TrackedCameraDataset(CameraDataset):

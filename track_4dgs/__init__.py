@@ -10,10 +10,11 @@ from .blender import BlenderPointTracker
 from .blender.dataset import BlenderScene, BlenderDataset
 from .dataset import AbstractDataset, SavedDataset, Supervision
 from .dataset import PointTrackerDataset, GaussianSplattingPointTrackerDataset
+from .dataset import TrackedCameraDataset, CameraDatasetTracker
 from .registry import register_point_tracker, get_available_point_trackers, build_point_tracker
 from .tracker import Query, Track, AbstractPointTracker
 from .tracker import AbstractViewPointTracker, AbstractBatchPointTracker
-from .tracker import CameraTrack, TrackedCameraDataset, CameraDatasetTracker
+from .tracker import CameraTrack
 
 __all__ = [
     "Query", "Track", "AbstractPointTracker",
