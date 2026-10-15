@@ -93,10 +93,17 @@ class UniFlowMatchPointTracker(AbstractViewPointTracker):
     The source frame keeps the query coordinate. Predicted points are the
     query plus the sampled flow. ``visibility`` and ``confidence`` are the
     sampled covisibility in ``[0, 1]``, and 1 on the source frame.
+
+    ``batch_size`` chunks query-point sampling after each dense match.
+    ``None`` samples every point in one call. The match itself does not
+    depend on the query points.
     """
 
-    def __init__(self, model: str = "base"):
+    def __init__(self, model: str = "base", batch_size: int | None = None):
+        if batch_size is not None and batch_size <= 0:
+            raise ValueError("batch_size must be a positive integer")
         self.model = load_uniflowmatch(model)
+        self.batch_size = batch_size
         self.device = torch.device("cpu")
         self.model.eval()
 
@@ -149,8 +156,17 @@ class UniFlowMatchPointTracker(AbstractViewPointTracker):
                 flow_output, covisibility = predict_correspondences(
                     self.model, source_image, target_image,
                 )
-                displacement = sample_at_points(flow_output, source_points)
-                covisible = sample_at_points(covisibility.unsqueeze(0), source_points).squeeze(-1)
+                point_count = source_points.shape[0]
+                step = point_count if self.batch_size is None else self.batch_size
+                displacement, covisible = [], []
+                covisibility_field = covisibility.unsqueeze(0)
+                for start in range(0, point_count, step):
+                    end = min(start + step, point_count)
+                    chunk = source_points[start:end]
+                    displacement.append(sample_at_points(flow_output, chunk))
+                    covisible.append(sample_at_points(covisibility_field, chunk).squeeze(-1))
+                displacement = torch.cat(displacement, dim=0)
+                covisible = torch.cat(covisible, dim=0)
                 pred[target_index, selected] = source_points + displacement.to(source_points.dtype)
                 visibility[target_index, selected] = covisible
                 confidence[target_index, selected] = covisible

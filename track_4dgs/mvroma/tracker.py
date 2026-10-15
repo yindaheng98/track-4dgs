@@ -524,6 +524,10 @@ class MVRoMaPointTracker(AbstractViewPointTracker):
     ``confidence`` are the sampled sigmoid certainty in ``[0, 1]``, and 1 on
     the source frame. The copied track clustering kernel requires CUDA and at
     most 31 reference frames.
+
+    ``batch_size`` chunks query-point sampling after the dense match. ``None``
+    samples every point in one call. The match itself does not depend on the
+    query points.
     """
 
     def __init__(
@@ -534,7 +538,10 @@ class MVRoMaPointTracker(AbstractViewPointTracker):
             target_res_hw: tuple[int, int] = DEFAULT_TARGET_RES_HW,
             upsample_preds: bool = True,
             covisibility_threshold: float = 0.3,
-            prematch_batched: bool = False):
+            prematch_batched: bool = False,
+            batch_size: int | None = None):
+        if batch_size is not None and batch_size <= 0:
+            raise ValueError("batch_size must be a positive integer")
         coarse_h, coarse_w = coarse_res_hw
         if coarse_h <= 0 or coarse_w <= 0 or coarse_h % 14 or coarse_w % 14:
             raise ValueError("coarse_res_hw must be positive and divisible by patch size 14")
@@ -552,6 +559,7 @@ class MVRoMaPointTracker(AbstractViewPointTracker):
         self.upsample_preds = upsample_preds
         self.covisibility_threshold = covisibility_threshold
         self.prematch_batched = prematch_batched
+        self.batch_size = batch_size
         self.device = torch.device("cpu")
         self.model.eval()
 
@@ -610,13 +618,23 @@ class MVRoMaPointTracker(AbstractViewPointTracker):
             target_sizes = query_points.new_tensor(
                 [[orig_sizes[index][0], orig_sizes[index][1]] for index in ref_ids]
             )
-            sampled_points, sampled_certainty = sample_correspondences(
-                flow,
-                certainty,
-                query_points[selected],
-                orig_sizes[source_index],
-                target_sizes,
-            )
+            selected_points = query_points[selected]
+            sampled_points, sampled_certainty = [], []
+            point_count = selected_points.shape[0]
+            step = point_count if self.batch_size is None else self.batch_size
+            for start in range(0, point_count, step):
+                end = min(start + step, point_count)
+                points_chunk, certainty_chunk = sample_correspondences(
+                    flow,
+                    certainty,
+                    selected_points[start:end],
+                    orig_sizes[source_index],
+                    target_sizes,
+                )
+                sampled_points.append(points_chunk)
+                sampled_certainty.append(certainty_chunk)
+            sampled_points = torch.cat(sampled_points, dim=0)
+            sampled_certainty = torch.cat(sampled_certainty, dim=0)
             selected_index = selected.nonzero(as_tuple=False).flatten()
             ref_index = torch.tensor(ref_ids, device=self.device, dtype=torch.long)
             pred[ref_index[:, None], selected_index[None, :]] = sampled_points.permute(1, 0, 2)
