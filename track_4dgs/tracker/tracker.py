@@ -154,6 +154,14 @@ class CameraTrack:
         data = torch.load(path, map_location=device, weights_only=True)
         return cls(points=data["points"], visibility=data["visibility"], confidence=data["confidence"], mask=data["mask"])
 
+    def __getitem__(self, index) -> 'CameraTrack':
+        return CameraTrack(
+            points=self.points[index],
+            visibility=self.visibility[index],
+            confidence=self.confidence[index],
+            mask=self.mask[index],
+        )
+
 
 @dataclass(frozen=True)
 class Track:
