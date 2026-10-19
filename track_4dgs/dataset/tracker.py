@@ -1,35 +1,18 @@
-"""Build supervision by running a point tracker."""
+"""Supervision from points sampled uniformly in each source scene."""
 
 from argparse import Action, ArgumentParser, Namespace
-from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Optional
 
 import torch
 from gaussian_splatting.dataset import CameraDataset
-from tqdm import tqdm
 
 from ..registry import build_point_tracker, get_available_point_trackers
 from ..tracker import AbstractPointTracker, Query
-from .reorder import prepare_datasets
 from ..utils.sample import sample_uniform_xyz
-from .dataset import AbstractDataset
+from .dataset import AbstractPointTrackerDataset
 from .registry import register_supervision_dataset
-from .supervision import Supervision
-
-
-@dataclass(frozen=True)
-class PointSample:
-    """One tracker input: a view-major query and frame-major camera datasets."""
-
-    query: Query
-    frames: Sequence[CameraDataset]
-
-    def to(self, device) -> 'PointSample':
-        return PointSample(
-            query=self.query.to(device),
-            frames=tuple(dataset.to(device) for dataset in self.frames),
-        )
+from .reorder import prepare_datasets
 
 
 class AppendPointSample(Action):
@@ -56,17 +39,38 @@ class AppendPointSample(Action):
         setattr(sample, field, values)
 
 
-class PointTrackerDataset(AbstractDataset):
-    """Turn each :class:`PointTrackerSample` into one :class:`Supervision`.
+@dataclass(frozen=True)
+class SamplePointSpec:
+    """Uniform scene-cube query. Cameras and the projection wait for :meth:`load`."""
 
-    ``tracker(query, frames, batch_size)`` supplies the tracks.
-    ``batch_size`` is forwarded to every sample; ``None`` tracks all points at once.
+    sources: tuple[str, ...]
+    load_cameras: Optional[tuple[str, ...]]
+    init_dataset_index: int
+    num_points: int
+    visible_cameras: int
+    device: str
+
+    def load(self) -> tuple[Query, list[CameraDataset]]:
+        with torch.no_grad():
+            frames = prepare_datasets(
+                sources=list(self.sources),
+                device=self.device,
+                trainable_camera=False,
+                load_cameras=None if self.load_cameras is None else list(self.load_cameras),
+                load_mask=False,
+                load_depth=False,
+                reorder_reference_idx=self.init_dataset_index,
+            )
+            xyz = sample_uniform_xyz(frames[self.init_dataset_index], self.num_points, self.visible_cameras, self.device)
+            frame_indices = torch.full((self.num_points,), self.init_dataset_index, dtype=torch.long, device=self.device)
+            return Query.from_projection(xyz, frames, frame_indices), frames
+
+
+class SamplePointTrackerDataset(AbstractPointTrackerDataset[SamplePointSpec]):
+    """One uniformly sampled query per ``--sources`` group.
+
+    :meth:`from_namespace` records specs. :meth:`SamplePointSpec.load` reads the cameras.
     """
-
-    def __init__(self, tracker: AbstractPointTracker, *samples: PointSample, batch_size: Optional[int] = None):
-        self.tracker = tracker
-        self.samples = samples
-        self.batch_size = batch_size
 
     @staticmethod
     def add_tracker_argument(parser: ArgumentParser) -> ArgumentParser:
@@ -85,15 +89,15 @@ class PointTrackerDataset(AbstractDataset):
         return parser
 
     @staticmethod
-    def tracker_frames_from_namespace(args: Namespace) -> tuple[AbstractPointTracker, list[CameraDataset]]:
-        """Build the tracker and one camera-dataset sequence per ``--sources`` group.
+    def tracker_frames_from_namespace(args: Namespace) -> tuple[AbstractPointTracker, list[Namespace]]:
+        """Build the tracker and normalize one ``--sources`` group per sample.
 
         Fills a missing ``init_dataset_index`` on each sample with 0.
+        Does not read cameras. :meth:`SamplePointSpec.load` does that.
         """
         assert args.samples, "at least one --sources is required"
         configs = {o.split("=", 1)[0]: eval(o.split("=", 1)[1]) for o in args.option_tracker}
         tracker = build_point_tracker(args.tracker, **configs).to(args.device)
-        frames: list[CameraDataset] = []
         for spec in args.samples:
             if spec.init_dataset_index is None:
                 spec.init_dataset_index = 0
@@ -103,12 +107,7 @@ class PointTrackerDataset(AbstractDataset):
             assert 0 <= init_dataset_index < len(sources), "--init-dataset-index must point to one of the values in --sources."
             if cameras is not None:
                 assert len(cameras) == len(sources), "--load_cameras must have the same number of values as --sources."
-            frames.append(prepare_datasets(
-                sources=sources, device=args.device,
-                trainable_camera=False, load_cameras=cameras,
-                load_mask=False, load_depth=False,
-                reorder_reference_idx=init_dataset_index))
-        return tracker, frames
+        return tracker, list(args.samples)
 
     @classmethod
     def add_argument(cls, parser: ArgumentParser) -> None:
@@ -118,33 +117,21 @@ class PointTrackerDataset(AbstractDataset):
         parser.add_argument("--visible-cameras", default=2, type=int, help="Keep a point only when more cameras than this see it.")
 
     @classmethod
-    def from_namespace(cls, args: Namespace) -> 'PointTrackerDataset':
-        """Project one uniformly sampled, sufficiently visible query per ``--sources``."""
-        tracker, sample_frames = cls.tracker_frames_from_namespace(args)
-        samples = []
-        with torch.no_grad():
-            for frames, spec in tqdm(
-                    zip(sample_frames, args.samples),
-                    total=len(sample_frames), desc="Samples", position=0):
-                init_dataset_index = spec.init_dataset_index
-                dataset = frames[init_dataset_index]
-                xyz = sample_uniform_xyz(dataset, args.num_points, args.visible_cameras, args.device)
-                frame_indices = torch.full((args.num_points,), init_dataset_index, dtype=torch.long, device=args.device)
-                samples.append(PointSample(query=Query.from_projection(xyz, frames, frame_indices), frames=frames))
+    def from_namespace(cls, args: Namespace) -> 'SamplePointTrackerDataset':
+        """One deferred uniform query per ``--sources``. Cameras load in :meth:`__getitem__`."""
+        tracker, groups = cls.tracker_frames_from_namespace(args)
+        samples = tuple(
+            SamplePointSpec(
+                sources=tuple(group.sources),
+                load_cameras=None if group.load_cameras is None else tuple(group.load_cameras),
+                init_dataset_index=group.init_dataset_index,
+                num_points=args.num_points,
+                visible_cameras=args.visible_cameras,
+                device=args.device,
+            )
+            for group in groups
+        )
         return cls(tracker, *samples, batch_size=args.batch_size)
 
-    def __len__(self) -> int:
-        return len(self.samples)
 
-    def to(self, device) -> 'PointTrackerDataset':
-        self.tracker = self.tracker.to(device)
-        self.samples = tuple(sample.to(device) for sample in self.samples)
-        return self
-
-    def __getitem__(self, index: int) -> Supervision:
-        sample = self.samples[index]
-        tracks = self.tracker(sample.query, sample.frames, batch_size=self.batch_size)
-        return Supervision(query=sample.query, frames=sample.frames, tracks=tracks)
-
-
-register_supervision_dataset("tracker", PointTrackerDataset)
+register_supervision_dataset("tracker", SamplePointTrackerDataset)
