@@ -9,7 +9,7 @@ from .ufm import UniFlowMatchPointTracker
 from .blender import BlenderPointTracker
 from .blender.dataset import BlenderScene, BlenderDataset
 from .dataset import AbstractDataset, SavedDataset, Supervision
-from .dataset import PointTrackerDataset, GaussianSplattingPointTrackerDataset
+from .dataset import AbstractPointTrackerDataset, SamplePointTrackerDataset, GaussianSplattingPointTrackerDataset
 from .dataset import TrackedCameraDataset, CameraDatasetTracker, build_camera_dataset_tracker, prepare_datasets
 from .registry import register_point_tracker, get_available_point_trackers, build_point_tracker
 from .tracker import Query, Track, AbstractPointTracker
@@ -26,6 +26,6 @@ __all__ = [
     "MVTAPPointTracker", "D4RTPointTracker", "MatchaPointTracker",
     "MVRoMaPointTracker", "UniFlowMatchPointTracker", "BlenderPointTracker",
     "AbstractDataset", "SavedDataset", "Supervision",
-    "PointTrackerDataset", "GaussianSplattingPointTrackerDataset",
+    "AbstractPointTrackerDataset", "SamplePointTrackerDataset", "GaussianSplattingPointTrackerDataset",
     "BlenderScene", "BlenderDataset",
 ]
