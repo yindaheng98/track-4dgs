@@ -67,21 +67,17 @@ class GaussianSplattingPointTrackerDataset(AbstractPointTrackerDataset[GaussianP
     @classmethod
     def from_namespace(cls, args: Namespace) -> 'GaussianSplattingPointTrackerDataset':
         """One deferred Gaussian query per ``--sources``. Cameras and the ply load in :meth:`__getitem__`."""
-        assert len(args.destination) == len(args.samples), "--destination must appear once per --sources."
-        assert len(args.iteration) == len(args.samples), "--iteration must appear once per --sources."
-        tracker, groups = SamplePointTrackerDataset.tracker_frames_from_namespace(args)
+        tracker, bases = SamplePointTrackerDataset.tracker_specs_from_namespace(args)
+        assert len(args.destination) == len(bases), "--destination must appear once per --sources."
+        assert len(args.iteration) == len(bases), "--iteration must appear once per --sources."
         samples = tuple(
             GaussianPointSampleSpec(
-                sources=tuple(group.sources),
-                load_cameras=None if group.load_cameras is None else tuple(group.load_cameras),
-                init_dataset_index=group.init_dataset_index,
-                num_points=args.num_points,
+                **vars(base),
                 sh_degree=args.sh_degree,
                 destination=destination,
                 iteration=iteration,
-                device=args.device,
             )
-            for group, destination, iteration in zip(groups, args.destination, args.iteration)
+            for base, destination, iteration in zip(bases, args.destination, args.iteration)
         )
         return cls(tracker, *samples, batch_size=args.batch_size)
 

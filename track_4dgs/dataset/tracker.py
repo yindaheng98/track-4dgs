@@ -94,15 +94,18 @@ class SamplePointTrackerDataset(AbstractPointTrackerDataset[SamplePointSpec]):
         return parser
 
     @staticmethod
-    def tracker_frames_from_namespace(args: Namespace) -> tuple[AbstractPointTracker, list[Namespace]]:
-        """Build the tracker and normalize one ``--sources`` group per sample.
+    def tracker_specs_from_namespace(args: Namespace) -> tuple[AbstractPointTracker, tuple[SamplePointSpec, ...]]:
+        """Build the tracker and one :class:`SamplePointSpec` per ``--sources`` group.
 
         Fills a missing ``init_dataset_index`` on each sample with 0.
         Does not read cameras. :meth:`SamplePointSpec.load` does that.
+        ``visible_cameras`` defaults to 2 when the namespace has no such argument.
         """
         assert args.samples, "at least one --sources is required"
         configs = {o.split("=", 1)[0]: eval(o.split("=", 1)[1]) for o in args.option_tracker}
         tracker = build_point_tracker(args.tracker, **configs).to(args.device)
+        visible_cameras = getattr(args, "visible_cameras", 2)
+        samples = []
         for spec in args.samples:
             if spec.init_dataset_index is None:
                 spec.init_dataset_index = 0
@@ -112,7 +115,15 @@ class SamplePointTrackerDataset(AbstractPointTrackerDataset[SamplePointSpec]):
             assert 0 <= init_dataset_index < len(sources), "--init-dataset-index must point to one of the values in --sources."
             if cameras is not None:
                 assert len(cameras) == len(sources), "--load_cameras must have the same number of values as --sources."
-        return tracker, list(args.samples)
+            samples.append(SamplePointSpec(
+                sources=tuple(sources),
+                load_cameras=None if cameras is None else tuple(cameras),
+                init_dataset_index=init_dataset_index,
+                num_points=args.num_points,
+                visible_cameras=visible_cameras,
+                device=args.device,
+            ))
+        return tracker, tuple(samples)
 
     @classmethod
     def add_argument(cls, parser: ArgumentParser) -> None:
@@ -124,18 +135,7 @@ class SamplePointTrackerDataset(AbstractPointTrackerDataset[SamplePointSpec]):
     @classmethod
     def from_namespace(cls, args: Namespace) -> 'SamplePointTrackerDataset':
         """One deferred uniform query per ``--sources``. Cameras load in :meth:`__getitem__`."""
-        tracker, groups = cls.tracker_frames_from_namespace(args)
-        samples = tuple(
-            SamplePointSpec(
-                sources=tuple(group.sources),
-                load_cameras=None if group.load_cameras is None else tuple(group.load_cameras),
-                init_dataset_index=group.init_dataset_index,
-                num_points=args.num_points,
-                visible_cameras=args.visible_cameras,
-                device=args.device,
-            )
-            for group in groups
-        )
+        tracker, samples = cls.tracker_specs_from_namespace(args)
         return cls(tracker, *samples, batch_size=args.batch_size)
 
 
