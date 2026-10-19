@@ -3,6 +3,7 @@
 import os
 from argparse import ArgumentParser, Namespace
 from collections.abc import Sequence
+from dataclasses import dataclass
 
 import torch
 from gaussian_splatting import GaussianModel
@@ -11,7 +12,8 @@ from gaussian_splatting.prepare import prepare_gaussians
 
 from ..tracker import Query
 from .registry import register_supervision_dataset
-from .tracker import PointTrackerDataset, PointSample
+from .dataset import AbstractPointTrackerDataset
+from .tracker import SamplePointSpec, SamplePointTrackerDataset
 
 
 def query_views_from_gaussians(
@@ -26,13 +28,37 @@ def query_views_from_gaussians(
     return Query.from_projection(xyz[chosen], datasets, frame_indices)
 
 
-class GaussianSplattingPointTrackerDataset(PointTrackerDataset):
-    """Like :class:`PointTrackerDataset`, but each query is a random subset of a 3DGS point cloud."""
+@dataclass(frozen=True, kw_only=True)
+class GaussianPointSampleSpec(SamplePointSpec):
+    """Random Gaussian positions. Cameras still come from :meth:`SamplePointSpec.load_frames`."""
+
+    sh_degree: int
+    destination: str
+    iteration: int
+
+    def load(self) -> tuple[Query, list[CameraDataset]]:
+        with torch.no_grad():
+            frames = self.load_frames()
+            load_ply = os.path.join(self.destination, "point_cloud", "iteration_" + str(self.iteration), "point_cloud.ply")
+            gaussians = prepare_gaussians(
+                sh_degree=self.sh_degree, source=self.sources[self.init_dataset_index], device=self.device,
+                trainable_camera=False, load_ply=load_ply)
+            query = query_views_from_gaussians(
+                datasets=frames, gaussians=gaussians,
+                init_dataset_index=self.init_dataset_index, num_points=self.num_points)
+            return query, frames
+
+
+class GaussianSplattingPointTrackerDataset(AbstractPointTrackerDataset[GaussianPointSampleSpec]):
+    """Like :class:`SamplePointTrackerDataset`, but each query is a random subset of a 3DGS point cloud.
+
+    The checkpoint is read in :meth:`GaussianPointSampleSpec.load`, not at construction.
+    """
 
     @classmethod
     def add_argument(cls, parser: ArgumentParser) -> None:
         """Register tracker inputs and the 3DGS checkpoint sampled into each query."""
-        cls.add_tracker_argument(parser)
+        SamplePointTrackerDataset.add_tracker_argument(parser)
         parser.add_argument("--num-points", default=256, type=int)
         parser.add_argument("--sh_degree", default=3, type=int)
         parser.add_argument("-d", "--destination", required=True, action="append", type=str, help="Gaussian run directory for one sample. Repeat once per --sources.")
@@ -40,23 +66,23 @@ class GaussianSplattingPointTrackerDataset(PointTrackerDataset):
 
     @classmethod
     def from_namespace(cls, args: Namespace) -> 'GaussianSplattingPointTrackerDataset':
-        """Project a random subset of each sample's Gaussian positions."""
+        """One deferred Gaussian query per ``--sources``. Cameras and the ply load in :meth:`__getitem__`."""
         assert len(args.destination) == len(args.samples), "--destination must appear once per --sources."
         assert len(args.iteration) == len(args.samples), "--iteration must appear once per --sources."
-        tracker, sample_frames = cls.tracker_frames_from_namespace(args)
-        samples = []
-        with torch.no_grad():
-            for spec, frames, destination, iteration in zip(
-                    args.samples, sample_frames, args.destination, args.iteration):
-                init_dataset_index = spec.init_dataset_index
-                load_ply = os.path.join(destination, "point_cloud", "iteration_" + str(iteration), "point_cloud.ply")
-                gaussians = prepare_gaussians(
-                    sh_degree=args.sh_degree, source=spec.sources[init_dataset_index], device=args.device,
-                    trainable_camera=False, load_ply=load_ply)
-                query = query_views_from_gaussians(
-                    datasets=frames, gaussians=gaussians,
-                    init_dataset_index=init_dataset_index, num_points=args.num_points)
-                samples.append(PointSample(query=query, frames=frames))
+        tracker, groups = SamplePointTrackerDataset.tracker_frames_from_namespace(args)
+        samples = tuple(
+            GaussianPointSampleSpec(
+                sources=tuple(group.sources),
+                load_cameras=None if group.load_cameras is None else tuple(group.load_cameras),
+                init_dataset_index=group.init_dataset_index,
+                num_points=args.num_points,
+                sh_degree=args.sh_degree,
+                destination=destination,
+                iteration=iteration,
+                device=args.device,
+            )
+            for group, destination, iteration in zip(groups, args.destination, args.iteration)
+        )
         return cls(tracker, *samples, batch_size=args.batch_size)
 
 
