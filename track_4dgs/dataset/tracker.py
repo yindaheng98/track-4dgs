@@ -47,20 +47,25 @@ class SamplePointSpec:
     load_cameras: Optional[tuple[str, ...]]
     init_dataset_index: int
     num_points: int
-    visible_cameras: int
     device: str
+    visible_cameras: int = 2
+
+    def load_frames(self) -> list[CameraDataset]:
+        """Load this sample's cameras and align them to ``sources[init_dataset_index]``."""
+
+        return prepare_datasets(
+            sources=list(self.sources),
+            device=self.device,
+            trainable_camera=False,
+            load_cameras=None if self.load_cameras is None else list(self.load_cameras),
+            load_mask=False,
+            load_depth=False,
+            reorder_reference_idx=self.init_dataset_index,
+        )
 
     def load(self) -> tuple[Query, list[CameraDataset]]:
         with torch.no_grad():
-            frames = prepare_datasets(
-                sources=list(self.sources),
-                device=self.device,
-                trainable_camera=False,
-                load_cameras=None if self.load_cameras is None else list(self.load_cameras),
-                load_mask=False,
-                load_depth=False,
-                reorder_reference_idx=self.init_dataset_index,
-            )
+            frames = self.load_frames()
             xyz = sample_uniform_xyz(frames[self.init_dataset_index], self.num_points, self.visible_cameras, self.device)
             frame_indices = torch.full((self.num_points,), self.init_dataset_index, dtype=torch.long, device=self.device)
             return Query.from_projection(xyz, frames, frame_indices), frames
