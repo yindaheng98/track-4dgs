@@ -17,7 +17,7 @@ The package provides three common workflows:
 - [x] Point batching through `--batch-size` for long tracks
 - [x] Camera dataset reordering against a selected reference timestep
 - [x] Blender rigid-mesh tracking for scenes rendered by [NVS2COLMAP](https://github.com/yindaheng98/NVS2COLMAP)
-- [x] Supervision datasets (`tracker`, `tracker_gs`, `blender`) that save query, frames, and tracks
+- [x] Supervision datasets (`tracker`, `gstracker`, `blender`) that save query, frames, and tracks
 - [ ] Port the motion estimation workflow from [TrackerSplat](https://github.com/yindaheng98/TrackerSplat) for point-tracker-driven motion synthesis
 - [ ] Regularize 3DGS training with point tracker trajectories
 
@@ -215,7 +215,7 @@ python -c "import track_4dgs; from track_4dgs.dataset.registry import get_availa
 ```
 
 - `tracker`: sample points uniformly inside the scene cube, keep those seen by more cameras than `--visible-cameras` (default 2), project them, and track
-- `tracker_gs`: sample a random subset of a trained 3DGS point cloud, then track those points
+- `gstracker`: sample a random subset of a trained 3DGS point cloud, then track those points
 - `blender`: render a `.blend` file from sampled cameras and track the query on its rigid meshes. See [Blender mesh tracking](#blender-mesh-tracking)
 
 Uniform scene points:
@@ -239,7 +239,7 @@ Gaussian point cloud. `-d` and `-i` name the run whose checkpoint is sampled:
 
 ```shell
 python -m track_4dgs.build_dataset \
-    --dataset tracker_gs \
+    --dataset gstracker \
     --tracker mvtap \
     -s data/sequence/frame_000 data/sequence/frame_001 data/sequence/frame_002 \
     -d output/sequence \
@@ -250,7 +250,7 @@ python -m track_4dgs.build_dataset \
     --vis-folder output/sequence/dataset-mvtap-vis
 ```
 
-Repeat `-s/--sources` to add another sample. `--load_cameras` and `--init-dataset-index` attach to the preceding `--sources` and may each appear once in that group. `--init-dataset-index` defaults to 0. For `tracker_gs`, `-d/--destination` and `-i/--iteration` likewise attach to that group.
+Repeat `-s/--sources` to add another sample. `--load_cameras` and `--init-dataset-index` attach to the preceding `--sources` and may each appear once in that group. `--init-dataset-index` defaults to 0. For `gstracker`, `-d/--destination` and `-i/--iteration` likewise attach to that group.
 
 ### Blender Mesh Tracking
 
@@ -279,7 +279,7 @@ Track those frames with the same blend file. This only writes overlays:
 
 ```shell
 python -m track_4dgs.build_dataset \
-    --dataset tracker_gs \
+    --dataset gstracker \
     --tracker blender \
     -s data/scene/frame1 data/scene/frame2 data/scene/frame3 \
     -d output/scene \
@@ -299,7 +299,7 @@ python -m nvs2colmap.blender \
     --frame_step 2
 
 python -m track_4dgs.build_dataset \
-    --dataset tracker_gs \
+    --dataset gstracker \
     --tracker blender \
     -s data/scene/frame1 data/scene/frame2 data/scene/frame3 \
     -d output/scene \

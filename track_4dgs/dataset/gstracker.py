@@ -74,4 +74,4 @@ class GaussianSplattingPointTrackerDataset(SamplePointTrackerDataset):
         )
 
 
-register_supervision_dataset("tracker_gs", GaussianSplattingPointTrackerDataset)
+register_supervision_dataset("gstracker", GaussianSplattingPointTrackerDataset)
