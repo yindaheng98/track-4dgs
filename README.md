@@ -250,7 +250,7 @@ python -m track_4dgs.build_dataset \
     --vis-folder output/sequence/dataset-mvtap-vis
 ```
 
-Repeat `-s/--sources` to add another sample. `--load_cameras` and `--init-dataset-index` attach to the preceding `--sources` and may each appear once in that group. `--init-dataset-index` defaults to 0. For `tracker_gs`, repeat `-d` and `-i` once per `--sources`.
+Repeat `-s/--sources` to add another sample. `--load_cameras` and `--init-dataset-index` attach to the preceding `--sources` and may each appear once in that group. `--init-dataset-index` defaults to 0. For `tracker_gs`, `-d/--destination` and `-i/--iteration` likewise attach to that group.
 
 ### Blender Mesh Tracking
 

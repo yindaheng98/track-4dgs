@@ -55,28 +55,26 @@ class GaussianSplattingPointTrackerDataset(SamplePointTrackerDataset):
     """
 
     @staticmethod
-    def add_common_argument(parser: ArgumentParser) -> ArgumentParser:
-        """Register shared flags and the 3DGS checkpoint sampled into each query."""
-        SamplePointTrackerDataset.add_common_argument(parser)
-        parser.add_argument("--sh_degree", default=3, type=int)
-        parser.add_argument("-d", "--destination", required=True, action="append", type=str, help="Gaussian run directory for one sample. Repeat once per --sources.")
-        parser.add_argument("-i", "--iteration", required=True, action="append", type=int, help="Checkpoint iteration for one sample. Repeat once per --sources.")
+    def add_group_argument(parser: ArgumentParser) -> ArgumentParser:
+        """Register one ``--sources`` group and the 3DGS checkpoint sampled for it."""
+        SamplePointTrackerDataset.add_group_argument(parser)
+        parser.add_argument("-d", "--destination", required=True, type=str, help="Gaussian run directory for this group.")
+        parser.add_argument("-i", "--iteration", required=True, type=int, help="Checkpoint iteration for this group.")
+        parser.add_argument("--sh_degree", default=3, type=int, help="Spherical-harmonics degree of this group's checkpoint. Defaults to 3.")
         return parser
 
     @staticmethod
     def specs_from_args(common_args: Namespace, *group_args: Namespace) -> tuple[GaussianPointSampleSpec, ...]:
         """One :class:`GaussianPointSampleSpec` per ``--sources`` group."""
         bases = SamplePointTrackerDataset.specs_from_args(common_args, *group_args)
-        assert len(common_args.destination) == len(bases), "--destination must appear once per --sources."
-        assert len(common_args.iteration) == len(bases), "--iteration must appear once per --sources."
         return tuple(
             GaussianPointSampleSpec(
                 **vars(base),
-                sh_degree=common_args.sh_degree,
-                destination=destination,
-                iteration=iteration,
+                sh_degree=spec.sh_degree,
+                destination=spec.destination,
+                iteration=spec.iteration,
             )
-            for base, destination, iteration in zip(bases, common_args.destination, common_args.iteration)
+            for base, spec in zip(bases, group_args)
         )
 
 
