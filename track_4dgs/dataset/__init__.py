@@ -1,4 +1,5 @@
-from .dataset import AbstractDataset, AbstractArgumentParserDataset, SavedDataset, AbstractPointTrackerDataset, PointSampleSpec
+from .dataset import AbstractDataset, AbstractPointTrackerDataset, PointSampleSpec
+from .saved import SavedDataset
 from .supervision import Supervision
 from .tracker import SamplePointTrackerDataset
 from .tracker_gs import GaussianSplattingPointTrackerDataset, query_views_from_gaussians
