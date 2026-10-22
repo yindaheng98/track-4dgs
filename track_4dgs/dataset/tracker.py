@@ -82,29 +82,25 @@ class SamplePointTrackerDataset(AbstractPointTrackerDataset[SamplePointSpec], Ab
         return build_point_tracker(common_args.tracker, **configs).to(common_args.device)
 
     @staticmethod
-    def specs_from_args(common_args: Namespace, *group_args: Namespace) -> tuple[SamplePointSpec, ...]:
-        """One :class:`SamplePointSpec` per ``--sources`` group.
+    def spec_from_args(common_args: Namespace, group_args: Namespace) -> SamplePointSpec:
+        """One :class:`SamplePointSpec` for this ``--sources`` group.
 
         Does not read cameras. :meth:`SamplePointSpec.load` does that.
         """
-        assert group_args, "at least one --sources is required"
-        samples = []
-        for spec in group_args:
-            sources = spec.sources
-            cameras = spec.load_cameras
-            init_dataset_index = spec.init_dataset_index
-            assert 0 <= init_dataset_index < len(sources), "--init-dataset-index must point to one of the values in --sources."
-            if cameras is not None:
-                assert len(cameras) == len(sources), "--load_cameras must have the same number of values as --sources."
-            samples.append(SamplePointSpec(
-                sources=tuple(sources),
-                load_cameras=None if cameras is None else tuple(cameras),
-                init_dataset_index=init_dataset_index,
-                num_points=common_args.num_points,
-                visible_cameras=common_args.visible_cameras,
-                device=common_args.device,
-            ))
-        return tuple(samples)
+        sources = group_args.sources
+        cameras = group_args.load_cameras
+        init_dataset_index = group_args.init_dataset_index
+        assert 0 <= init_dataset_index < len(sources), "--init-dataset-index must point to one of the values in --sources."
+        if cameras is not None:
+            assert len(cameras) == len(sources), "--load_cameras must have the same number of values as --sources."
+        return SamplePointSpec(
+            sources=tuple(sources),
+            load_cameras=None if cameras is None else tuple(cameras),
+            init_dataset_index=init_dataset_index,
+            num_points=common_args.num_points,
+            visible_cameras=common_args.visible_cameras,
+            device=common_args.device,
+        )
 
     @classmethod
     def parse_known_group_chunk(cls, argv: list[str] = []) -> tuple[Namespace, list[str]]:
@@ -126,8 +122,9 @@ class SamplePointTrackerDataset(AbstractPointTrackerDataset[SamplePointSpec], Ab
     @classmethod
     def from_args(cls, common_args: Namespace, *group_args: Namespace) -> 'SamplePointTrackerDataset':
         """One deferred uniform query per ``--sources``. Cameras load in :meth:`__getitem__`."""
+        assert group_args, "at least one --sources is required"
         tracker = cls.tracker_from_args(common_args)
-        samples = cls.specs_from_args(common_args, *group_args)
+        samples = tuple(cls.spec_from_args(common_args, group) for group in group_args)
         return cls(tracker, *samples, batch_size=common_args.batch_size)
 
 

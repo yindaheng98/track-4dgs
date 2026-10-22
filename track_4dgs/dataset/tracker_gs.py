@@ -64,17 +64,13 @@ class GaussianSplattingPointTrackerDataset(SamplePointTrackerDataset):
         return parser
 
     @staticmethod
-    def specs_from_args(common_args: Namespace, *group_args: Namespace) -> tuple[GaussianPointSampleSpec, ...]:
-        """One :class:`GaussianPointSampleSpec` per ``--sources`` group."""
-        bases = SamplePointTrackerDataset.specs_from_args(common_args, *group_args)
-        return tuple(
-            GaussianPointSampleSpec(
-                **vars(base),
-                sh_degree=spec.sh_degree,
-                destination=spec.destination,
-                iteration=spec.iteration,
-            )
-            for base, spec in zip(bases, group_args)
+    def spec_from_args(common_args: Namespace, group_args: Namespace) -> GaussianPointSampleSpec:
+        """One :class:`GaussianPointSampleSpec` for this ``--sources`` group."""
+        return GaussianPointSampleSpec(
+            **vars(SamplePointTrackerDataset.spec_from_args(common_args, group_args)),
+            sh_degree=group_args.sh_degree,
+            destination=group_args.destination,
+            iteration=group_args.iteration,
         )
 
 
