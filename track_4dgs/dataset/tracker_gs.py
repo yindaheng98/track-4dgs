@@ -12,7 +12,6 @@ from gaussian_splatting.prepare import prepare_gaussians
 
 from ..tracker import Query
 from .registry import register_supervision_dataset
-from .dataset import AbstractPointTrackerDataset
 from .tracker import SamplePointSpec, SamplePointTrackerDataset
 
 
@@ -49,37 +48,36 @@ class GaussianPointSampleSpec(SamplePointSpec):
             return query, frames
 
 
-class GaussianSplattingPointTrackerDataset(AbstractPointTrackerDataset[GaussianPointSampleSpec]):
+class GaussianSplattingPointTrackerDataset(SamplePointTrackerDataset):
     """Like :class:`SamplePointTrackerDataset`, but each query is a random subset of a 3DGS point cloud.
 
     The checkpoint is read in :meth:`GaussianPointSampleSpec.load`, not at construction.
     """
 
-    @classmethod
-    def add_argument(cls, parser: ArgumentParser) -> None:
-        """Register tracker inputs and the 3DGS checkpoint sampled into each query."""
-        SamplePointTrackerDataset.add_tracker_argument(parser)
-        parser.add_argument("--num-points", default=256, type=int)
+    @staticmethod
+    def add_common_argument(parser: ArgumentParser) -> ArgumentParser:
+        """Register shared flags and the 3DGS checkpoint sampled into each query."""
+        SamplePointTrackerDataset.add_common_argument(parser)
         parser.add_argument("--sh_degree", default=3, type=int)
         parser.add_argument("-d", "--destination", required=True, action="append", type=str, help="Gaussian run directory for one sample. Repeat once per --sources.")
         parser.add_argument("-i", "--iteration", required=True, action="append", type=int, help="Checkpoint iteration for one sample. Repeat once per --sources.")
+        return parser
 
-    @classmethod
-    def from_namespace(cls, args: Namespace) -> 'GaussianSplattingPointTrackerDataset':
-        """One deferred Gaussian query per ``--sources``. Cameras and the ply load in :meth:`__getitem__`."""
-        tracker, bases = SamplePointTrackerDataset.tracker_specs_from_namespace(args)
-        assert len(args.destination) == len(bases), "--destination must appear once per --sources."
-        assert len(args.iteration) == len(bases), "--iteration must appear once per --sources."
-        samples = tuple(
+    @staticmethod
+    def specs_from_args(common_args: Namespace, *group_args: Namespace) -> tuple[GaussianPointSampleSpec, ...]:
+        """One :class:`GaussianPointSampleSpec` per ``--sources`` group."""
+        bases = SamplePointTrackerDataset.specs_from_args(common_args, *group_args)
+        assert len(common_args.destination) == len(bases), "--destination must appear once per --sources."
+        assert len(common_args.iteration) == len(bases), "--iteration must appear once per --sources."
+        return tuple(
             GaussianPointSampleSpec(
                 **vars(base),
-                sh_degree=args.sh_degree,
+                sh_degree=common_args.sh_degree,
                 destination=destination,
                 iteration=iteration,
             )
-            for base, destination, iteration in zip(bases, args.destination, args.iteration)
+            for base, destination, iteration in zip(bases, common_args.destination, common_args.iteration)
         )
-        return cls(tracker, *samples, batch_size=args.batch_size)
 
 
 register_supervision_dataset("tracker_gs", GaussianSplattingPointTrackerDataset)
