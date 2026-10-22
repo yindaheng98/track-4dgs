@@ -1,7 +1,6 @@
 """Shared arguments plus optional repeated groups."""
 
 from abc import abstractmethod
-from argparse import Namespace
 
 from .dataset import AbstractDataset
 
@@ -21,12 +20,12 @@ class AbstractGroupArgsDataset(AbstractDataset):
 
     @classmethod
     @abstractmethod
-    def parse_known_group_chunk(cls, argv: list[str] = []) -> tuple[Namespace, list[str]]:
+    def parse_known_group_chunk(cls, argv: list[str] = []):
         """Parse one group's argv."""
         raise NotImplementedError
 
     @classmethod
-    def parse_known_group_argv(cls, argv: list[str] = []) -> tuple[list[Namespace], list[str]]:
+    def parse_known_group_argv(cls, argv: list[str] = []):
         """Split ``argv`` into groups and parse each one.
 
         Each chunk starts at one :attr:`arg_group_starters` token and stops before the next.
@@ -35,7 +34,7 @@ class AbstractGroupArgsDataset(AbstractDataset):
         """
         starters = set(cls.arg_group_starters)
         starts = [index for index, token in enumerate(argv) if token in starters]
-        groups: list[Namespace] = []
+        groups = []
         rest = list(argv[:starts[0]]) if starts else list(argv)
         for begin, end in zip(starts, starts[1:] + [len(argv)]):
             group, extra = cls.parse_known_group_chunk(argv[begin:end])
@@ -45,13 +44,13 @@ class AbstractGroupArgsDataset(AbstractDataset):
 
     @classmethod
     @abstractmethod
-    def parse_known_common_argv(cls, argv: list[str] = []) -> tuple[Namespace, list[str]]:
+    def parse_known_common_argv(cls, argv: list[str] = []):
         """Parse the arguments shared by every sample."""
         raise NotImplementedError
 
     @classmethod
     @abstractmethod
-    def from_args(cls, common_args: Namespace, *group_args: Namespace) -> 'AbstractGroupArgsDataset':
+    def from_args(cls, common_args, *group_args) -> 'AbstractGroupArgsDataset':
         """Build this dataset from the shared namespace and one namespace per group."""
         raise NotImplementedError
 

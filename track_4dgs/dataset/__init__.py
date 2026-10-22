@@ -1,4 +1,5 @@
 from .dataset import AbstractDataset, AbstractPointTrackerDataset, PointSampleSpec
+from .group_args import AbstractGroupArgsDataset
 from .saved import SavedDataset
 from .supervision import Supervision
 from .tracker import SamplePointTrackerDataset
@@ -8,7 +9,7 @@ from .reorder import ReorderedCameraDataset, prepare_datasets
 
 __all__ = [
     "AbstractDataset",
-    "AbstractArgumentParserDataset",
+    "AbstractGroupArgsDataset",
     "SavedDataset",
     "Supervision",
     "AbstractPointTrackerDataset",

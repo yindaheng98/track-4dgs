@@ -1,6 +1,6 @@
 """Build supervision by rendering stills from a blend file."""
 
-from argparse import Action, ArgumentParser, Namespace
+from argparse import ArgumentParser, Namespace
 from collections.abc import Sequence
 from dataclasses import dataclass
 
@@ -9,7 +9,7 @@ import torch
 from gaussian_splatting.camera import Camera, build_camera
 from gaussian_splatting.utils import focal2fov
 
-from ..dataset import AbstractArgumentParserDataset
+from ..dataset.group_args import AbstractGroupArgsDataset
 from ..dataset.supervision import Supervision
 from ..tracker import Query, Track
 from ..utils import sample_c2ws
@@ -143,43 +143,14 @@ class BlenderScene:
         )
 
 
-class AppendBlenderScene(Action):
-    """Attach frame bounds and ``--init-dataset-index`` to the preceding ``--blend``.
-
-    Each ``--blend`` starts one scene. ``--frame_start``, ``--frame_end``,
-    ``--frame_step``, and ``--init-dataset-index`` may each follow it once.
-    A second copy, or any of them before the first ``--blend``, is an error.
-    """
-
-    def __call__(self, parser, namespace, values, option_string=None):
-        scenes = getattr(namespace, "scenes", None)
-        if scenes is None:
-            scenes = []
-            namespace.scenes = scenes
-        if option_string == "--blend":
-            scenes.append(Namespace(
-                blend=values, frame_start=None, frame_end=None, frame_step=None, init_dataset_index=None))
-            return
-        if not scenes:
-            parser.error(f"{option_string} must follow --blend")
-        scene = scenes[-1]
-        field = {
-            "--frame_start": "frame_start",
-            "--frame_end": "frame_end",
-            "--frame_step": "frame_step",
-            "--init-dataset-index": "init_dataset_index",
-        }[option_string]
-        if getattr(scene, field) is not None:
-            parser.error(f"{option_string} already set for --blend {scene.blend}")
-        setattr(scene, field, values)
-
-
-class BlenderDataset(AbstractArgumentParserDataset):
+class BlenderDataset(AbstractGroupArgsDataset):
     """Render each :class:`BlenderScene` into one :class:`Supervision` sample.
 
     Images and depth come from :class:`RenderServer`.
     Tracks bind the query to the blend's rigid meshes.
     """
+
+    arg_group_starters = ("--blend",)
 
     def __init__(self, *scenes: BlenderScene, blender: str = "blender"):
         self.scenes = scenes
@@ -187,20 +158,25 @@ class BlenderDataset(AbstractArgumentParserDataset):
         self.render_server = RenderServer(blender)
 
     @classmethod
-    def add_argument(cls, parser: ArgumentParser) -> None:
-        """Register one blend file, its frame range, and the cameras sampled around it.
+    def parse_known_group_chunk(cls, argv: list[str] = []) -> tuple[Namespace, list[str]]:
+        """Parse one blend file and its frame range.
 
-        ``--frame_start``, ``--frame_end``, ``--frame_step``, and ``--init-dataset-index``
-        belong to the preceding ``--blend``. Each may appear once in that group.
         Frames are ``range(frame_start, frame_end + 1, frame_step)``.
         ``frame_start`` defaults to 1. ``frame_end`` and ``frame_step`` default to the blend scene.
         ``--init-dataset-index`` defaults to 0.
         """
-        parser.add_argument("--blend", required=True, dest="scenes", action=AppendBlenderScene, type=str, metavar="FILE", help="Blend file for one sample. Repeat to start another sample.")
-        parser.add_argument("--frame_start", dest="scenes", action=AppendBlenderScene, type=int, metavar="START", help="First absolute Blender frame for the preceding --blend. At most once. Defaults to 1.")
-        parser.add_argument("--frame_end", dest="scenes", action=AppendBlenderScene, type=int, metavar="END", help="Last absolute Blender frame for the preceding --blend. At most once. Defaults to the blend scene.")
-        parser.add_argument("--frame_step", dest="scenes", action=AppendBlenderScene, type=int, metavar="STEP", help="Frame step for the preceding --blend. At most once. Defaults to the blend scene.")
-        parser.add_argument("--init-dataset-index", dest="scenes", action=AppendBlenderScene, type=int, metavar="INDEX", help="Index into range(frame_start, frame_end + 1, frame_step) for the mesh the query is sampled on. At most once. Defaults to 0.")
+        parser = ArgumentParser(allow_abbrev=False)
+        parser.add_argument("--blend", required=True, type=str, metavar="FILE", help="Blend file for one sample.")
+        parser.add_argument("--frame_start", type=int, metavar="START", default=1, help="First absolute Blender frame for this blend. Defaults to 1.")
+        parser.add_argument("--frame_end", type=int, metavar="END", default=None, help="Last absolute Blender frame for this blend. Defaults to the blend scene.")
+        parser.add_argument("--frame_step", type=int, metavar="STEP", default=None, help="Frame step for this blend. Defaults to the blend scene.")
+        parser.add_argument("--init-dataset-index", type=int, metavar="INDEX", default=0, help="Index into range(frame_start, frame_end + 1, frame_step) for the mesh the query is sampled on. Defaults to 0.")
+        return parser.parse_known_args(argv)
+
+    @classmethod
+    def parse_known_common_argv(cls, argv: list[str] = []) -> tuple[Namespace, list[str]]:
+        """Parse the cameras sampled around each blend."""
+        parser = ArgumentParser(allow_abbrev=False)
         parser.add_argument("--n-cameras", required=True, type=int)
         parser.add_argument("--height", required=True, type=int)
         parser.add_argument("--width", required=True, type=int)
@@ -215,54 +191,55 @@ class BlenderDataset(AbstractArgumentParserDataset):
         parser.add_argument("--visible-cameras", default=0, type=int, help="Keep a point only when more cameras than this see it.")
         parser.add_argument("--surface-distance", default=0.0, type=float, help="Half-width of the band around the mesh, in world units.")
         parser.add_argument("--blender", default="blender", type=str)
+        return parser.parse_known_args(argv)
 
     @classmethod
-    def from_namespace(cls, args: Namespace) -> 'BlenderDataset':
+    def from_args(cls, common_args: Namespace, *group_args: Namespace) -> 'BlenderDataset':
         """Sample a query near each blend's surface and film it with cameras on a spherical cap."""
-        assert args.scenes, "at least one --blend is required"
+        assert group_args, "at least one --blend is required"
         scenes = []
         with torch.no_grad():
-            for spec in args.scenes:
+            for spec in group_args:
                 blend = spec.blend
-                frame_start = 1 if spec.frame_start is None else spec.frame_start
-                init_dataset_index = 0 if spec.init_dataset_index is None else spec.init_dataset_index
+                frame_start = spec.frame_start
+                init_dataset_index = spec.init_dataset_index
                 mesh = BlenderPointTracker(
-                    blend, blender=args.blender,
+                    blend, blender=common_args.blender,
                     frame_start=frame_start, frame_end=spec.frame_end, frame_step=spec.frame_step,
-                ).to(args.device)
+                ).to(common_args.device)
                 n_frames = mesh.matrices.shape[0]
                 assert n_frames, "the blend scene produced no frames."
                 assert 0 <= init_dataset_index < n_frames, "--init-dataset-index must index one Blender frame."
                 query_matrix = mesh.matrices[init_dataset_index]
                 c2ws = sample_c2ws(
-                    args.n_cameras, args.center, args.radius, args.axis,
-                    args.cap_angle, args.spacing, args.device)
+                    common_args.n_cameras, common_args.center, common_args.radius, common_args.axis,
+                    common_args.cap_angle, common_args.spacing, common_args.device)
                 cameras: list[Camera] = []
                 for c2w in c2ws:
                     w2c = torch.linalg.inv(c2w)
                     cameras.append(build_camera(
-                        image_height=args.height,
-                        image_width=args.width,
-                        FoVx=focal2fov(args.focal, args.width),
-                        FoVy=focal2fov(args.focal, args.height),
+                        image_height=common_args.height,
+                        image_width=common_args.width,
+                        FoVx=focal2fov(common_args.focal, common_args.width),
+                        FoVy=focal2fov(common_args.focal, common_args.height),
                         R=w2c[:3, :3].contiguous(),
                         T=w2c[:3, 3].contiguous(),
                         device=c2w.device,
                     ))
                 xyz = sample_near_surface(
                     mesh.verts, mesh.faces, query_matrix, cameras,
-                    args.num_points, args.visible_cameras, args.surface_distance)
-                frame_indices = torch.full((args.num_points,), init_dataset_index, dtype=torch.long, device=args.device)
+                    common_args.num_points, common_args.visible_cameras, common_args.surface_distance)
+                frame_indices = torch.full((common_args.num_points,), init_dataset_index, dtype=torch.long, device=common_args.device)
                 query = Query.from_projection(xyz, [cameras] * n_frames, frame_indices)
                 n_views = c2ws.shape[0]
                 scenes.append(BlenderScene(
                     blend=blend, frame_start=mesh.frame_start, frame_end=mesh.frame_end, frame_step=mesh.frame_step, query=query,
                     c2w=c2ws.unsqueeze(1).expand(-1, n_frames, -1, -1).contiguous(),
-                    height=torch.full((n_views, n_frames), args.height, dtype=torch.long, device=args.device),
-                    width=torch.full((n_views, n_frames), args.width, dtype=torch.long, device=args.device),
-                    focal=torch.full((n_views, n_frames), args.focal, dtype=torch.float32, device=args.device),
+                    height=torch.full((n_views, n_frames), common_args.height, dtype=torch.long, device=common_args.device),
+                    width=torch.full((n_views, n_frames), common_args.width, dtype=torch.long, device=common_args.device),
+                    focal=torch.full((n_views, n_frames), common_args.focal, dtype=torch.float32, device=common_args.device),
                 ))
-        return cls(*scenes, blender=args.blender)
+        return cls(*scenes, blender=common_args.blender)
 
     def __len__(self) -> int:
         return len(self.scenes)

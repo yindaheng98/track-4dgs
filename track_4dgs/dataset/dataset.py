@@ -30,7 +30,7 @@ class AbstractDataset(Dataset[Supervision], ABC):
 
     @classmethod
     @abstractmethod
-    def from_argv(cls, argv: list[str] | None = None) -> tuple['AbstractDataset', list[str]]:
+    def from_argv(cls, argv: list[str] = []) -> tuple['AbstractDataset', list[str]]:
         """Parse ``argv`` and build this dataset.
 
         The second value is the unrecognized remainder of ``argv``.
