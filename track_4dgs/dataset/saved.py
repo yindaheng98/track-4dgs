@@ -22,7 +22,7 @@ class SavedDataset(AbstractDataset):
         self.length = index - start
 
     @classmethod
-    def from_argv(cls, argv: list[str] | None = None) -> tuple['SavedDataset', list[str]]:
+    def from_argv(cls, argv: list[str] = []) -> tuple['SavedDataset', list[str]]:
         parser = ArgumentParser(allow_abbrev=False)
         parser.add_argument("--folder", required=True, type=str)
         parser.add_argument("--start", type=int, default=0)
