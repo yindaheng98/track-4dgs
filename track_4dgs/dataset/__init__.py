@@ -1,4 +1,4 @@
-from .dataset import AbstractDataset, SavedDataset, AbstractPointTrackerDataset, PointSampleSpec
+from .dataset import AbstractDataset, AbstractArgumentParserDataset, SavedDataset, AbstractPointTrackerDataset, PointSampleSpec
 from .supervision import Supervision
 from .tracker import SamplePointTrackerDataset
 from .tracker_gs import GaussianSplattingPointTrackerDataset, query_views_from_gaussians
@@ -7,6 +7,7 @@ from .reorder import ReorderedCameraDataset, prepare_datasets
 
 __all__ = [
     "AbstractDataset",
+    "AbstractArgumentParserDataset",
     "SavedDataset",
     "Supervision",
     "AbstractPointTrackerDataset",

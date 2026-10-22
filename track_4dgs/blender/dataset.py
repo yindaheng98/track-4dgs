@@ -9,7 +9,7 @@ import torch
 from gaussian_splatting.camera import Camera, build_camera
 from gaussian_splatting.utils import focal2fov
 
-from ..dataset import AbstractDataset
+from ..dataset import AbstractArgumentParserDataset
 from ..dataset.supervision import Supervision
 from ..tracker import Query, Track
 from ..utils import sample_c2ws
@@ -174,7 +174,7 @@ class AppendBlenderScene(Action):
         setattr(scene, field, values)
 
 
-class BlenderDataset(AbstractDataset):
+class BlenderDataset(AbstractArgumentParserDataset):
     """Render each :class:`BlenderScene` into one :class:`Supervision` sample.
 
     Images and depth come from :class:`RenderServer`.

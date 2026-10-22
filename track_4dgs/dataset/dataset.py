@@ -31,27 +31,12 @@ class AbstractDataset(Dataset[Supervision], ABC):
 
     @classmethod
     @abstractmethod
-    def add_argument(cls, parser: ArgumentParser) -> None:
-        """Register this dataset's arguments on ``parser``."""
-        raise NotImplementedError
-
-    @classmethod
-    @abstractmethod
-    def from_namespace(cls, args: Namespace) -> 'AbstractDataset':
-        """Build this dataset from a parsed argument namespace."""
-        raise NotImplementedError
-
-    @classmethod
     def from_argv(cls, argv: list[str] | None = None) -> tuple['AbstractDataset', list[str]]:
-        """Create a parser, parse ``argv``, and build this dataset.
+        """Parse ``argv`` and build this dataset.
 
-        ``ArgumentParser.parse_known_args`` supplies :meth:`from_namespace`. The second
-        value is the unrecognized remainder of ``argv``.
+        The second value is the unrecognized remainder of ``argv``.
         """
-        parser = ArgumentParser()
-        cls.add_argument(parser)
-        args, unknown = parser.parse_known_args(argv)
-        return cls.from_namespace(args), unknown
+        raise NotImplementedError
 
     def dump(self, folder: str, start: int = 0) -> None:
         """Save sample ``i`` to ``folder/supervision{start + i}`` via :meth:`Supervision.save`."""
@@ -61,7 +46,35 @@ class AbstractDataset(Dataset[Supervision], ABC):
             self[i].save(os.path.join(folder, f"supervision{start + i}"))
 
 
-class SavedDataset(AbstractDataset):
+class AbstractArgumentParserDataset(AbstractDataset):
+    """Dataset built from one :class:`~argparse.ArgumentParser` namespace."""
+
+    @classmethod
+    @abstractmethod
+    def add_argument(cls, parser: ArgumentParser) -> None:
+        """Register this dataset's arguments on ``parser``."""
+        raise NotImplementedError
+
+    @classmethod
+    @abstractmethod
+    def from_namespace(cls, args: Namespace) -> 'AbstractArgumentParserDataset':
+        """Build this dataset from a parsed argument namespace."""
+        raise NotImplementedError
+
+    @classmethod
+    def from_argv(cls, argv: list[str] | None = None) -> tuple['AbstractArgumentParserDataset', list[str]]:
+        """Register :meth:`add_argument`, parse ``argv``, and call :meth:`from_namespace`.
+
+        ``ArgumentParser.parse_known_args`` supplies the namespace. The second value is
+        the unrecognized remainder of ``argv``.
+        """
+        parser = ArgumentParser()
+        cls.add_argument(parser)
+        args, unknown = parser.parse_known_args(argv)
+        return cls.from_namespace(args), unknown
+
+
+class SavedDataset(AbstractArgumentParserDataset):
     """Load ``folder/supervision{start + i}`` samples written by :meth:`AbstractDataset.dump`."""
 
     def __init__(self, folder: str, start: int = 0):
