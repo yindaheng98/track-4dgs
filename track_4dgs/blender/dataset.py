@@ -1,8 +1,8 @@
 """Build supervision by rendering stills from a blend file."""
 
 from argparse import ArgumentParser, Namespace
-from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from typing import Optional
 
 import numpy as np
 import torch
@@ -11,143 +11,123 @@ from gaussian_splatting.utils import focal2fov
 
 from ..dataset.group_args import AbstractGroupArgsDataset
 from ..dataset.supervision import Supervision
-from ..tracker import Query, Track
+from ..tracker import Query
 from ..utils import sample_c2ws
-from .kernels import sample_near_surface, track_points
+from .kernels import sample_near_surface
 from .render_server import RenderServer
 from .tracker import BlenderPointTracker
-from .workers.render_server_protocol import RenderReply, RenderRequest
+from .workers.render_server_protocol import RenderRequest
 
 
 # OpenCV camera (+Z forward, +Y down) to Blender camera (-Z forward, +Y up).
 BLENDER_FROM_OPENCV = np.diag([1.0, -1.0, -1.0, 1.0]).astype(np.float64)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class BlenderScene:
-    """One blend file, the query to supervise, and the cameras that film it.
+    """One blend file and how to film it.
 
-    ``c2w`` is OpenCV camera-to-world in the blend world: the camera looks along
-    ``+Z`` and image ``+Y`` points down. Shape is ``[V, D, 4, 4]``, one pose per
-    view per frame. ``V`` matches ``query``.
-    ``height``, ``width``, and ``focal`` are ``[V, D]``. ``focal`` is pixels,
-    ``fx = fy``, and the principal point is the image center.
-    Columns of ``c2w`` are ``range(frame_start, frame_end + 1, frame_step)``.
+    Construction records the arguments. :meth:`load_tracker` exports the mesh.
+    :meth:`load` samples the query and renders the stills.
     """
 
     blend: str
-    frame_start: int
-    frame_end: int
-    frame_step: int
-    query: Query
-    c2w: torch.Tensor
-    height: torch.Tensor
-    width: torch.Tensor
-    focal: torch.Tensor
+    frame_start: int = 1
+    frame_end: Optional[int] = None
+    frame_step: Optional[int] = None
+    init_dataset_index: int = 0
+    n_cameras: int
+    height: int
+    width: int
+    focal: float
+    center: tuple[float, float, float]
+    radius: tuple[float, float]
+    axis: tuple[float, float]
+    cap_angle: tuple[float, float]
+    spacing: tuple[float, float]
+    num_points: int
+    visible_cameras: int = 0
+    surface_distance: float = 0.0
+    device: str = "cuda"
 
     def __post_init__(self):
-        c2w = self.c2w
-        n_views = self.query.points.shape[0]
-        if not torch.is_tensor(c2w) or not torch.is_floating_point(c2w):
-            raise TypeError("c2w must be a floating point tensor")
-        if c2w.ndim != 4 or c2w.shape[0] != n_views or c2w.shape[-2:] != (4, 4):
-            raise ValueError("c2w must be [V, D, 4, 4] with V matching Query")
-        if c2w.shape[1] < 1:
-            raise ValueError("c2w must contain at least one frame")
-        n_frames = c2w.shape[1]
-        if not all(isinstance(value, int) for value in (self.frame_start, self.frame_end, self.frame_step)):
-            raise TypeError("frame_start, frame_end, and frame_step must be ints")
         if self.frame_step == 0:
             raise ValueError("frame_step must not be 0")
-        if len(self.frames) != n_frames:
-            raise ValueError("c2w columns must match range(frame_start, frame_end + 1, frame_step)")
-        shape = (n_views, n_frames)
-        for name in ("height", "width", "focal"):
-            value = getattr(self, name)
-            if not torch.is_tensor(value) or tuple(value.shape) != shape:
-                raise ValueError(f"{name} must be [V, D]")
-        if self.height.is_floating_point() or self.height.dtype == torch.bool:
-            raise TypeError("height must be an integer tensor")
-        if self.width.is_floating_point() or self.width.dtype == torch.bool:
-            raise TypeError("width must be an integer tensor")
-        if int(self.height.min()) <= 0 or int(self.width.min()) <= 0 or float(self.focal.min()) <= 0:
+        if self.height <= 0 or self.width <= 0 or self.focal <= 0:
             raise ValueError("height, width, and focal must be positive")
-        frame_indices = self.query.frame_indices
-        if int(frame_indices.min()) < 0 or int(frame_indices.max()) >= n_frames:
-            raise ValueError("Query.frame_indices must index c2w frames")
+        if self.init_dataset_index < 0:
+            raise ValueError("--init-dataset-index must index one Blender frame")
+        if self.frame_end is not None and self.frame_step is not None:
+            n_frames = len(range(self.frame_start, self.frame_end + 1, self.frame_step))
+            if self.init_dataset_index >= n_frames:
+                raise ValueError("--init-dataset-index must index one Blender frame")
 
-    @property
-    def device(self):
-        """Device of the query and the camera tensors."""
+    def load_tracker(self, blender: str) -> BlenderPointTracker:
+        """Export this blend's rigid meshes."""
 
-        return self.query.points.device
+        return BlenderPointTracker(
+            self.blend, blender=blender,
+            frame_start=self.frame_start, frame_end=self.frame_end, frame_step=self.frame_step,
+        ).to(self.device)
 
-    @property
-    def frames(self) -> range:
-        """Absolute Blender frames, one per column of ``c2w``."""
+    def camera(self, c2w: torch.Tensor) -> Camera:
+        """One 3DGS camera for this OpenCV pose. The image is filled in later."""
 
-        return range(self.frame_start, self.frame_end + 1, self.frame_step)
-
-    def to(self, device) -> 'BlenderScene':
-        """Return this scene with the query and camera tensors on ``device``."""
-
-        return BlenderScene(
-            blend=self.blend,
-            frame_start=self.frame_start,
-            frame_end=self.frame_end,
-            frame_step=self.frame_step,
-            query=self.query.to(device),
-            c2w=self.c2w.to(device),
-            height=self.height.to(device),
-            width=self.width.to(device),
-            focal=self.focal.to(device),
-        )
-
-    def build_render_request(self, view_index: int, frame_index: int) -> RenderRequest:
-        """One still: this view and frame, with the pose converted to Blender."""
-
-        c2w = self.c2w[view_index, frame_index].detach().cpu().numpy().astype(np.float64)
-        return RenderRequest(
-            blend=self.blend,
-            frame=self.frames[frame_index],
-            width=int(self.width[view_index, frame_index]),
-            height=int(self.height[view_index, frame_index]),
-            focal=float(self.focal[view_index, frame_index]),
-            c2w=c2w @ BLENDER_FROM_OPENCV,
-        )
-
-    def build_rendered_camera(self, view_index: int, frame_index: int, reply: RenderReply) -> Camera:
-        """One 3DGS camera from this OpenCV pose and one rendered still."""
-
-        c2w = self.c2w[view_index, frame_index]
-        height = int(self.height[view_index, frame_index])
-        width = int(self.width[view_index, frame_index])
-        focal = float(self.focal[view_index, frame_index])
         w2c = torch.linalg.inv(c2w.detach().to(dtype=torch.float32))
-        rgb = torch.from_numpy(np.ascontiguousarray(reply.rgb)).permute(2, 0, 1).to(device=self.device, dtype=torch.float32)
-        # depth = torch.from_numpy(np.ascontiguousarray(reply.depth)).to(device=device, dtype=torch.float32)
-        # object_id = torch.from_numpy(np.ascontiguousarray(reply.object_id)).to(device=device, dtype=torch.float32)
-        camera = build_camera(
-            image_height=height,
-            image_width=width,
-            FoVx=focal2fov(focal, width),
-            FoVy=focal2fov(focal, height),
+        return build_camera(
+            image_height=self.height,
+            image_width=self.width,
+            FoVx=focal2fov(self.focal, self.width),
+            FoVy=focal2fov(self.focal, self.height),
             R=w2c[:3, :3].contiguous(),
             T=w2c[:3, 3].contiguous(),
             device=self.device,
         )
-        return camera._replace(
-            ground_truth_image=rgb,
-            # ground_truth_depth=depth,
-            # custom_data={"object_id": object_id},
-        )
+
+    def render_camera(self, render_server: RenderServer, camera: Camera, c2w: torch.Tensor, frame: int) -> Camera:
+        """Render one still and attach it to ``camera``."""
+
+        pose = c2w.detach().cpu().numpy().astype(np.float64) @ BLENDER_FROM_OPENCV
+        reply = render_server.render(RenderRequest(
+            blend=self.blend, frame=frame, width=self.width, height=self.height, focal=float(self.focal), c2w=pose,
+        ))
+        rgb = torch.from_numpy(np.ascontiguousarray(reply.rgb)).permute(2, 0, 1).to(device=self.device, dtype=torch.float32)
+        return camera._replace(ground_truth_image=rgb)
+
+    def load(self, tracker: BlenderPointTracker, render_server: RenderServer) -> tuple[Query, list[list[Camera]]]:
+        """Sample a query on ``tracker`` and render one still per view and frame."""
+
+        with torch.no_grad():
+            n_frames = int(tracker.matrices.shape[0])
+            if n_frames < 1:
+                raise ValueError("the blend scene produced no frames")
+            if self.init_dataset_index >= n_frames:
+                raise ValueError("--init-dataset-index must index one Blender frame")
+            frame_numbers = range(tracker.frame_start, tracker.frame_end + 1, tracker.frame_step)
+            if len(frame_numbers) != n_frames:
+                raise ValueError(f"requested {len(frame_numbers)} Blender frames but the blend exported {n_frames}")
+            c2ws = sample_c2ws(
+                self.n_cameras, self.center, self.radius, self.axis,
+                self.cap_angle, self.spacing, self.device)
+            n_views = int(c2ws.shape[0])
+            cameras = [self.camera(c2ws[view_index]) for view_index in range(n_views)]
+            xyz = sample_near_surface(
+                tracker.verts, tracker.faces, tracker.matrices[self.init_dataset_index], cameras,
+                self.num_points, self.visible_cameras, self.surface_distance)
+            frame_indices = torch.full((xyz.shape[0],), self.init_dataset_index, dtype=torch.long, device=xyz.device)
+            query = Query.from_projection(xyz, [cameras] * n_frames, frame_indices)
+            frames = [
+                [self.render_camera(render_server, cameras[view_index], c2ws[view_index], frame) for view_index in range(n_views)]
+                for frame in frame_numbers
+            ]
+            return query, frames
 
 
 class BlenderDataset(AbstractGroupArgsDataset):
-    """Render each :class:`BlenderScene` into one :class:`Supervision` sample.
+    """One deferred blend per ``--blend``.
 
-    Images and depth come from :class:`RenderServer`.
-    Tracks bind the query to the blend's rigid meshes.
+    :meth:`from_args` records specs. :meth:`__getitem__` exports that blend,
+    renders its stills, and tracks the query with the same mesh.
     """
 
     arg_group_starters = ("--blend",)
@@ -155,28 +135,22 @@ class BlenderDataset(AbstractGroupArgsDataset):
     def __init__(self, *scenes: BlenderScene, blender: str = "blender"):
         self.scenes = scenes
         self.blender = blender
+        self.device = None
         self.render_server = RenderServer(blender)
 
-    @classmethod
-    def parse_known_group_chunk(cls, argv: list[str] = []) -> tuple[Namespace, list[str]]:
-        """Parse one blend file and its frame range.
-
-        Frames are ``range(frame_start, frame_end + 1, frame_step)``.
-        ``frame_start`` defaults to 1. ``frame_end`` and ``frame_step`` default to the blend scene.
-        ``--init-dataset-index`` defaults to 0.
-        """
-        parser = ArgumentParser(allow_abbrev=False)
+    @staticmethod
+    def add_group_argument(parser: ArgumentParser) -> ArgumentParser:
+        """Register one ``--blend`` group's flags on ``parser`` and return ``parser``."""
         parser.add_argument("--blend", required=True, type=str, metavar="FILE", help="Blend file for one sample.")
         parser.add_argument("--frame_start", type=int, metavar="START", default=1, help="First absolute Blender frame for this blend. Defaults to 1.")
         parser.add_argument("--frame_end", type=int, metavar="END", default=None, help="Last absolute Blender frame for this blend. Defaults to the blend scene.")
         parser.add_argument("--frame_step", type=int, metavar="STEP", default=None, help="Frame step for this blend. Defaults to the blend scene.")
         parser.add_argument("--init-dataset-index", type=int, metavar="INDEX", default=0, help="Index into range(frame_start, frame_end + 1, frame_step) for the mesh the query is sampled on. Defaults to 0.")
-        return parser.parse_known_args(argv)
+        return parser
 
-    @classmethod
-    def parse_known_common_argv(cls, argv: list[str] = []) -> tuple[Namespace, list[str]]:
-        """Parse the cameras sampled around each blend."""
-        parser = ArgumentParser(allow_abbrev=False)
+    @staticmethod
+    def add_common_argument(parser: ArgumentParser) -> ArgumentParser:
+        """Register the cameras sampled around every blend and return ``parser``."""
         parser.add_argument("--n-cameras", required=True, type=int)
         parser.add_argument("--height", required=True, type=int)
         parser.add_argument("--width", required=True, type=int)
@@ -191,104 +165,75 @@ class BlenderDataset(AbstractGroupArgsDataset):
         parser.add_argument("--visible-cameras", default=0, type=int, help="Keep a point only when more cameras than this see it.")
         parser.add_argument("--surface-distance", default=0.0, type=float, help="Half-width of the band around the mesh, in world units.")
         parser.add_argument("--blender", default="blender", type=str)
+        return parser
+
+    @staticmethod
+    def spec_from_args(common_args: Namespace, group_args: Namespace) -> BlenderScene:
+        """One :class:`BlenderScene` for this ``--blend`` group.
+
+        Does not open the blend. :meth:`BlenderScene.load` does that.
+        """
+        return BlenderScene(
+            blend=group_args.blend,
+            frame_start=group_args.frame_start,
+            frame_end=group_args.frame_end,
+            frame_step=group_args.frame_step,
+            init_dataset_index=group_args.init_dataset_index,
+            n_cameras=common_args.n_cameras,
+            height=common_args.height,
+            width=common_args.width,
+            focal=common_args.focal,
+            center=tuple(common_args.center),
+            radius=tuple(common_args.radius),
+            axis=tuple(common_args.axis),
+            cap_angle=tuple(common_args.cap_angle),
+            spacing=tuple(common_args.spacing),
+            num_points=common_args.num_points,
+            visible_cameras=common_args.visible_cameras,
+            surface_distance=common_args.surface_distance,
+            device=common_args.device,
+        )
+
+    @classmethod
+    def parse_known_group_chunk(cls, argv: list[str] = []) -> tuple[Namespace, list[str]]:
+        """Parse one blend file and its frame range.
+
+        Frames are ``range(frame_start, frame_end + 1, frame_step)``.
+        ``frame_start`` defaults to 1. ``frame_end`` and ``frame_step`` default to the blend scene.
+        ``--init-dataset-index`` defaults to 0.
+        """
+        parser = ArgumentParser(allow_abbrev=False)
+        cls.add_group_argument(parser)
+        return parser.parse_known_args(argv)
+
+    @classmethod
+    def parse_known_common_argv(cls, argv: list[str] = []) -> tuple[Namespace, list[str]]:
+        """Parse the cameras sampled around each blend."""
+        parser = ArgumentParser(allow_abbrev=False)
+        cls.add_common_argument(parser)
         return parser.parse_known_args(argv)
 
     @classmethod
     def from_args(cls, common_args: Namespace, *group_args: Namespace) -> 'BlenderDataset':
-        """Sample a query near each blend's surface and film it with cameras on a spherical cap."""
+        """One deferred blend per ``--blend``. The mesh is exported in :meth:`__getitem__`."""
         assert group_args, "at least one --blend is required"
-        scenes = []
-        with torch.no_grad():
-            for spec in group_args:
-                blend = spec.blend
-                frame_start = spec.frame_start
-                init_dataset_index = spec.init_dataset_index
-                mesh = BlenderPointTracker(
-                    blend, blender=common_args.blender,
-                    frame_start=frame_start, frame_end=spec.frame_end, frame_step=spec.frame_step,
-                ).to(common_args.device)
-                n_frames = mesh.matrices.shape[0]
-                assert n_frames, "the blend scene produced no frames."
-                assert 0 <= init_dataset_index < n_frames, "--init-dataset-index must index one Blender frame."
-                query_matrix = mesh.matrices[init_dataset_index]
-                c2ws = sample_c2ws(
-                    common_args.n_cameras, common_args.center, common_args.radius, common_args.axis,
-                    common_args.cap_angle, common_args.spacing, common_args.device)
-                cameras: list[Camera] = []
-                for c2w in c2ws:
-                    w2c = torch.linalg.inv(c2w)
-                    cameras.append(build_camera(
-                        image_height=common_args.height,
-                        image_width=common_args.width,
-                        FoVx=focal2fov(common_args.focal, common_args.width),
-                        FoVy=focal2fov(common_args.focal, common_args.height),
-                        R=w2c[:3, :3].contiguous(),
-                        T=w2c[:3, 3].contiguous(),
-                        device=c2w.device,
-                    ))
-                xyz = sample_near_surface(
-                    mesh.verts, mesh.faces, query_matrix, cameras,
-                    common_args.num_points, common_args.visible_cameras, common_args.surface_distance)
-                frame_indices = torch.full((common_args.num_points,), init_dataset_index, dtype=torch.long, device=common_args.device)
-                query = Query.from_projection(xyz, [cameras] * n_frames, frame_indices)
-                n_views = c2ws.shape[0]
-                scenes.append(BlenderScene(
-                    blend=blend, frame_start=mesh.frame_start, frame_end=mesh.frame_end, frame_step=mesh.frame_step, query=query,
-                    c2w=c2ws.unsqueeze(1).expand(-1, n_frames, -1, -1).contiguous(),
-                    height=torch.full((n_views, n_frames), common_args.height, dtype=torch.long, device=common_args.device),
-                    width=torch.full((n_views, n_frames), common_args.width, dtype=torch.long, device=common_args.device),
-                    focal=torch.full((n_views, n_frames), common_args.focal, dtype=torch.float32, device=common_args.device),
-                ))
+        scenes = tuple(cls.spec_from_args(common_args, group) for group in group_args)
         return cls(*scenes, blender=common_args.blender)
 
     def __len__(self) -> int:
         return len(self.scenes)
 
     def to(self, device) -> 'BlenderDataset':
-        self.scenes = tuple(scene.to(device) for scene in self.scenes)
+        """Export and render later samples on ``device``."""
+
+        self.device = device
         return self
 
     def __getitem__(self, index: int) -> Supervision:
         scene = self.scenes[index]
-        frames = [self.render_frame(scene, frame_index) for frame_index in range(scene.c2w.shape[1])]
-        return Supervision(query=scene.query, frames=frames, tracks=self.tracks(scene, frames))
-
-    def render_frame(self, scene: BlenderScene, frame_index: int) -> list[Camera]:
-        """Render every view of one frame."""
-
-        cameras = []
-        for view_index in range(scene.c2w.shape[0]):
-            request = scene.build_render_request(view_index, frame_index)
-            reply = self.render_server.render(request)
-            camera = scene.build_rendered_camera(view_index, frame_index, reply)
-            cameras.append(camera)
-        return cameras
-
-    def tracks(self, scene: BlenderScene, frames: Sequence[Sequence[Camera]]) -> list[Track]:
-        """Bind ``scene.query`` to the rigid meshes posed across its frame range."""
-
-        query = scene.query
-        tracker = BlenderPointTracker(
-            scene.blend, blender=self.blender,
-            frame_start=scene.frame_start, frame_end=scene.frame_end, frame_step=scene.frame_step,
-        ).to(scene.device)
-        n_views, n_points, _ = query.points.shape
-        n_frames = len(frames)
-        if tracker.matrices.shape[0] != n_frames:
-            raise ValueError(
-                f"requested {n_frames} Blender frames but the blend exported {tracker.matrices.shape[0]}"
-            )
-        points, visibility, valid = track_points(
-            tracker.verts, tracker.faces, tracker.matrices, scene.query, frames, tracker.eps, str(tracker.device),
-        )
-        confidence = query.points.new_ones((n_views, n_frames, n_points))
-        mask = valid.to(dtype=torch.bool).expand(n_frames, n_points)
-        return [
-            Track(
-                points=points[view_index],
-                visibility=visibility[view_index],
-                confidence=confidence[view_index],
-                mask=mask,
-            )
-            for view_index in range(n_views)
-        ]
+        if self.device is not None:
+            scene = replace(scene, device=self.device)
+        tracker = scene.load_tracker(self.blender)
+        query, frames = scene.load(tracker, self.render_server)
+        tracks = tracker(query, frames)
+        return Supervision(query=query, frames=frames, tracks=tracks)
