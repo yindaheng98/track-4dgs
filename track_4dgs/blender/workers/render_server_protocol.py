@@ -107,7 +107,8 @@ class RenderRequest:
 class RenderReply:
     """One still for one :class:`RenderRequest`.
 
-    ``rgb`` is ``(H, W, 3)`` linear color.
+    ``rgb`` is ``(H, W, 3)`` display-referred color in ``[0, 1]``.
+    The scene view transform, look, and exposure are already applied.
     ``depth`` and ``object_id`` are ``(H, W)``.
     Row 0 is the top of the image.
     ``depth`` is the view-layer Z pass.
