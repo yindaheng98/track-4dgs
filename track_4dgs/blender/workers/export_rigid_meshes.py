@@ -4,6 +4,7 @@ The blend file is already open when this script starts.
 Each mesh is rigid in object space, so triangles are written once and ``matrix_world`` is written per frame.
 Frames are ``range(frame_start, frame_end + 1, frame_step)``.
 ``frame_start`` defaults to 1. ``frame_end`` and ``frame_step`` default to the open scene.
+The mesh record is one :class:`export_rigid_meshes_protocol.RigidMeshes`.
 The export is one ``pickle.dumps`` byte string on the connection, then this process exits.
 """
 
@@ -11,22 +12,38 @@ import argparse
 import pickle
 import sys
 from multiprocessing.connection import Client
+from pathlib import Path
 
 import bpy
+
+protocol = sys.path.insert(0, str(Path(__file__).resolve().parent)) or __import__("export_rigid_meshes_protocol")
 
 AUTH = b"track-4dgs-export"
 
 
 def export_meshes(meshes):
-    """Export object-local vertices and loop triangles for each mesh."""
+    """Export object-local vertices, loop triangles, and one item id per mesh.
+
+    The id is the mesh's root parent: walk ``parent`` until it is missing.
+    Meshes under that same object share an id. A mesh with no parent is its own item.
+    Ids are dense and follow the first mesh of each item in ``meshes``.
+    """
     verts = []
     faces = []
+    object_id = []
+    item_ids = {}
     for obj in meshes:
+        root = obj
+        while root.parent is not None:
+            root = root.parent
+        if root.name not in item_ids:
+            item_ids[root.name] = len(item_ids)
         mesh = obj.data
         mesh.calc_loop_triangles()
         verts.append([[vertex.co.x, vertex.co.y, vertex.co.z] for vertex in mesh.vertices])
         faces.append([list(triangle.vertices) for triangle in mesh.loop_triangles])
-    return verts, faces
+        object_id.append(item_ids[root.name])
+    return protocol.RigidMeshes(verts=verts, faces=faces, object_id=object_id)
 
 
 def pose_matrices(scene, meshes, frames):
@@ -66,16 +83,14 @@ def main() -> None:
             f"no Blender frames from {scene.frame_start} to {scene.frame_end} step {scene.frame_step}"
         )
     meshes = [obj for obj in scene.objects if obj.type == "MESH"]
-    verts, faces = export_meshes(meshes)
+    rigid_meshes = export_meshes(meshes)
     matrices = pose_matrices(scene, meshes, frames)
-    payload = pickle.dumps({
-        "verts": verts,
-        "faces": faces,
-        "matrices": matrices,
-        "frame_start": scene.frame_start,
-        "frame_end": scene.frame_end,
-        "frame_step": scene.frame_step,
-    }, protocol=pickle.HIGHEST_PROTOCOL)
+    payload = rigid_meshes.encode()
+    payload["matrices"] = matrices
+    payload["frame_start"] = scene.frame_start
+    payload["frame_end"] = scene.frame_end
+    payload["frame_step"] = scene.frame_step
+    payload = pickle.dumps(payload, protocol=pickle.HIGHEST_PROTOCOL)
     conn = Client(("127.0.0.1", args.port), authkey=AUTH)
     try:
         conn.send(payload)
