@@ -28,7 +28,8 @@ class BlenderScene:
     """One blend file and how to film it.
 
     Construction records the arguments. :meth:`load_tracker` exports the mesh.
-    :meth:`load` samples the query and renders the stills.
+    :meth:`sample_cameras` renders the stills. :meth:`sample_points` draws the query.
+    :meth:`load` returns both.
     """
 
     blend: str
@@ -94,33 +95,47 @@ class BlenderScene:
         rgb = torch.from_numpy(np.ascontiguousarray(reply.rgb)).permute(2, 0, 1).to(device=self.device, dtype=torch.float32)
         return camera._replace(ground_truth_image=rgb)
 
+    def sample_cameras(self, tracker: BlenderPointTracker, render_server: RenderServer) -> tuple[list[Camera], list[list[Camera]]]:
+        """Sample the views and render one still per view and frame.
+
+        Returns the cameras and one still per view for each exported frame.
+        The view count may be smaller than ``n_cameras``.
+        """
+
+        n_frames = int(tracker.matrices.shape[0])
+        if n_frames < 1:
+            raise ValueError("the blend scene produced no frames")
+        frame_numbers = range(tracker.frame_start, tracker.frame_end + 1, tracker.frame_step)
+        if len(frame_numbers) != n_frames:
+            raise ValueError(f"requested {len(frame_numbers)} Blender frames but the blend exported {n_frames}")
+        c2ws = sample_c2ws(
+            self.n_cameras, self.center, self.radius, self.axis,
+            self.cap_angle, self.spacing, self.device)
+        cameras = [self.camera(c2ws[view_index]) for view_index in range(int(c2ws.shape[0]))]
+        frames = [
+            [self.render_camera(render_server, cameras[view_index], c2ws[view_index], frame) for view_index in range(len(cameras))]
+            for frame in frame_numbers
+        ]
+        return cameras, frames
+
+    def sample_points(self, tracker: BlenderPointTracker, cameras: list[Camera]) -> Query:
+        """Sample a query on the init frame of ``tracker`` that ``cameras`` can see."""
+
+        n_frames = int(tracker.matrices.shape[0])
+        if self.init_dataset_index >= n_frames:
+            raise ValueError("--init-dataset-index must index one Blender frame")
+        xyz = sample_near_surface(
+            tracker.verts, tracker.faces, tracker.matrices[self.init_dataset_index], cameras,
+            self.num_points, self.visible_cameras, self.surface_distance)
+        frame_indices = torch.full((xyz.shape[0],), self.init_dataset_index, dtype=torch.long, device=xyz.device)
+        return Query.from_projection(xyz, [cameras] * n_frames, frame_indices)
+
     def load(self, tracker: BlenderPointTracker, render_server: RenderServer) -> tuple[Query, list[list[Camera]]]:
         """Sample a query on ``tracker`` and render one still per view and frame."""
 
         with torch.no_grad():
-            n_frames = int(tracker.matrices.shape[0])
-            if n_frames < 1:
-                raise ValueError("the blend scene produced no frames")
-            if self.init_dataset_index >= n_frames:
-                raise ValueError("--init-dataset-index must index one Blender frame")
-            frame_numbers = range(tracker.frame_start, tracker.frame_end + 1, tracker.frame_step)
-            if len(frame_numbers) != n_frames:
-                raise ValueError(f"requested {len(frame_numbers)} Blender frames but the blend exported {n_frames}")
-            c2ws = sample_c2ws(
-                self.n_cameras, self.center, self.radius, self.axis,
-                self.cap_angle, self.spacing, self.device)
-            n_views = int(c2ws.shape[0])
-            cameras = [self.camera(c2ws[view_index]) for view_index in range(n_views)]
-            xyz = sample_near_surface(
-                tracker.verts, tracker.faces, tracker.matrices[self.init_dataset_index], cameras,
-                self.num_points, self.visible_cameras, self.surface_distance)
-            frame_indices = torch.full((xyz.shape[0],), self.init_dataset_index, dtype=torch.long, device=xyz.device)
-            query = Query.from_projection(xyz, [cameras] * n_frames, frame_indices)
-            frames = [
-                [self.render_camera(render_server, cameras[view_index], c2ws[view_index], frame) for view_index in range(n_views)]
-                for frame in frame_numbers
-            ]
-            return query, frames
+            cameras, frames = self.sample_cameras(tracker, render_server)
+            return self.sample_points(tracker, cameras), frames
 
 
 class BlenderDataset(AbstractGroupArgsDataset):
