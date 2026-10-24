@@ -24,23 +24,36 @@ protocol = sys.path.insert(0, str(Path(__file__).resolve().parent)) or __import_
 
 AUTH = b"track-4dgs-render" # same as in ../render_server.py
 SENSOR_WIDTH_MM = 36.0
+SAMPLES = 64
 
 
 def setup_blend(path: str, scratch: Path) -> None:
     """Open ``path`` and write rgb, depth, and object id into ``scratch``.
 
-    The blend file keeps its objects, materials, and render engine.
+    The blend file keeps its objects, materials, and world.
+    Cycles renders the still.
     This replaces the scene compositor so the three passes can be read back.
     """
 
     bpy.ops.wm.open_mainfile(filepath=path, load_ui=False)
+    missing = sorted({img.filepath for img in bpy.data.images if img.filepath and tuple(img.size) == (0, 0)})
+    if missing:
+        raise RuntimeError(f"missing textures: {missing}")
     scene = bpy.context.scene
     # Kubric saves the color image from a Filmic PNG and keeps the EXR linear.
     # https://github.com/google-research/kubric/blob/main/kubric/renderer/blender.py
+    scene.render.engine = "CYCLES"
+    cycles = scene.cycles
+    cycles.samples = SAMPLES
+    cycles.use_adaptive_sampling = False
+    cycles.use_denoising = True
+    cycles.denoiser = "OPENIMAGEDENOISE"
     scene.view_settings.view_transform = "Filmic"
     scene.view_settings.look = "None"
     scene.render.use_compositing = True
     view_layer = scene.view_layers[0]
+    view_layer.samples = 0
+    view_layer.cycles.use_denoising = True
     view_layer.use_pass_z = True
     view_layer.use_pass_cryptomatte_object = True
 
@@ -132,9 +145,11 @@ def render_still(scratch: Path) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         path.unlink(missing_ok=True)
     scene = bpy.context.scene
     scene.render.filepath = str(png)
-    scene.render.image_settings.file_format = "PNG"
-    scene.render.image_settings.color_mode = "RGB"
-    scene.render.image_settings.color_depth = "8"
+    image = scene.render.image_settings
+    image.file_format = "PNG"
+    image.color_mode = "RGB"
+    image.color_depth = "8"
+    image.color_management = "FOLLOW_SCENE"
     bpy.context.view_layer.update()
     bpy.ops.render.render(write_still=True)
     for path in (depth_exr, id_exr, png):
