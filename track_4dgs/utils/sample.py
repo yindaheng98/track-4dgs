@@ -61,6 +61,7 @@ def sample_c2ws(
     """Sample OpenCV camera-to-world poses on a spherical cap.
 
     Returns ``[V, 4, 4]``. Stops after 100 proposals, so ``V`` may be smaller than ``n_cameras``.
+    The draw is fixed by seed 0.
     """
 
     azimuth, elevation = np.deg2rad(axis)
@@ -73,7 +74,7 @@ def sample_c2ws(
     min_angle, max_angle = np.deg2rad(spacing)
     radius_min, radius_max = radius
     center = np.array(center)
-    rng = np.random.default_rng()
+    rng = np.random.default_rng(42)
 
     directions = []
     radii = []
