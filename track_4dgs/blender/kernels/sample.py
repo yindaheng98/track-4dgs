@@ -21,7 +21,7 @@ def sample_near_surface(
     Triangles are drawn with probability proportional to area, then each point is
     moved along the face normal by a uniform offset in ``[-distance, distance]``.
     A point is kept only when it projects into more cameras than ``visible_cameras``.
-    The draw is fixed by seed 0.
+    The draw is fixed by seed 42.
     """
     world = posed_scene_vertices(verts, matrix_world)
     scene_faces, _ = pack_object_faces(verts, faces)
