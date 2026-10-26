@@ -22,16 +22,16 @@ from mathutils import Matrix
 
 protocol = sys.path.insert(0, str(Path(__file__).resolve().parent)) or __import__("render_server_protocol")
 
-AUTH = b"track-4dgs-render" # same as in ../render_server.py
+AUTH = b"track-4dgs-render"  # same as in ../render_server.py
 SENSOR_WIDTH_MM = 36.0
 SAMPLES = 64
 
 
-def setup_blend(path: str, scratch: Path) -> None:
+def setup_blend(path: str, scratch: Path, device_type: str, device_index: int | None) -> None:
     """Open ``path`` and write rgb, depth, and object id into ``scratch``.
 
     The blend file keeps its objects, materials, and world.
-    Cycles renders the still.
+    Cycles renders the still on ``device_type`` and ``device_index``.
     This replaces the scene compositor so the three passes can be read back.
     """
 
@@ -43,6 +43,17 @@ def setup_blend(path: str, scratch: Path) -> None:
     # Kubric saves the color image from a Filmic PNG and keeps the EXR linear.
     # https://github.com/google-research/kubric/blob/main/kubric/renderer/blender.py
     scene.render.engine = "CYCLES"
+    match device_type:
+        case "cpu":
+            scene.cycles.device = "CPU"
+        case "cuda":
+            prefs = bpy.context.preferences.addons["cycles"].preferences
+            prefs.compute_device_type = "CUDA"
+            prefs.get_devices()
+            gpus = [item for item in prefs.devices if item.type == "CUDA"]
+            for item in prefs.devices:
+                item.use = item is gpus[device_index]
+            scene.cycles.device = "GPU"
     cycles = scene.cycles
     cycles.samples = SAMPLES
     cycles.use_adaptive_sampling = False
@@ -164,6 +175,8 @@ def render_still(scratch: Path) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", type=int, required=True)
+    parser.add_argument("--device-type", required=True, choices=("cpu", "cuda"))
+    parser.add_argument("--device-index", type=int, default=None)
     args = parser.parse_args(sys.argv[sys.argv.index("--") + 1:])
     scratch = Path(tempfile.mkdtemp(prefix="track4dgs-render-"))
     conn = Client(("127.0.0.1", args.port), authkey=AUTH)
@@ -176,7 +189,7 @@ def main() -> None:
             try:
                 request = protocol.RenderRequest.decode(message)
                 if request.blend != loaded_blend:
-                    setup_blend(request.blend, scratch)
+                    setup_blend(request.blend, scratch, args.device_type, args.device_index)
                     loaded_blend = request.blend
                 bpy.context.scene.frame_set(int(request.frame))
                 apply_camera(request)
