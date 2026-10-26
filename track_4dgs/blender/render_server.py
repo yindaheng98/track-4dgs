@@ -16,14 +16,15 @@ class RenderServer:
 
     ``__init__`` listens on ``127.0.0.1`` and starts ``workers/render_server.py``.
     Blender connects back with ``AUTH``.
-    ``device`` is a :class:`torch.device`. Its ``type`` and ``index`` are passed as ``--device-type`` and ``--device-index``.
+    ``device`` is kept as given. Its torch ``type`` and ``index`` are passed as ``--device-type`` and ``--device-index``.
     A ``cuda`` device with no index uses :func:`torch.cuda.current_device`.
     :meth:`render` sends one request and returns the reply.
     :meth:`__del__` sends ``None`` and waits for Blender to exit.
     """
 
     def __init__(self, blender: str = "blender", device: str | torch.device = "cuda"):
-        self.device = torch.device(device)
+        self.device = device
+        parsed = torch.device(device)
         script = Path(__file__).resolve().parent / "workers" / "render_server.py"
         listener = Listener(("127.0.0.1", 0), authkey=AUTH)
         command = [
@@ -37,10 +38,10 @@ class RenderServer:
             "--port",
             str(listener.address[1]),
             "--device-type",
-            self.device.type,
+            parsed.type,
         ]
-        if self.device.type == "cuda":
-            index = torch.cuda.current_device() if self.device.index is None else self.device.index
+        if parsed.type == "cuda":
+            index = torch.cuda.current_device() if parsed.index is None else parsed.index
             command.extend(("--device-index", str(index)))
         try:
             self.server = subprocess.Popen(command)
