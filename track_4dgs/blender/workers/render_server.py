@@ -4,7 +4,7 @@ The blend file is already configured.
 It is opened only when its path changes.
 This file imports only the standard library, NumPy, Blender, and ``render_server_protocol.py``.
 ``--background`` discards the framebuffer.
-Color is read back from the Filmic PNG.
+Color is read back from the display PNG.
 Depth and object id are read back from EXR.
 """
 
@@ -24,15 +24,13 @@ protocol = sys.path.insert(0, str(Path(__file__).resolve().parent)) or __import_
 
 AUTH = b"track-4dgs-render"  # same as in ../render_server.py
 SENSOR_WIDTH_MM = 36.0
-SAMPLES = 64
 
 
-def setup_blend(path: str, scratch: Path, device_type: str, device_index: int | None) -> None:
+def setup_blend(path: str, scratch: Path) -> None:
     """Open ``path`` and write rgb, depth, and object id into ``scratch``.
 
-    The blend file keeps its objects, materials, and world.
-    Cycles renders the still on ``device_type`` and ``device_index``.
-    This replaces the scene compositor so the three passes can be read back.
+    The blend file keeps its objects, materials, world, render engine, samples, and color management.
+    This turns on the depth and object-id passes and replaces the scene compositor so the three passes can be read back.
     """
 
     bpy.ops.wm.open_mainfile(filepath=path, load_ui=False)
@@ -40,31 +38,8 @@ def setup_blend(path: str, scratch: Path, device_type: str, device_index: int | 
     if missing:
         raise RuntimeError(f"missing textures: {missing}")
     scene = bpy.context.scene
-    # Kubric saves the color image from a Filmic PNG and keeps the EXR linear.
-    # https://github.com/google-research/kubric/blob/main/kubric/renderer/blender.py
-    scene.render.engine = "CYCLES"
-    match device_type:
-        case "cpu":
-            scene.cycles.device = "CPU"
-        case "cuda":
-            prefs = bpy.context.preferences.addons["cycles"].preferences
-            prefs.compute_device_type = "CUDA"
-            prefs.get_devices()
-            gpus = [item for item in prefs.devices if item.type == "CUDA"]
-            for item in prefs.devices:
-                item.use = item is gpus[device_index]
-            scene.cycles.device = "GPU"
-    cycles = scene.cycles
-    cycles.samples = SAMPLES
-    cycles.use_adaptive_sampling = False
-    cycles.use_denoising = True
-    cycles.denoiser = "OPENIMAGEDENOISE"
-    scene.view_settings.view_transform = "Filmic"
-    scene.view_settings.look = "None"
     scene.render.use_compositing = True
     view_layer = scene.view_layers[0]
-    view_layer.samples = 0
-    view_layer.cycles.use_denoising = True
     view_layer.use_pass_z = True
     view_layer.use_pass_cryptomatte_object = True
 
@@ -116,7 +91,7 @@ def apply_camera(request) -> None:
 
 
 def read_display_png(path: Path) -> np.ndarray:
-    """Read one Filmic PNG as ``(H, W, 3)`` float in ``[0, 1]``.
+    """Read one display PNG as ``(H, W, 3)`` float in ``[0, 1]``.
 
     ``Non-Color`` keeps the file bytes.
     Blender stores the first row at the bottom of ``image.pixels``.
@@ -175,8 +150,6 @@ def render_still(scratch: Path) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", type=int, required=True)
-    parser.add_argument("--device-type", required=True, choices=("cpu", "cuda"))
-    parser.add_argument("--device-index", type=int, default=None)
     args = parser.parse_args(sys.argv[sys.argv.index("--") + 1:])
     scratch = Path(tempfile.mkdtemp(prefix="track4dgs-render-"))
     conn = Client(("127.0.0.1", args.port), authkey=AUTH)
@@ -189,7 +162,7 @@ def main() -> None:
             try:
                 request = protocol.RenderRequest.decode(message)
                 if request.blend != loaded_blend:
-                    setup_blend(request.blend, scratch, args.device_type, args.device_index)
+                    setup_blend(request.blend, scratch)
                     loaded_blend = request.blend
                 bpy.context.scene.frame_set(int(request.frame))
                 apply_camera(request)

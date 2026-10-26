@@ -4,8 +4,6 @@ import subprocess
 from multiprocessing.connection import Listener
 from pathlib import Path
 
-import torch
-
 from .workers.render_server_protocol import RenderReply, RenderRequest
 
 AUTH = b"track-4dgs-render"  # same as in workers/render_server.py
@@ -16,35 +14,25 @@ class RenderServer:
 
     ``__init__`` listens on ``127.0.0.1`` and starts ``workers/render_server.py``.
     Blender connects back with ``AUTH``.
-    ``device`` is kept as given. Its torch ``type`` and ``index`` are passed as ``--device-type`` and ``--device-index``.
-    A ``cuda`` device with no index uses :func:`torch.cuda.current_device`.
     :meth:`render` sends one request and returns the reply.
     :meth:`__del__` sends ``None`` and waits for Blender to exit.
     """
 
-    def __init__(self, blender: str = "blender", device: str | torch.device = "cuda"):
-        self.device = device
-        parsed = torch.device(device)
+    def __init__(self, blender: str = "blender"):
         script = Path(__file__).resolve().parent / "workers" / "render_server.py"
         listener = Listener(("127.0.0.1", 0), authkey=AUTH)
-        command = [
-            blender,
-            "--background",
-            "--python-exit-code",
-            "1",
-            "--python",
-            str(script),
-            "--",
-            "--port",
-            str(listener.address[1]),
-            "--device-type",
-            parsed.type,
-        ]
-        if parsed.type == "cuda":
-            index = torch.cuda.current_device() if parsed.index is None else parsed.index
-            command.extend(("--device-index", str(index)))
         try:
-            self.server = subprocess.Popen(command)
+            self.server = subprocess.Popen([
+                blender,
+                "--background",
+                "--python-exit-code",
+                "1",
+                "--python",
+                str(script),
+                "--",
+                "--port",
+                str(listener.address[1]),
+            ])
             self.connection = listener.accept()
         except BaseException:
             server = getattr(self, "server", None)

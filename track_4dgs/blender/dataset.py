@@ -150,8 +150,8 @@ class BlenderDataset(AbstractGroupArgsDataset):
     def __init__(self, *scenes: BlenderScene, blender: str = "blender"):
         self.scenes = scenes
         self.blender = blender
-        self.render_server = None
-        self.to(scenes[0].device)
+        self.device = None
+        self.render_server = RenderServer(blender)
 
     @staticmethod
     def add_group_argument(parser: ArgumentParser) -> ArgumentParser:
@@ -239,16 +239,7 @@ class BlenderDataset(AbstractGroupArgsDataset):
         return len(self.scenes)
 
     def to(self, device) -> 'BlenderDataset':
-        """Export and render later samples on ``device``.
-
-        A different device stops the current Blender process and starts one on that device.
-        """
-
-        if self.render_server is None:
-            self.render_server = RenderServer(self.blender, device)
-        elif device != self.render_server.device:
-            self.render_server.__del__()
-            self.render_server = RenderServer(self.blender, device)
+        """Export and render later samples on ``device``."""
         self.device = device
         return self
 
