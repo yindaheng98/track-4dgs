@@ -1,8 +1,8 @@
 """Blender worker that exports evaluated meshes one frame at a time.
 
 The blend file is already open when this script starts.
-The first socket message is one :class:`export_meshes_protocol.MeshTopology`.
-Each following message is one :class:`export_meshes_protocol.MeshFrame`, in frame order.
+The first socket message is one :class:`export_meshes_protocol.MeshTopology`, including the first frame's vertices.
+Each following message is one :class:`export_meshes_protocol.MeshFrame` for a later frame, in frame order.
 Positions include deformation and the object transform.
 A frame whose vertex count or triangle indices differ from the first frame aborts the export.
 Frames are ``range(frame_start, frame_end + 1, frame_step)``.
@@ -84,6 +84,7 @@ def main() -> None:
                 reference = ([len(coords) for coords in verts], faces)
                 conn.send(protocol.MeshTopology(
                     faces=faces,
+                    verts=verts,
                     object_id=object_id,
                     frame_start=scene.frame_start,
                     frame_end=scene.frame_end,
@@ -98,7 +99,7 @@ def main() -> None:
                             f"{count} vertices, {len(ref)} triangles became "
                             f"{len(coords)} vertices, {len(triangles)} triangles"
                         )
-            conn.send(protocol.MeshFrame(verts=verts).encode())
+                conn.send(protocol.MeshFrame(verts=verts).encode())
     finally:
         conn.close()
 

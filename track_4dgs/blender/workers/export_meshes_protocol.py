@@ -1,8 +1,8 @@
 """Socket messages for one evaluated-mesh export.
 
 ``export_meshes.py`` imports this file by path and does not import the training package.
-The first message is one :class:`MeshTopology`.
-Each following message is one :class:`MeshFrame`.
+The first message is one :class:`MeshTopology`, including the first frame's vertices.
+Each following message is one :class:`MeshFrame` for a later frame.
 ``encode`` writes a message and ``decode`` reads one.
 The socket carries the dict, not the class, because the two interpreters load this file under different module names.
 """
@@ -27,6 +27,7 @@ class MeshTopology:
     """Triangles of every exported mesh, and the frame range those meshes share.
 
     ``faces[i]`` is a list of triangle vertex indices into mesh ``i``.
+    ``verts`` is the first exported frame, in the same layout as :class:`MeshFrame` ``verts``.
     ``object_id[i]`` is the item that owns mesh ``i``.
     Meshes that share a root parent are one item and share one id.
     A mesh with no parent is its own item.
@@ -36,6 +37,7 @@ class MeshTopology:
     """
 
     faces: list
+    verts: list
     object_id: list
     frame_start: int
     frame_end: int
