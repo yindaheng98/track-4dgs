@@ -5,25 +5,24 @@ from collections.abc import Sequence
 import torch
 
 from ...utils import project_points
-from .track import pack_object_faces, posed_scene_vertices
+from .track import pack_object_faces, scene_vertices
 
 
 def sample_near_surface(
         verts: Sequence[torch.Tensor],
         faces: Sequence[torch.Tensor],
-        matrix_world: torch.Tensor,
         cameras: Sequence,
         num_points: int,
         visible_cameras: int,
         distance: float) -> torch.Tensor:
-    """Sample ``num_points`` in a band around the posed mesh.
+    """Sample ``num_points`` in a band around one frame of the mesh.
 
-    Triangles are drawn with probability proportional to area, then each point is
-    moved along the face normal by a uniform offset in ``[-distance, distance]``.
+    ``verts`` lists world-space ``(V_i, 3)`` vertices in export order.
+    Triangles are drawn with probability proportional to area, then each point is moved along the face normal by a uniform offset in ``[-distance, distance]``.
     A point is kept only when it projects into more cameras than ``visible_cameras``.
     The draw is fixed by seed 42.
     """
-    world = posed_scene_vertices(verts, matrix_world)
+    world = scene_vertices(verts)
     scene_faces, _ = pack_object_faces(verts, faces)
     triangles = world[scene_faces.long()]
     edges = torch.cross(triangles[:, 1] - triangles[:, 0], triangles[:, 2] - triangles[:, 0], dim=-1)

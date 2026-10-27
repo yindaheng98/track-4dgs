@@ -64,7 +64,7 @@ class BlenderScene:
                 raise ValueError("--init-dataset-index must index one Blender frame")
 
     def load_tracker(self, blender: str) -> BlenderPointTracker:
-        """Export this blend's rigid meshes."""
+        """Export this blend's evaluated meshes."""
 
         return BlenderPointTracker(
             self.blend, blender=blender,
@@ -102,12 +102,7 @@ class BlenderScene:
         The view count may be smaller than ``n_cameras``.
         """
 
-        n_frames = int(tracker.matrices.shape[0])
-        if n_frames < 1:
-            raise ValueError("the blend scene produced no frames")
         frame_numbers = range(tracker.frame_start, tracker.frame_end + 1, tracker.frame_step)
-        if len(frame_numbers) != n_frames:
-            raise ValueError(f"requested {len(frame_numbers)} Blender frames but the blend exported {n_frames}")
         c2ws = sample_c2ws(
             self.n_cameras, self.center, self.radius, self.axis,
             self.cap_angle, self.spacing, self.device)
@@ -121,11 +116,12 @@ class BlenderScene:
     def sample_points(self, tracker: BlenderPointTracker, cameras: list[Camera]) -> Query:
         """Sample a query on the init frame of ``tracker`` that ``cameras`` can see."""
 
-        n_frames = int(tracker.matrices.shape[0])
+        n_frames = tracker.n_frames
         if self.init_dataset_index >= n_frames:
             raise ValueError("--init-dataset-index must index one Blender frame")
+        posed = [obj_verts[self.init_dataset_index] for obj_verts in tracker.verts]
         xyz = sample_near_surface(
-            tracker.verts, tracker.faces, tracker.matrices[self.init_dataset_index], cameras,
+            posed, tracker.faces, cameras,
             self.num_points, self.visible_cameras, self.surface_distance)
         frame_indices = torch.full((xyz.shape[0],), self.init_dataset_index, dtype=torch.long, device=xyz.device)
         return Query.from_projection(xyz, [cameras] * n_frames, frame_indices)

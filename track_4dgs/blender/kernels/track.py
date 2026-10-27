@@ -1,4 +1,4 @@
-"""Pose a rigid Blender scene and track query pixels through it."""
+"""Track query pixels across evaluated Blender meshes."""
 
 from collections.abc import Sequence
 
@@ -10,25 +10,20 @@ from .bind import bind_points
 from .visibility import project_visibility
 
 
-def posed_scene_vertices(
-        verts: Sequence[torch.Tensor],
-        matrix_world: torch.Tensor) -> torch.Tensor:
-    """Concatenate one frame of rigidly posed mesh vertices.
+def scene_vertices(verts: Sequence[torch.Tensor]) -> torch.Tensor:
+    """Concatenate one frame of world-space mesh vertices.
 
-    ``verts`` lists object-local ``(V_i, 3)`` vertices in export order.
-    ``matrix_world`` is ``(M, 4, 4)`` for that frame, in the same order.
+    ``verts`` lists ``(V_i, 3)`` vertices in export order.
     Objects with no vertices are skipped.
     Returns ``(sum V_i, 3)`` world vertices.
     A scene with no objects, or only empty objects, returns ``(0, 3)``.
     """
-    parts = []
-    for obj_verts, matrix in zip(verts, matrix_world):
-        if obj_verts.shape[0] == 0:
-            continue
-        hom = torch.cat([obj_verts, obj_verts.new_ones(obj_verts.shape[0], 1)], dim=1)
-        parts.append(torch.einsum("ij,vj->vi", matrix, hom)[:, :3])
+    parts = [obj_verts for obj_verts in verts if obj_verts.shape[0] > 0]
     if not parts:
-        return matrix_world.new_zeros((0, 3))
+        reference = verts[0] if verts else None
+        if reference is None:
+            return torch.zeros((0, 3), dtype=torch.float32)
+        return reference.new_zeros((0, 3))
     return torch.cat(parts)
 
 
@@ -61,25 +56,30 @@ def pack_object_faces(
 def track_points(
         verts: Sequence[torch.Tensor],
         faces: Sequence[torch.Tensor],
-        matrices: torch.Tensor,
         query: Query,
         frames: Sequence[CameraDataset],
         eps: float,
         device: str) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    """Bind query pixels to the rigid scene and project them into every camera.
+    """Bind query pixels to the evaluated scene and project them into every camera.
 
-    ``verts`` and ``faces`` are per-object tensors in export order.
-    ``matrices`` is ``(F, M, 4, 4)`` ``matrix_world``.
+    ``verts`` lists per-object ``(F, V_i, 3)`` world positions in export order.
+    ``faces`` lists per-object ``(T_i, 3)`` triangles into those vertices.
+    Vertex count and triangle indices stay fixed across ``F``.
     ``device`` is a Warp device name.
     ``eps`` is the visibility depth tolerance in world units.
     Returns ``points`` ``(V, F, N, 2)``, ``visibility`` ``(V, F, N)``, and ``valid`` ``(N,)`` int.
     """
-    scene_faces, face_owner = pack_object_faces(verts, faces)
-    world_verts = torch.stack([
-        posed_scene_vertices(verts, matrices[frame_index]) for frame_index in range(matrices.shape[0])
-    ])
+    n_frames = len(frames)
+    scene_faces, face_owner = pack_object_faces([obj_verts[0] for obj_verts in verts], faces)
+    if verts:
+        world_verts = torch.stack([
+            scene_vertices([obj_verts[frame_index] for obj_verts in verts])
+            for frame_index in range(n_frames)
+        ])
+    else:
+        world_verts = query.points.new_zeros((n_frames, 0, 3))
     worlds, valid = bind_points(
-        world_verts, scene_faces, face_owner, query, frames, matrices, device,
+        world_verts, scene_faces, face_owner, query, frames, device,
     )
     points, visibility = project_visibility(
         query, frames, worlds, world_verts, scene_faces, valid, eps, device,

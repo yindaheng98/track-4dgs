@@ -1,4 +1,4 @@
-"""Bind triangulated query rays to rigid mesh objects."""
+"""Bind triangulated query rays to deformed mesh surfaces."""
 
 from collections import defaultdict
 from collections.abc import Sequence
@@ -19,31 +19,33 @@ def bind_points(
         face_owner: torch.Tensor,
         query: Query,
         frames: Sequence[CameraDataset],
-        matrices: torch.Tensor,
         device: str):
-    """Bind query rays and pose each point through every frame.
+    """Bind query rays and replay each snap on the deformed surface.
 
     ``world_verts`` is ``(F, P, 3)`` posed vertices, one row of frames.
     ``scene_faces`` is ``(T, 3)`` triangles into those vertices, and ``face_owner`` is ``(T,)``.
-    ``matrices`` is ``(F, M, 4, 4)`` ``matrix_world``.
+    Vertex count and triangle indices are the same on every frame.
     ``device`` is the Warp device used for ray casts and closest-point snaps.
     A point with fewer than two in-image views stays masked off.
     Each ray votes for the object of its first hit, or for empty space on a miss.
     The winner must beat both empty space and the runner-up.
-    A snap is multiplied by every frame's ``matrix_world``.
+    A snap stores Warp barycentric weights on the winning object's triangle.
+    Those weights are ``u`` on the first vertex, ``v`` on the second, and ``1 - u - v`` on the third.
+    Every frame interpolates the same triangle from that frame's vertices.
     A point that does not snap keeps its triangulated world position on every frame.
     Returns ``worlds`` ``(F, N, 3)`` and ``valid`` ``(N,)`` int.
     """
     n_points = query.points.shape[1]
-    obj_index = torch.full((n_points,), -1, dtype=torch.long, device=matrices.device)
-    local = torch.zeros((n_points, 3), dtype=matrices.dtype, device=matrices.device)
-    valid = torch.zeros((n_points,), dtype=torch.int32, device=matrices.device)
+    n_frames = world_verts.shape[0]
+    triangles = torch.full((n_points, 3), -1, dtype=torch.long, device=world_verts.device)
+    bary = torch.zeros((n_points, 3), dtype=world_verts.dtype, device=world_verts.device)
+    anchor = torch.zeros((n_points, 3), dtype=world_verts.dtype, device=world_verts.device)
+    valid = torch.zeros((n_points,), dtype=torch.int32, device=world_verts.device)
     frame = query.frame_indices[0].detach().to(dtype=torch.long)
     n_views = query.points.shape[0]
     for frame_index in frame.unique().tolist():
         selected = torch.where(frame == frame_index)[0]
         cameras = [frames[frame_index][view_index] for view_index in range(n_views)]
-        matrix_world = matrices[frame_index]
         posed_verts = world_verts[frame_index]
         rays = PointRays.from_cameras(query.points[:, selected], cameras, query.in_image[:, selected])
         local_ids = torch.where(rays.valid)[0]
@@ -68,22 +70,23 @@ def bind_points(
             if winner >= 0 and count > misses and count > second:
                 pending[winner].append((point_index, rays.xyz[local_index]))
             else:
-                local[point_index] = rays.xyz[local_index]
+                anchor[point_index] = rays.xyz[local_index]
         for obj, items in pending.items():
             xyz = torch.stack([item[1] for item in items])
-            snapped_ok, snapped = closest_point(xyz, posed_verts, scene_faces[face_owner == obj], device)
-            hom_snap = torch.cat([snapped, snapped.new_ones(snapped.shape[0], 1)], dim=1)
-            snapped = torch.einsum("ij,bj->bi", torch.linalg.inv(matrix_world[obj]), hom_snap)[:, :3]
-            for (point_index, world_xyz), ok, snapped_xyz in zip(items, snapped_ok, snapped):
-                if ok.item():
-                    obj_index[point_index] = obj
-                    local[point_index] = snapped_xyz
-                else:
-                    local[point_index] = world_xyz
-    hom = torch.cat([local, local.new_ones(n_points, 1)], dim=1)
-    worlds = hom[:, :3].unsqueeze(0).expand(matrices.shape[0], -1, -1).clone()
-    bound = obj_index >= 0
+            point_indices = torch.tensor([item[0] for item in items], dtype=torch.long, device=world_verts.device)
+            obj_faces = scene_faces[face_owner == obj]
+            ok, face, uv = closest_point(xyz, posed_verts, obj_faces, device)
+            if bool(ok.any()):
+                chosen = point_indices[ok]
+                triangles[chosen] = obj_faces[face[ok].long()].long()
+                weights = uv[ok]
+                bary[chosen] = torch.cat((weights, 1 - weights.sum(dim=1, keepdim=True)), dim=1)
+            missed = ~ok
+            if bool(missed.any()):
+                anchor[point_indices[missed]] = xyz[missed]
+    worlds = anchor.unsqueeze(0).expand(n_frames, -1, -1).clone()
+    bound = triangles[:, 0] >= 0
     if bool(bound.any()):
-        posed = torch.einsum("fbij,bj->fbi", matrices[:, obj_index[bound]], hom[bound])
-        worlds[:, bound] = posed[..., :3]
+        corners = world_verts[:, triangles[bound]]
+        worlds[:, bound] = (corners * bary[bound].view(1, -1, 3, 1)).sum(dim=2)
     return worlds, valid
