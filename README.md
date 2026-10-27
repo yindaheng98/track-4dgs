@@ -16,7 +16,7 @@ The package provides three common workflows:
 - [x] Multi-timestep Gaussian Splatting camera dataset tracking
 - [x] Point batching through `--batch-size` for long tracks
 - [x] Camera dataset reordering against a selected reference timestep
-- [x] Blender rigid-mesh tracking for scenes rendered by [NVS2COLMAP](https://github.com/yindaheng98/NVS2COLMAP)
+- [x] Blender mesh tracking for scenes rendered by [NVS2COLMAP](https://github.com/yindaheng98/NVS2COLMAP)
 - [x] Supervision datasets (`tracker`, `gstracker`, `blender`) that save query, frames, and tracks
 - [ ] Port the motion estimation workflow from [TrackerSplat](https://github.com/yindaheng98/TrackerSplat) for point-tracker-driven motion synthesis
 - [ ] Regularize 3DGS training with point tracker trajectories
@@ -167,7 +167,7 @@ python -c "import track_4dgs; print(track_4dgs.get_available_point_trackers())"
 | `mvroma` | `MVRoMaPointTracker` | single-view | yes |
 | `uniflowmatch` | `UniFlowMatchPointTracker` | single-view | yes |
 | `mvtap` | `MVTAPPointTracker` | joint multi-view | no |
-| `blender` | `BlenderPointTracker` | joint rigid-mesh | no |
+| `blender` | `BlenderPointTracker` | joint mesh | no |
 
 `track1v` accepts an `AbstractViewPointTracker`. Joint trackers run through `build_dataset`. `blender` is documented in [Blender mesh tracking](#blender-mesh-tracking).
 
@@ -216,7 +216,7 @@ python -c "import track_4dgs; from track_4dgs.dataset.registry import get_availa
 
 - `tracker`: sample points uniformly inside the scene cube, keep those seen by more cameras than `--visible-cameras` (default 2), project them, and track
 - `gstracker`: sample a random subset of a trained 3DGS point cloud, then track those points
-- `blender`: render a `.blend` file from sampled cameras and track the query on its rigid meshes. See [Blender mesh tracking](#blender-mesh-tracking)
+- `blender`: render a `.blend` file from sampled cameras and track the query on its evaluated meshes. See [Blender mesh tracking](#blender-mesh-tracking)
 
 Uniform scene points:
 
@@ -254,7 +254,9 @@ Repeat `-s/--sources` to add another sample. `--load_cameras` and `--init-datase
 
 ### Blender Mesh Tracking
 
-`track_4dgs.blender` (`--tracker blender`) binds query pixels to rigid meshes in a `.blend` file and carries them with each mesh `matrix_world`. Use it together with the Blender tools in [NVS2COLMAP](https://github.com/yindaheng98/NVS2COLMAP).
+`track_4dgs.blender` (`--tracker blender`) binds query pixels to evaluated meshes in a `.blend` file and carries each hit with that triangle's barycentric coordinates.
+Armature deformation, shape keys, and other modifiers are included when the mesh topology stays fixed.
+Use it together with the Blender tools in [NVS2COLMAP](https://github.com/yindaheng98/NVS2COLMAP).
 
 [NVS2COLMAP](https://github.com/yindaheng98/NVS2COLMAP) renders that blend file into a Neural 3D Video scene (`poses_bounds.npy` and one video per camera), then `nvs2colmap.n3dv` writes one COLMAP camera dataset per frame. This tracker reads the same `.blend` file and those frame datasets. Cameras stay in the blend world, look along +Z, and treat image +Y as downward, which is the OpenCV camera NVS2COLMAP stores in `poses_bounds.npy`. Dataset frame `i` in `--sources` is Blender frame `frame_start + i * frame_step`, and that frame is at most `frame_end`. Pass the same `--frame_start`, `--frame_end`, and `--frame_step` as `nvs2colmap.blender`. `frame_start` defaults to 1. `frame_end` and `frame_step` default to the blend scene. Install NVS2COLMAP and keep a Blender executable on `PATH` as `blender`, or pass another path with `-m blender="'path/to/blender'"`. `warp-lang` is already installed with this package.
 
@@ -311,7 +313,7 @@ python -m track_4dgs.build_dataset \
     --vis-folder output/scene/track-blender-vis
 ```
 
-`build_dataset --dataset blender` can skip the COLMAP export and render supervision directly. It samples OpenCV cameras on a spherical cap, samples the query near the mesh at `--init-dataset-index`, renders every view, and binds the tracks to the rigid meshes. `--frame_start`, `--frame_end`, `--frame_step`, and `--init-dataset-index` attach to the preceding `--blend`. Repeat `--blend` for another sample.
+`build_dataset --dataset blender` can skip the COLMAP export and render supervision directly. It samples OpenCV cameras on a spherical cap, samples the query near the mesh at `--init-dataset-index`, renders every view, and binds the tracks to the evaluated meshes. `--frame_start`, `--frame_end`, `--frame_step`, and `--init-dataset-index` attach to the preceding `--blend`. Repeat `--blend` for another sample.
 
 ```shell
 python -m track_4dgs.build_dataset \
