@@ -12,13 +12,16 @@ from .tracker import AbstractPointTracker, Query, Track
 class AbstractViewPointTracker(AbstractPointTracker):
     """Point tracker that processes one camera sequence at a time."""
 
+    tqdm_position = 0
+    tqdm_leave = True
+
     def track(
             self,
             query: Query,
             frames: Sequence[CameraDataset],
             batch_size: Optional[int] = None) -> Sequence[Track]:
         view_tracks = []
-        for view_idx in tqdm(range(query.points.shape[0]), desc="Tracking views"):
+        for view_idx in tqdm(range(query.points.shape[0]), desc="Tracking views", position=self.tqdm_position, leave=self.tqdm_leave, dynamic_ncols=True):
             views = []
             frame_masks = []
             for dataset in frames:

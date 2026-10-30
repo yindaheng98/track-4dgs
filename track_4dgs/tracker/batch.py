@@ -13,6 +13,7 @@ class AbstractBatchPointTracker(AbstractPointTracker):
     """Point tracker that consumes all camera views jointly, in point batches."""
 
     tqdm_position = 0
+    tqdm_leave = True
 
     def track(
             self,
@@ -25,7 +26,7 @@ class AbstractBatchPointTracker(AbstractPointTracker):
             tracks = self.track_batch(query, frames)
         else:
             tracks: list[Sequence[Track]] = []
-            for start in tqdm(range(0, n_points, batch_size), desc="Tracking batches", position=self.tqdm_position):
+            for start in tqdm(range(0, n_points, batch_size), desc="Tracking batches", position=self.tqdm_position, leave=self.tqdm_leave, dynamic_ncols=True):
                 end = min(start + batch_size, n_points)
                 tracks.append(self.track_batch(
                     Query(
