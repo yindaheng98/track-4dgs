@@ -105,7 +105,7 @@ class BlenderPointTracker(AbstractBatchPointTracker):
     The export returns triangles and the first frame together, then one later frame at a time.
     Rays, object votes, and surface snaps run against that frame's mesh.
     A snap stores barycentric coordinates and replays them on later frames.
-    ``Track.xyz`` is those positions as ``(F, N, 3)`` blend-world coordinates, one tensor shared by every view.
+    :meth:`track_blender` returns those positions as ``worlds`` ``(F, N, 3)``, with ``valid``, ``points``, and ``visibility``.
     Every view of a point shares one query frame.
     Visibility is an any-hit test from each camera to each posed point.
     Exported frames are ``range(frame_start, frame_end + 1, frame_step)``.
@@ -171,21 +171,39 @@ class BlenderPointTracker(AbstractBatchPointTracker):
         return self
 
     @torch.no_grad()
-    def track_batch(
+    def track_blender(
             self,
             query: Query,
-            frames: Sequence[CameraDataset]) -> Sequence[Track]:
+            frames: Sequence[CameraDataset]) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Bind ``query`` to the exported meshes and project it into ``frames``.
+
+        Every view of a point must share one query frame.
+        Returns ``worlds`` ``(F, N, 3)`` blend-world coordinates, ``valid`` ``(N,)`` int,
+        ``points`` ``(V, F, N, 2)`` pixels, and ``visibility`` ``(V, F, N)``.
+        ``worlds`` is the same point on every view.
+        A point with ``valid == 0`` stays at the origin.
+        A point that does not snap keeps its triangulated position on every frame.
+        """
+
         assert torch.all(query.frame_indices == query.frame_indices[0]), (
             "every view of a point must share one frame"
         )
-        n_views, n_points, _ = query.points.shape
-        n_frames = len(frames)
-        worlds, valid, world_verts, scene_faces, face_owner = track_points(
+        worlds, valid, world_verts, scene_faces, _face_owner = track_points(
             self.verts, self.faces, query, frames, str(self.device),
         )
         points, visibility = project_visibility(
             query, frames, worlds, world_verts, scene_faces, valid, self.eps, str(self.device),
         )
+        return worlds, valid, points, visibility
+
+    @torch.no_grad()
+    def track_batch(
+            self,
+            query: Query,
+            frames: Sequence[CameraDataset]) -> Sequence[Track]:
+        n_views, n_points, _ = query.points.shape
+        n_frames = len(frames)
+        _, valid, points, visibility = self.track_blender(query, frames)
         confidence = query.points.new_ones((n_views, n_frames, n_points))
         mask = valid.to(dtype=torch.bool).expand(n_frames, n_points)
         return [
