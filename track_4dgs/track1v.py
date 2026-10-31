@@ -42,6 +42,8 @@ def draw_rainbow_tracks(
     image: torch.Tensor,
     track: Track,
     frame_idx: int,
+    line_width: int = 1,
+    point_size: int = 2,
 ) -> Image.Image:
     canvas = image_tensor_to_pil(image)
     draw = ImageDraw.Draw(canvas)
@@ -60,15 +62,15 @@ def draw_rainbow_tracks(
             if bool(valid):
                 line.append((float(point[0]), float(point[1])))
             elif len(line) > 1:
-                draw.line(line, fill=color, width=1)
+                draw.line(line, fill=color, width=line_width)
                 line = []
             else:
                 line = []
         if len(line) > 1:
-            draw.line(line, fill=color, width=1)
+            draw.line(line, fill=color, width=line_width)
 
         x, y = points[frame_idx, point_idx].tolist()
-        draw.ellipse((x - 2, y - 2, x + 2, y + 2), fill=color)
+        draw.ellipse((x - point_size, y - point_size, x + point_size, y + point_size), fill=color)
 
     return canvas
 
@@ -84,12 +86,18 @@ def sample_query(image: torch.Tensor, num_points: int) -> tuple[torch.Tensor, to
 
 
 @torch.no_grad()
-def rendering(frames: Sequence[torch.Tensor], track: Track, save: str) -> None:
+def rendering(
+    frames: Sequence[torch.Tensor],
+    track: Track,
+    save: str,
+    line_width: int = 1,
+    point_size: int = 2,
+) -> None:
     os.makedirs(save, exist_ok=True)
     print(f"Saving {track.points.shape[1]} tracked points to {save}")
 
     for frame_idx, frame in enumerate(frames):
-        canvas = draw_rainbow_tracks(frame, track, frame_idx)
+        canvas = draw_rainbow_tracks(frame, track, frame_idx, line_width=line_width, point_size=point_size)
         canvas.save(os.path.join(save, f"{frame_idx + 1:05d}.png"))
 
 
@@ -104,6 +112,8 @@ if __name__ == "__main__":
     parser.add_argument("-m", "--option_tracker", default=[], action="append", type=str)
     parser.add_argument("--num-points", default=256, type=int)
     parser.add_argument("--batch-size", default=None, type=int)
+    parser.add_argument("--line-width", default=1, type=int)
+    parser.add_argument("--point-size", default=2, type=int)
     args = parser.parse_args()
     tracker_configs = {o.split("=", 1)[0]: eval(o.split("=", 1)[1]) for o in args.option_tracker}
 
@@ -117,4 +127,4 @@ if __name__ == "__main__":
             points, frame_indices,
             frames, [None] * len(frames), batch_size=args.batch_size,
         )
-        rendering(frames, track, args.destination)
+        rendering(frames, track, args.destination, line_width=args.line_width, point_size=args.point_size)
