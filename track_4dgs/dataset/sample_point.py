@@ -13,7 +13,7 @@ from ..utils.sample import sample_uniform_xyz
 from .track_point import AbstractPointTrackerDataset
 from .group_args import AbstractGroupArgsDataset
 from .registry import register_supervision_dataset
-from .reorder import prepare_datasets
+from .reorder_camera import prepare_datasets
 
 
 @dataclass(frozen=True)
