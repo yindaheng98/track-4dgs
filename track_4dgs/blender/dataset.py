@@ -1,6 +1,7 @@
 """Build supervision by rendering stills from a blend file."""
 
 from argparse import ArgumentParser, Namespace
+from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from typing import Optional
 
@@ -11,9 +12,10 @@ from gaussian_splatting.utils import focal2fov
 
 from ..dataset.group_args import AbstractGroupArgsDataset
 from ..dataset.supervision import Supervision
-from ..tracker import Query
+from ..tracker import Query, Track
 from ..utils import sample_c2ws
-from .kernels import sample_near_surface
+from .kernels import project_visibility, sample_near_surface, track_bind_points
+from .kernels.sample import SurfaceBinding
 from .render_server import RenderServer
 from .tracker import BlenderPointTracker
 from .workers.render_server_protocol import RenderRequest
@@ -100,10 +102,10 @@ class BlenderScene:
         rgb = torch.from_numpy(np.ascontiguousarray(reply.rgb)).permute(2, 0, 1).to(device=self.device, dtype=torch.float32)
         return camera._replace(ground_truth_image=rgb)
 
-    def sample_cameras(self, tracker: BlenderPointTracker, render_server: RenderServer) -> tuple[list[Camera], list[list[Camera]]]:
+    def sample_cameras(self, tracker: BlenderPointTracker, render_server: RenderServer) -> list[list[Camera]]:
         """Sample the views and render one still per view and frame.
 
-        Returns the cameras and one still per view for each exported frame.
+        Returns one still per view for each exported frame.
         The view count may be smaller than ``n_cameras``.
         """
 
@@ -112,31 +114,57 @@ class BlenderScene:
             self.n_cameras, self.center, self.radius, self.axis,
             self.cap_angle, self.spacing, self.device)
         cameras = [self.camera(c2ws[view_index]) for view_index in range(int(c2ws.shape[0]))]
-        frames = [
+        return [
             [self.render_camera(render_server, cameras[view_index], c2ws[view_index], frame) for view_index in range(len(cameras))]
             for frame in frame_numbers
         ]
-        return cameras, frames
 
-    def sample_points(self, tracker: BlenderPointTracker, cameras: list[Camera]) -> Query:
-        """Sample a query on the init frame of ``tracker`` that ``cameras`` can see."""
+    def sample_points(self, tracker: BlenderPointTracker, frames: Sequence[list[Camera]]) -> tuple[Query, SurfaceBinding]:
+        """Sample a surface binding on the init frame and project it into ``frames``."""
 
         n_frames = tracker.n_frames
         if self.init_dataset_index >= n_frames:
             raise ValueError("--init-dataset-index must index one Blender frame")
         posed = [obj_verts[self.init_dataset_index] for obj_verts in tracker.verts]
-        xyz = sample_near_surface(
-            posed, tracker.faces, cameras,
+        binding = sample_near_surface(
+            posed, tracker.faces, frames[self.init_dataset_index],
             self.num_points, self.visible_cameras, self.inward_distance, self.outward_distance)
-        frame_indices = torch.full((xyz.shape[0],), self.init_dataset_index, dtype=torch.long, device=xyz.device)
-        return Query.from_projection(xyz, [cameras] * n_frames, frame_indices)
+        frame_indices = torch.full((binding.xyz.shape[0],), self.init_dataset_index, dtype=torch.long, device=binding.xyz.device)
+        return Query.from_projection(binding.xyz, frames, frame_indices), binding
 
-    def load(self, tracker: BlenderPointTracker, render_server: RenderServer) -> tuple[Query, list[list[Camera]]]:
-        """Sample a query on ``tracker`` and render one still per view and frame."""
+    def load(self, blender: str, render_server: RenderServer) -> tuple[Query, list[list[Camera]], list[Track]]:
+        """Render stills and replay the sampled surface binding into tracks.
 
+        The mesh export supplies posed vertices. Tracks do not call the point tracker.
+        :func:`~track_4dgs.blender.kernels.track_bind.track_bind_points` applies the packed face, barycentric weights, and normal offset on every frame.
+        :func:`~track_4dgs.blender.kernels.visibility.project_visibility` turns those world positions into pixels and occlusion.
+        Returns one :class:`~track_4dgs.tracker.tracker.Track` per view.
+        ``mask`` is true for every sampled point. ``confidence`` is one.
+        """
+
+        tracker = self.load_tracker(blender)
         with torch.no_grad():
-            cameras, frames = self.sample_cameras(tracker, render_server)
-            return self.sample_points(tracker, cameras), frames
+            frames = self.sample_cameras(tracker, render_server)
+            query, binding = self.sample_points(tracker, frames)
+            worlds, valid, world_verts, scene_faces, _face_owner = track_bind_points(
+                tracker.verts, tracker.faces, frames, binding,
+            )
+            points, visibility = project_visibility(
+                query, frames, worlds, world_verts, scene_faces, valid, tracker.eps, str(tracker.device),
+            )
+            n_views, n_frames, n_points, _ = points.shape
+            confidence = points.new_ones((n_views, n_frames, n_points))
+            mask = valid.to(dtype=torch.bool).expand(n_frames, n_points)
+            tracks = [
+                Track(
+                    points=points[view_index],
+                    visibility=visibility[view_index],
+                    confidence=confidence[view_index],
+                    mask=mask,
+                )
+                for view_index in range(n_views)
+            ]
+            return query, frames, tracks
 
 
 class BlenderDataset(AbstractGroupArgsDataset):
