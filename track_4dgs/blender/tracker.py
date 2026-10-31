@@ -10,7 +10,7 @@ import torch
 from gaussian_splatting.dataset import CameraDataset
 
 from ..tracker import AbstractBatchPointTracker, Query, Track
-from .kernels import track_points
+from .kernels import project_visibility, track_points
 from .workers import MeshFrame, MeshTopology
 
 AUTH = b"track-4dgs-export"
@@ -105,6 +105,7 @@ class BlenderPointTracker(AbstractBatchPointTracker):
     The export returns triangles and the first frame together, then one later frame at a time.
     Rays, object votes, and surface snaps run against that frame's mesh.
     A snap stores barycentric coordinates and replays them on later frames.
+    ``Track.xyz`` is those positions as ``(F, N, 3)`` blend-world coordinates, one tensor shared by every view.
     Every view of a point shares one query frame.
     Visibility is an any-hit test from each camera to each posed point.
     Exported frames are ``range(frame_start, frame_end + 1, frame_step)``.
@@ -179,8 +180,11 @@ class BlenderPointTracker(AbstractBatchPointTracker):
         )
         n_views, n_points, _ = query.points.shape
         n_frames = len(frames)
-        points, visibility, valid = track_points(
-            self.verts, self.faces, query, frames, self.eps, str(self.device),
+        worlds, valid, world_verts, scene_faces, face_owner = track_points(
+            self.verts, self.faces, query, frames, str(self.device),
+        )
+        points, visibility = project_visibility(
+            query, frames, worlds, world_verts, scene_faces, valid, self.eps, str(self.device),
         )
         confidence = query.points.new_ones((n_views, n_frames, n_points))
         mask = valid.to(dtype=torch.bool).expand(n_frames, n_points)

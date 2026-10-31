@@ -1,4 +1,4 @@
-"""Track query pixels across evaluated Blender meshes."""
+"""Bind query pixels to evaluated Blender meshes."""
 
 from collections.abc import Sequence
 
@@ -7,7 +7,6 @@ from gaussian_splatting.dataset import CameraDataset
 
 from ...tracker import Query
 from .bind import bind_points
-from .visibility import project_visibility
 
 
 def scene_vertices(verts: Sequence[torch.Tensor]) -> torch.Tensor:
@@ -58,16 +57,20 @@ def track_points(
         faces: Sequence[torch.Tensor],
         query: Query,
         frames: Sequence[CameraDataset],
-        eps: float,
-        device: str) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    """Bind query pixels to the evaluated scene and project them into every camera.
+        device: str) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Bind query pixels to the evaluated scene.
 
     ``verts`` lists per-object ``(F, V_i, 3)`` world positions in export order.
     ``faces`` lists per-object ``(T_i, 3)`` triangles into those vertices.
     Vertex count and triangle indices stay fixed across ``F``.
     ``device`` is a Warp device name.
-    ``eps`` is the visibility depth tolerance in world units.
-    Returns ``points`` ``(V, F, N, 2)``, ``visibility`` ``(V, F, N)``, and ``valid`` ``(N,)`` int.
+    Returns ``worlds`` ``(F, N, 3)``, ``valid`` ``(N,)`` int, ``world_verts`` ``(F, P, 3)``,
+    ``scene_faces`` ``(T, 3)``, and ``face_owner`` ``(T,)`` long.
+    ``worlds`` is the bound point in blend world coordinates, the same on every view.
+    A point with ``valid == 0`` stays at the origin.
+    A point that does not snap keeps its triangulated position on every frame.
+    ``world_verts`` and ``scene_faces`` are the posed scene those points were bound to.
+    ``face_owner`` is the object index of each triangle in ``scene_faces``.
     """
     n_frames = len(frames)
     scene_faces, face_owner = pack_object_faces([obj_verts[0] for obj_verts in verts], faces)
@@ -81,7 +84,4 @@ def track_points(
     worlds, valid = bind_points(
         world_verts, scene_faces, face_owner, query, frames, device,
     )
-    points, visibility = project_visibility(
-        query, frames, worlds, world_verts, scene_faces, valid, eps, device,
-    )
-    return points, visibility, valid
+    return worlds, valid, world_verts, scene_faces, face_owner
