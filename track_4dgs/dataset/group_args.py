@@ -1,6 +1,7 @@
 """Shared arguments plus optional repeated groups."""
 
 from abc import abstractmethod
+from typing import Self
 
 from .dataset import AbstractDataset
 
@@ -50,12 +51,12 @@ class AbstractGroupArgsDataset(AbstractDataset):
 
     @classmethod
     @abstractmethod
-    def from_args(cls, common_args, *group_args) -> 'AbstractGroupArgsDataset':
+    def from_args(cls, common_args, *group_args) -> Self:
         """Build this dataset from the shared namespace and one namespace per group."""
         raise NotImplementedError
 
     @classmethod
-    def from_argv(cls, argv: list[str] = []) -> tuple['AbstractGroupArgsDataset', list[str]]:
+    def from_argv(cls, argv: list[str] = []) -> tuple[Self, list[str]]:
         """Parse groups, then the shared arguments left over, and call :meth:`from_args`.
 
         The second value is the unrecognized remainder of ``argv``.
