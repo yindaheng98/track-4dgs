@@ -6,11 +6,12 @@ from .d4rt import D4RTPointTracker
 from .matcha import MatchaPointTracker
 from .mvroma import MVRoMaPointTracker
 from .ufm import UniFlowMatchPointTracker
-from .blender import BlenderPointTracker
-from .blender.dataset import BlenderScene, BlenderDataset
+from .blender import BlenderPointTracker, BlenderScene, BlenderDataset
 from .dataset import AbstractDataset, AbstractGroupArgsDataset, SavedDataset, Supervision
-from .dataset import AbstractPointTrackerDataset, SamplePointTrackerDataset, GaussianSplattingPointTrackerDataset
+from .dataset import AbstractPointTrackerDataset, PointSampleSpec, SamplePointSpec, SamplePointTrackerDataset
+from .dataset import GaussianPointSampleSpec, GaussianSplattingPointTrackerDataset
 from .dataset import TrackedCameraDataset, CameraDatasetTracker, build_camera_dataset_tracker, prepare_datasets
+from .dataset import register_supervision_dataset, get_available_supervision_datasets, get_supervision_dataset
 from .registry import register_point_tracker, get_available_point_trackers, build_point_tracker
 from .tracker import Query, Track, AbstractPointTracker
 from .tracker import AbstractViewPointTracker, AbstractBatchPointTracker
@@ -21,11 +22,13 @@ __all__ = [
     "AbstractViewPointTracker", "AbstractBatchPointTracker",
     "CameraTrack", "TrackedCameraDataset", "CameraDatasetTracker",
     "register_point_tracker", "get_available_point_trackers", "build_point_tracker",
+    "register_supervision_dataset", "get_available_supervision_datasets", "get_supervision_dataset",
     "build_camera_dataset_tracker", "prepare_datasets",
     "Cotracker3PointTracker", "VGGTPointTracker", "VGGSfMPointTracker",
     "MVTAPPointTracker", "D4RTPointTracker", "MatchaPointTracker",
     "MVRoMaPointTracker", "UniFlowMatchPointTracker", "BlenderPointTracker",
     "AbstractDataset", "AbstractGroupArgsDataset", "SavedDataset", "Supervision",
-    "AbstractPointTrackerDataset", "SamplePointTrackerDataset", "GaussianSplattingPointTrackerDataset",
+    "AbstractPointTrackerDataset", "PointSampleSpec", "SamplePointSpec", "SamplePointTrackerDataset",
+    "GaussianPointSampleSpec", "GaussianSplattingPointTrackerDataset",
     "BlenderScene", "BlenderDataset",
 ]
