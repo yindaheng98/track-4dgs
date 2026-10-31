@@ -1,4 +1,4 @@
-"""Any-hit visibility from cameras to world points."""
+"""Camera-to-point visibility on a posed triangle mesh."""
 
 from collections.abc import Sequence
 
@@ -15,23 +15,22 @@ def ray_visibility_kernel(
         mesh: wp.uint64,
         origins: wp.array(dtype=wp.vec3),
         points: wp.array(dtype=wp.vec3),
-        valid: wp.array(dtype=wp.int32),
-        eps: float,
         n_points: int,
-        out: wp.array(dtype=wp.float32)):
+        hit_face: wp.array(dtype=wp.int32),
+        hit_distance: wp.array(dtype=wp.float32)):
     tid = wp.tid()
     point = tid % n_points
     view = tid // n_points
-    if valid[point] == 0:
-        out[tid] = 0.0
-        return
     delta = points[point] - origins[view]
     dist = wp.length(delta)
-    if dist <= eps:
-        out[tid] = 1.0
+    hit_face[tid] = -1
+    hit_distance[tid] = dist
+    if dist <= 0.0:
         return
-    hit = wp.mesh_query_ray_anyhit(mesh, origins[view], delta / dist, dist - eps)
-    out[tid] = 0.0 if hit else 1.0
+    query = wp.mesh_query_ray(mesh, origins[view], delta / dist, dist)
+    if query.result:
+        hit_face[tid] = query.face
+        hit_distance[tid] = query.t
 
 
 def ray_visibility(
@@ -40,17 +39,20 @@ def ray_visibility(
         world_verts: torch.Tensor,
         faces: torch.Tensor,
         device: str,
-        eps: float,
-        valid: torch.Tensor) -> torch.Tensor:
+        occlusion_eps: float,
+        valid: torch.Tensor,
+        ignore_face: torch.Tensor | None = None) -> torch.Tensor:
     """Return ``(V, N)`` visibility in ``{0, 1}``.
 
     ``camera_centers`` is ``(V, 3)`` camera centers.
     ``points`` is ``(N, 3)`` world points.
     ``world_verts`` is ``(P, 3)`` posed vertices, and ``faces`` is ``(T, 3)`` int32 triangles into those vertices.
     ``device`` is a Warp device name such as ``cpu`` or ``cuda``.
-    ``eps`` is the depth tolerance in world units.
+    ``occlusion_eps`` is the occlusion depth tolerance in world units.
     ``valid`` is ``(N,)`` int, and nonzero entries are the points to test.
-    A point is visible when the camera-to-point segment does not hit the mesh before ``distance - eps``.
+    ``ignore_face`` is ``(N,)`` int. Negative entries exempt nothing. The default exempts nothing.
+    The closest hit does not occlude when its face is ``ignore_face`` or it lies within ``occlusion_eps`` of the point.
+    Triangles behind that hit are not tested.
     ``valid == 0`` points are invisible.
     No faces, or a frame with no posed vertices, reports every nonzero ``valid`` point as visible.
     The result stays on the device of the inputs.
@@ -63,12 +65,17 @@ def ray_visibility(
     camera_centers = camera_centers.contiguous()
     points = points.contiguous()
     valid = valid.contiguous()
+    if ignore_face is None:
+        ignore_face = torch.full((n_points,), -1, dtype=torch.int32, device=points.device)
+    else:
+        ignore_face = ignore_face.to(device=points.device, dtype=torch.int32).reshape(-1).contiguous()
     wp.init()
     mesh = wp.Mesh(
         points=wp.from_torch(world_verts, dtype=wp.vec3),
         indices=wp.from_torch(faces, dtype=wp.int32),
     )
-    visible = wp.zeros(n_views * n_points, dtype=wp.float32, device=device)
+    hit_face = wp.empty(n_views * n_points, dtype=wp.int32, device=device)
+    hit_distance = wp.empty(n_views * n_points, dtype=wp.float32, device=device)
     wp.launch(
         ray_visibility_kernel,
         dim=n_views * n_points,
@@ -76,14 +83,19 @@ def ray_visibility(
             mesh.id,
             wp.from_torch(camera_centers, dtype=wp.vec3),
             wp.from_torch(points, dtype=wp.vec3),
-            wp.from_torch(valid, dtype=wp.int32),
-            float(eps),
             n_points,
         ],
-        outputs=[visible],
+        outputs=[hit_face, hit_distance],
         device=device,
     )
-    return wp.to_torch(visible).reshape(n_views, n_points)
+    face = wp.to_torch(hit_face).reshape(n_views, n_points)
+    distance = wp.to_torch(hit_distance).reshape(n_views, n_points)
+    point_distance = torch.linalg.norm(points - camera_centers[:, None, :], dim=-1)
+    near_point = point_distance - distance <= occlusion_eps
+    ignored = face == ignore_face.view(1, -1)
+    visible = (face < 0) | ignored | near_point
+    visible = visible & valid.to(dtype=torch.bool).view(1, -1)
+    return visible.to(dtype=points.dtype)
 
 
 def project_visibility(
@@ -93,15 +105,18 @@ def project_visibility(
         world_verts: torch.Tensor,
         scene_faces: torch.Tensor,
         valid: torch.Tensor,
-        eps: float,
-        device: str) -> tuple[torch.Tensor, torch.Tensor]:
+        occlusion_eps: float,
+        device: str,
+        ignore_face: torch.Tensor | None = None) -> tuple[torch.Tensor, torch.Tensor]:
     """Project posed points and combine occlusion with the camera frustum.
 
     ``worlds`` is ``(F, N, 3)`` in blend world coordinates.
     ``world_verts`` is ``(F, P, 3)`` and ``scene_faces`` is ``(T, 3)`` into those vertices.
     ``valid`` is ``(N,)`` and is nonzero for points that were sent to binding.
     ``device`` is a Warp device name.
-    ``eps`` is the depth tolerance in world units.
+    ``occlusion_eps`` is the occlusion depth tolerance in world units.
+    ``ignore_face`` is an optional ``(N,)`` int passed to :func:`ray_visibility`.
+    The default counts every triangle as an occluder.
     Returns ``points`` ``(V, F, N, 2)`` pixels and ``visibility`` ``(V, F, N)``.
     A point is visible when the camera-to-point segment is unoccluded and :func:`project_points` places it in the image.
     """
@@ -116,7 +131,7 @@ def project_visibility(
             for view_index in range(n_views)
         ])
         ray_visible = ray_visibility(
-            centers, worlds[frame_index], world_verts[frame_index], scene_faces, device, eps, valid,
+            centers, worlds[frame_index], world_verts[frame_index], scene_faces, device, occlusion_eps, valid, ignore_face,
         )
         for view_index in range(n_views):
             camera = dataset[view_index]

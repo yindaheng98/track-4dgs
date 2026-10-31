@@ -116,18 +116,18 @@ class BlenderPointTracker(AbstractBatchPointTracker):
     ``frame_start`` defaults to 1.
     ``frame_end`` and ``frame_step`` default to the blend scene.
     Cameras use the blend world, look along +Z, and treat image +Y as downward.
-    ``eps`` is the visibility depth tolerance in world units.
+    ``occlusion_eps`` is the occlusion depth tolerance in world units.
     """
 
     def __init__(
             self,
             blend: str,
             blender: str = "blender",
-            eps: float = 1e-2,
+            occlusion_eps: float = 1e-2,
             frame_start: int = 1,
             frame_end: Optional[int] = None,
             frame_step: Optional[int] = None):
-        self.eps = eps
+        self.occlusion_eps = occlusion_eps
         self.device = torch.device("cpu")
         self.load_frames(blend, blender, frame_start, frame_end, frame_step)
 
@@ -192,7 +192,7 @@ class BlenderPointTracker(AbstractBatchPointTracker):
             self.verts, self.faces, query, frames, str(self.device),
         )
         points, visibility = project_visibility(
-            query, frames, worlds, world_verts, scene_faces, valid, self.eps, str(self.device),
+            query, frames, worlds, world_verts, scene_faces, valid, self.occlusion_eps, str(self.device),
         )
         return worlds, valid, points, visibility
 

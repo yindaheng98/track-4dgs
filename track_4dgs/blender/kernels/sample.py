@@ -4,9 +4,11 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 import torch
+from gaussian_splatting.camera import Camera
 
 from ...utils import project_points
 from .track import pack_object_faces, scene_vertices
+from .visibility import ray_visibility
 
 
 @dataclass(frozen=True)
@@ -29,11 +31,13 @@ class SurfaceBinding:
 def sample_near_surface(
         verts: Sequence[torch.Tensor],
         faces: Sequence[torch.Tensor],
-        cameras: Sequence,
+        cameras: Sequence[Camera],
         num_points: int,
         visible_cameras: int,
         inward_distance: float,
-        outward_distance: float) -> SurfaceBinding:
+        outward_distance: float,
+        occlusion_eps: float,
+        device: str) -> SurfaceBinding:
     """Sample ``num_points`` in a band around one frame of the mesh.
 
     ``verts`` lists world-space ``(V_i, 3)`` vertices in export order.
@@ -41,7 +45,12 @@ def sample_near_surface(
     A point on the chosen triangle uses barycentric weights ``(1 - r1, r1 * (1 - r2), r1 * r2)`` with ``r1 = sqrt(u)``.
     It is then moved along the outward face normal by a uniform offset in ``[-inward_distance, outward_distance]``.
     A negative offset goes inward.
-    A point is kept only when it projects into more cameras than ``visible_cameras``.
+    A point is kept only when more cameras than ``visible_cameras`` see it.
+    A camera sees it when the point projects into the image and the closest hit on the camera-to-point segment is not occlusion.
+    That hit is not occlusion when it is the bound triangle or lies within ``occlusion_eps`` of the point.
+    Triangles behind that hit are not tested.
+    Candidates are drawn again until ``num_points`` survive.
+    ``occlusion_eps`` is that occlusion depth tolerance in world units, and ``device`` is a Warp device name.
     The returned binding stores the packed face, the barycentric weights, and that signed offset.
     The draw is fixed by seed 42.
     """
@@ -62,6 +71,11 @@ def sample_near_surface(
     picked_face = torch.empty((0,), dtype=torch.long, device=world.device)
     picked_bary = torch.empty((0, 3), dtype=world.dtype, device=world.device)
     picked_offset = torch.empty((0,), dtype=world.dtype, device=world.device)
+    centers = torch.stack([
+        cameras[view].camera_center.detach().to(device=world.device, dtype=world.dtype)
+        for view in range(n_views)
+    ])
+    valid = torch.ones(num_points, dtype=torch.int32, device=world.device)
     generator = torch.Generator(device=world.device).manual_seed(42)
     while picked_xyz.shape[0] < num_points:
         choice = torch.multinomial(probabilities, num_points, replacement=True, generator=generator)
@@ -71,10 +85,12 @@ def sample_near_surface(
         point = (barycentric[:, :, None] * triangles[choice]).sum(dim=1)
         offset = torch.rand(num_points, device=world.device, generator=generator) * (inward_distance + outward_distance) - inward_distance
         xyz = point + normal[choice] * offset[:, None]
+        ray_visible = ray_visibility(centers, xyz, world, scene_faces, device, occlusion_eps, valid, choice)
         count = torch.zeros(num_points, dtype=torch.long, device=world.device)
         for view in range(n_views):
             _, in_frustum = project_points(xyz, cameras[view])
-            count += in_frustum.to(dtype=torch.long)
+            seen = ray_visible[view] * in_frustum.to(dtype=ray_visible.dtype)
+            count += seen.to(dtype=torch.long)
         keep = count > visible_cameras
         picked_xyz = torch.cat([picked_xyz, xyz[keep]], dim=0)
         picked_face = torch.cat([picked_face, choice[keep]], dim=0)
