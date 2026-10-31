@@ -37,7 +37,8 @@ def sample_near_surface(
         inward_distance: float,
         outward_distance: float,
         occlusion_eps: float,
-        device: str) -> SurfaceBinding:
+        device: str,
+        max_reject_draws: int = 16) -> SurfaceBinding:
     """Sample ``num_points`` in a band around one frame of the mesh.
 
     ``verts`` lists world-space ``(V_i, 3)`` vertices in export order.
@@ -50,6 +51,8 @@ def sample_near_surface(
     That hit is not occlusion when it is the bound triangle or lies within ``occlusion_eps`` of the point.
     Triangles behind that hit are not tested.
     Candidates are drawn again until ``num_points`` survive.
+    ``max_reject_draws`` draws in a row that keep nothing raise ``ValueError``. It defaults to 16.
+    That happens when the faces seen by more than ``visible_cameras`` cameras cannot supply the sample.
     ``occlusion_eps`` is that occlusion depth tolerance in world units, and ``device`` is a Warp device name.
     The returned binding stores the packed face, the barycentric weights, and that signed offset.
     The draw is fixed by seed 42.
@@ -67,6 +70,8 @@ def sample_near_surface(
         raise ValueError("--visible-cameras must be smaller than the number of cameras")
     if inward_distance < 0 or outward_distance < 0:
         raise ValueError("inward_distance and outward_distance must be non-negative")
+    if max_reject_draws < 1:
+        raise ValueError("max_reject_draws must be positive")
     picked_xyz = torch.empty((0, 3), dtype=world.dtype, device=world.device)
     picked_face = torch.empty((0,), dtype=torch.long, device=world.device)
     picked_bary = torch.empty((0, 3), dtype=world.dtype, device=world.device)
@@ -77,6 +82,7 @@ def sample_near_surface(
     ])
     valid = torch.ones(num_points, dtype=torch.int32, device=world.device)
     generator = torch.Generator(device=world.device).manual_seed(42)
+    draws_without_keep = 0
     while picked_xyz.shape[0] < num_points:
         choice = torch.multinomial(probabilities, num_points, replacement=True, generator=generator)
         r1 = torch.rand(num_points, device=world.device, generator=generator).sqrt()
@@ -92,6 +98,14 @@ def sample_near_surface(
             seen = ray_visible[view] * in_frustum.to(dtype=ray_visible.dtype)
             count += seen.to(dtype=torch.long)
         keep = count > visible_cameras
+        if not bool(keep.any()):
+            draws_without_keep += 1
+            if draws_without_keep >= max_reject_draws:
+                raise ValueError(
+                    f"kept {picked_xyz.shape[0]} points seen by more than {visible_cameras} cameras "
+                    f"after {max_reject_draws} draws kept nothing; {num_points} were requested")
+            continue
+        draws_without_keep = 0
         picked_xyz = torch.cat([picked_xyz, xyz[keep]], dim=0)
         picked_face = torch.cat([picked_face, choice[keep]], dim=0)
         picked_bary = torch.cat([picked_bary, barycentric[keep]], dim=0)
