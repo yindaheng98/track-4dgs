@@ -27,9 +27,11 @@ BLENDER_FROM_OPENCV = np.diag([1.0, -1.0, -1.0, 1.0]).astype(np.float64)
 class BlenderScene:
     """One blend file and how to film it.
 
-    Construction records the arguments. :meth:`load_tracker` exports the mesh.
-    :meth:`sample_cameras` renders the stills. :meth:`sample_points` draws the query.
-    :meth:`load` returns both.
+    This is not a :class:`~track_4dgs.dataset.track_point.PointSampleSpec`.
+    :meth:`load` returns the query, the stills, and the tracks of the sampled surface binding together.
+    A :class:`~track_4dgs.dataset.track_point.PointSampleSpec` returns only a query and frames for a tracker.
+
+    Construction records the arguments.
     """
 
     blend: str
@@ -140,8 +142,10 @@ class BlenderScene:
 class BlenderDataset(AbstractGroupArgsDataset):
     """One deferred blend per ``--blend``.
 
-    :meth:`from_args` records specs. :meth:`__getitem__` exports that blend,
-    renders its stills, and tracks the query with the same mesh.
+    This is not an :class:`~track_4dgs.dataset.track_point.AbstractPointTrackerDataset`.
+    :meth:`__getitem__` replays the sampled surface binding. It does not call ``tracker(query, frames)``.
+
+    :meth:`from_args` records specs.
     """
 
     arg_group_starters = ("--blend",)
@@ -248,7 +252,5 @@ class BlenderDataset(AbstractGroupArgsDataset):
         scene = self.scenes[index]
         if self.device is not None:
             scene = replace(scene, device=self.device)
-        tracker = scene.load_tracker(self.blender)
-        query, frames = scene.load(tracker, self.render_server)
-        tracks = tracker(query, frames)
+        query, frames, tracks = scene.load(self.blender, self.render_server)
         return Supervision(query=query, frames=frames, tracks=tracks)
