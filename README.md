@@ -211,7 +211,7 @@ python -m track_4dgs.track1v \
 List the dataset names:
 
 ```shell
-python -c "import track_4dgs; from track_4dgs.dataset.registry import get_available_supervision_datasets; print(get_available_supervision_datasets())"
+python -c "import track_4dgs; print(track_4dgs.get_available_supervision_datasets())"
 ```
 
 - `tracker`: sample points uniformly inside the scene cube, keep those seen by more cameras than `--visible-cameras` (default 2), project them, and track

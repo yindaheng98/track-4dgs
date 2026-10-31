@@ -9,7 +9,7 @@ from gaussian_splatting.dataset import CameraDataset
 
 from ..registry import build_point_tracker, get_available_point_trackers
 from ..tracker import AbstractPointTracker, Query
-from ..utils.sample import sample_uniform_xyz
+from ..utils import sample_uniform_xyz
 from .track_point import AbstractPointTrackerDataset
 from .group_args import AbstractGroupArgsDataset
 from .registry import register_supervision_dataset

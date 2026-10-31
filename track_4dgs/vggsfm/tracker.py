@@ -5,7 +5,7 @@ import torch
 from vggt.dependency.vggsfm_tracker import TrackerPredictor
 
 from track_4dgs.tracker import AbstractViewPointTracker, Track
-from track_4dgs.vggt.tracker import padding_square, points_from_square, points_to_square
+from track_4dgs.vggt import padding_square, points_from_square, points_to_square
 
 
 def calculate_index_mappings(query_index: int, frame_num: int, device=None) -> torch.Tensor:

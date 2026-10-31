@@ -2,8 +2,7 @@ import os
 
 import torch
 
-from track_4dgs.dataset import AbstractDataset, SavedDataset
-from track_4dgs.dataset.registry import get_available_supervision_datasets, get_supervision_dataset
+from track_4dgs.dataset import AbstractDataset, SavedDataset, get_available_supervision_datasets, get_supervision_dataset
 from track_4dgs.track1v import draw_rainbow_tracks
 
 

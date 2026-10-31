@@ -4,7 +4,7 @@ import subprocess
 from multiprocessing.connection import Listener
 from pathlib import Path
 
-from .workers.render_server_protocol import RenderReply, RenderRequest
+from .workers import RenderReply, RenderRequest
 
 AUTH = b"track-4dgs-render"  # same as in workers/render_server.py
 

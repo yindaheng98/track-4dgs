@@ -10,14 +10,13 @@ import torch
 from gaussian_splatting.camera import Camera, build_camera
 from gaussian_splatting.utils import focal2fov
 
-from ..dataset.group_args import AbstractGroupArgsDataset
-from ..dataset.supervision import Supervision
+from ..dataset import AbstractGroupArgsDataset, Supervision
 from ..tracker import Query, Track
 from ..utils import sample_c2ws
 from .kernels import SurfaceBinding, project_visibility, sample_near_surface, track_bind_points
 from .render_server import RenderServer
 from .tracker import BlenderPointTracker
-from .workers.render_server_protocol import RenderRequest
+from .workers import RenderRequest
 
 
 # OpenCV camera (+Z forward, +Y down) to Blender camera (-Z forward, +Y up).
@@ -28,9 +27,9 @@ BLENDER_FROM_OPENCV = np.diag([1.0, -1.0, -1.0, 1.0]).astype(np.float64)
 class BlenderScene:
     """One blend file and how to film it.
 
-    This is not a :class:`~track_4dgs.dataset.track_point.PointSampleSpec`.
+    This is not a :class:`~track_4dgs.dataset.PointSampleSpec`.
     :meth:`load` returns the query, the stills, and the tracks of the sampled surface binding together.
-    A :class:`~track_4dgs.dataset.track_point.PointSampleSpec` returns only a query and frames for a tracker.
+    A :class:`~track_4dgs.dataset.PointSampleSpec` returns only a query and frames for a tracker.
 
     Construction records the arguments.
     """
