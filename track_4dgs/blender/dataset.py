@@ -48,7 +48,8 @@ class BlenderScene:
     spacing: tuple[float, float]
     num_points: int
     visible_cameras: int = 0
-    surface_distance: float = 0.0
+    inward_distance: float = 0.0
+    outward_distance: float = 0.0
     device: str = "cuda"
 
     def __post_init__(self):
@@ -56,6 +57,8 @@ class BlenderScene:
             raise ValueError("frame_step must not be 0")
         if self.height <= 0 or self.width <= 0 or self.focal <= 0:
             raise ValueError("height, width, and focal must be positive")
+        if self.inward_distance < 0 or self.outward_distance < 0:
+            raise ValueError("inward and outward distances must be non-negative")
         if self.init_dataset_index < 0:
             raise ValueError("--init-dataset-index must index one Blender frame")
         if self.frame_end is not None and self.frame_step is not None:
@@ -122,7 +125,7 @@ class BlenderScene:
         posed = [obj_verts[self.init_dataset_index] for obj_verts in tracker.verts]
         xyz = sample_near_surface(
             posed, tracker.faces, cameras,
-            self.num_points, self.visible_cameras, self.surface_distance)
+            self.num_points, self.visible_cameras, self.inward_distance, self.outward_distance)
         frame_indices = torch.full((xyz.shape[0],), self.init_dataset_index, dtype=torch.long, device=xyz.device)
         return Query.from_projection(xyz, [cameras] * n_frames, frame_indices)
 
@@ -174,7 +177,8 @@ class BlenderDataset(AbstractGroupArgsDataset):
         parser.add_argument("--device", default="cuda", type=str)
         parser.add_argument("--num-points", default=256, type=int)
         parser.add_argument("--visible-cameras", default=0, type=int, help="Keep a point only when more cameras than this see it.")
-        parser.add_argument("--surface-distance", default=0.0, type=float, help="Half-width of the band around the mesh, in world units.")
+        parser.add_argument("--inward-distance", default=0.0, type=float, help="How far points may move into the mesh along the face normal, in world units.")
+        parser.add_argument("--outward-distance", default=0.0, type=float, help="How far points may move out of the mesh along the face normal, in world units.")
         parser.add_argument("--blender", default="blender", type=str)
         return parser
 
@@ -201,7 +205,8 @@ class BlenderDataset(AbstractGroupArgsDataset):
             spacing=tuple(common_args.spacing),
             num_points=common_args.num_points,
             visible_cameras=common_args.visible_cameras,
-            surface_distance=common_args.surface_distance,
+            inward_distance=common_args.inward_distance,
+            outward_distance=common_args.outward_distance,
             device=common_args.device,
         )
 

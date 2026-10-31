@@ -14,11 +14,13 @@ def sample_near_surface(
         cameras: Sequence,
         num_points: int,
         visible_cameras: int,
-        distance: float) -> torch.Tensor:
+        inward_distance: float,
+        outward_distance: float) -> torch.Tensor:
     """Sample ``num_points`` in a band around one frame of the mesh.
 
     ``verts`` lists world-space ``(V_i, 3)`` vertices in export order.
-    Triangles are drawn with probability proportional to area, then each point is moved along the face normal by a uniform offset in ``[-distance, distance]``.
+    Triangles are drawn with probability proportional to area, then each point is moved along the face normal by a uniform offset in ``[-inward_distance, outward_distance]``.
+    The normal points out of the mesh, so a negative offset goes inward.
     A point is kept only when it projects into more cameras than ``visible_cameras``.
     The draw is fixed by seed 42.
     """
@@ -33,6 +35,8 @@ def sample_near_surface(
     n_views = len(cameras)
     if visible_cameras >= n_views:
         raise ValueError("--visible-cameras must be smaller than the number of cameras")
+    if inward_distance < 0 or outward_distance < 0:
+        raise ValueError("inward_distance and outward_distance must be non-negative")
     picked = torch.empty((0, 3), dtype=world.dtype, device=world.device)
     generator = torch.Generator(device=world.device).manual_seed(42)
     while picked.shape[0] < num_points:
@@ -41,7 +45,7 @@ def sample_near_surface(
         r2 = torch.rand(num_points, device=world.device, generator=generator)
         barycentric = torch.stack([1 - r1, r1 * (1 - r2), r1 * r2], dim=-1)
         point = (barycentric[:, :, None] * triangles[choice]).sum(dim=1)
-        offset = (torch.rand(num_points, 1, device=world.device, generator=generator) * 2 - 1) * distance
+        offset = torch.rand(num_points, 1, device=world.device, generator=generator) * (inward_distance + outward_distance) - inward_distance
         xyz = point + normal[choice] * offset
         count = torch.zeros(num_points, dtype=torch.long, device=world.device)
         for view in range(n_views):
