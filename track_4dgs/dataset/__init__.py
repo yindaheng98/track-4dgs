@@ -2,7 +2,7 @@ from .dataset import AbstractDataset, AbstractPointTrackerDataset, PointSampleSp
 from .group_args import AbstractGroupArgsDataset
 from .saved import SavedDataset
 from .supervision import Supervision
-from .tracker import SamplePointTrackerDataset
+from .sample_point import SamplePointTrackerDataset
 from .gstracker import GaussianSplattingPointTrackerDataset, query_views_from_gaussians
 from .tracker_camera_dataset import TrackedCameraDataset, CameraDatasetTracker, build_camera_dataset_tracker
 from .reorder import ReorderedCameraDataset, prepare_datasets

@@ -12,7 +12,7 @@ from gaussian_splatting.prepare import prepare_gaussians
 
 from ..tracker import Query
 from .registry import register_supervision_dataset
-from .tracker import SamplePointSpec, SamplePointTrackerDataset
+from .sample_point import SamplePointSpec, SamplePointTrackerDataset
 
 
 def query_views_from_gaussians(
