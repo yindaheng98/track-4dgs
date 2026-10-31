@@ -1,5 +1,5 @@
 from .dataset import AbstractDataset
-from .point_tracker import AbstractPointTrackerDataset, PointSampleSpec
+from .track_point import AbstractPointTrackerDataset, PointSampleSpec
 from .group_args import AbstractGroupArgsDataset
 from .saved import SavedDataset
 from .supervision import Supervision
