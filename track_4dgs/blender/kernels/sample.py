@@ -38,11 +38,16 @@ def sample_near_surface(
         outward_distance: float,
         occlusion_eps: float,
         device: str,
+        face_mask: torch.Tensor | None = None,
         max_reject_draws: int = 16) -> SurfaceBinding:
     """Sample ``num_points`` in a band around one frame of the mesh.
 
     ``verts`` lists world-space ``(V_i, 3)`` vertices in export order.
-    Triangles are drawn with probability proportional to area.
+    ``verts`` and ``faces`` are the complete occluding scene.
+    ``face_mask`` is an optional ``(T,)`` bool, one entry per triangle from :func:`~track_4dgs.blender.kernels.track.pack_object_faces`.
+    ``True`` allows that triangle to be sampled. ``None`` samples every packed face.
+    A selection with no positive area raises ``ValueError``.
+    Triangles are drawn with probability proportional to area, using only the selected faces.
     A point on the chosen triangle uses barycentric weights ``(1 - r1, r1 * (1 - r2), r1 * r2)`` with ``r1 = sqrt(u)``.
     It is then moved along the outward face normal by a uniform offset in ``[-inward_distance, outward_distance]``.
     A negative offset goes inward.
@@ -54,17 +59,26 @@ def sample_near_surface(
     ``max_reject_draws`` draws in a row that keep nothing raise ``ValueError``. It defaults to 16.
     That happens when the faces seen by more than ``visible_cameras`` cameras cannot supply the sample.
     ``occlusion_eps`` is that occlusion depth tolerance in world units, and ``device`` is a Warp device name.
-    The returned binding stores the packed face, the barycentric weights, and that signed offset.
+    The returned binding stores the packed complete-scene face, the barycentric weights, and that signed offset.
+    Visibility rays test every packed face. The chosen face is ignored as an occluder.
     The draw is fixed by seed 42.
     """
     world = scene_vertices(verts)
     scene_faces, _ = pack_object_faces(verts, faces)
     triangles = world[scene_faces.long()]
     edges = torch.cross(triangles[:, 1] - triangles[:, 0], triangles[:, 2] - triangles[:, 0], dim=-1)
-    length = edges.norm(dim=-1).clamp_min(1e-12)
+    raw_length = edges.norm(dim=-1)
+    length = raw_length.clamp_min(1e-12)
     normal = edges / length.unsqueeze(-1)
     area = length * 0.5
-    probabilities = area / area.sum()
+    if face_mask is None:
+        probabilities = area / area.sum()
+    else:
+        selected = face_mask.to(device=raw_length.device)
+        if raw_length[selected].sum() == 0:
+            raise ValueError("face_mask selects no triangle with positive area")
+        selected_area = area.masked_fill(~selected, 0)
+        probabilities = selected_area / selected_area.sum()
     n_views = len(cameras)
     if visible_cameras >= n_views:
         raise ValueError("--visible-cameras must be smaller than the number of cameras")

@@ -22,7 +22,7 @@ py_modules = ["track_4dgs.matcha.utils.category_list"]
 
 setup(
     name="track_4dgs",
-    version="1.6.6",
+    version="1.6.7",
     author="yindaheng98",
     author_email="yindaheng98@gmail.com",
     url="https://github.com/yindaheng98/track-4dgs",
