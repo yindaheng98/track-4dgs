@@ -46,6 +46,7 @@ def sample_near_surface(
     ``verts`` and ``faces`` are the complete occluding scene.
     ``face_mask`` is an optional ``(T,)`` bool, one entry per triangle from :func:`~track_4dgs.blender.kernels.track.pack_object_faces`.
     ``True`` allows that triangle to be sampled. ``None`` samples every packed face.
+    Any other shape or dtype fails an assertion.
     A selection with no positive area raises ``ValueError``.
     Triangles are drawn with probability proportional to area, using only the selected faces.
     A point on the chosen triangle uses barycentric weights ``(1 - r1, r1 * (1 - r2), r1 * r2)`` with ``r1 = sqrt(u)``.
@@ -74,6 +75,9 @@ def sample_near_surface(
     if face_mask is None:
         probabilities = area / area.sum()
     else:
+        assert face_mask.shape == raw_length.shape and face_mask.dtype == torch.bool, (
+            "face_mask must be a (T,) bool, one entry per packed triangle"
+        )
         selected = face_mask.to(device=raw_length.device)
         if raw_length[selected].sum() == 0:
             raise ValueError("face_mask selects no triangle with positive area")
