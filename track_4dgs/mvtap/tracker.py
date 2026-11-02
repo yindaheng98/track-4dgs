@@ -172,7 +172,7 @@ class MVTAPPointTracker(AbstractPointTracker):
         vis = vis[:, :, :n_frames]
         conf = conf[:, :, :n_frames]
         points = coords[0] / scale[:, :, None, :]
-        mask = torch.ones(vis[0].shape, dtype=torch.bool, device=points.device)
+        mask = query.in_image.to(device=points.device).unsqueeze(1).expand(vis[0].shape)
 
         return [
             Track(points=p, visibility=visibility, confidence=confidence, mask=m)
