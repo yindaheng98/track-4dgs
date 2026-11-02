@@ -11,7 +11,7 @@ The package provides three common workflows:
 ## Features
 
 - [x] Organised as a standard Python package with `pip install` support
-- [x] Shared point tracker registry with `cotracker3`, `vggt`, `vggsfm`, `mvtap`, `d4rt`, `matcha`, `mvroma`, `uniflowmatch`, `raft`, and `blender`
+- [x] Shared point tracker registry with `cotracker3`, `vggt`, `vggsfm`, `mvtap`, `d4rt`, `matcha`, `mvroma`, `uniflowmatch`, `raft`, `dot`, and `blender`
 - [x] Single-view image sequence tracking and rendering
 - [x] Multi-timestep Gaussian Splatting camera dataset tracking
 - [x] Point batching through `--batch-size` for long tracks
@@ -49,7 +49,7 @@ pip install --upgrade "git+https://github.com/jytime/LightGlue.git#egg=lightglue
 pip install --upgrade "git+https://github.com/castacks/UniCeption.git@ee7fa0b50d8295b3f0485e42c1d133fb534bfce7"
 ```
 
-`matcha`, `mvroma`, and `uniflowmatch` ship inside this package. Their source trees are the `submodules/matcha`, `submodules/MV-RoMa`, and `submodules/UFM` submodules, so a source install needs `git clone --recursive`.
+`matcha`, `mvroma`, `uniflowmatch`, and `dot` ship inside this package. Their source trees are the `submodules/matcha`, `submodules/MV-RoMa`, `submodules/UFM`, and `submodules/dot` submodules, so a source install needs `git clone --recursive`.
 
 If you have trouble with `gaussian-splatting`, try installing it from source:
 
@@ -88,6 +88,17 @@ CoTracker3 offline checkpoint (`cotracker3`, default `checkpoints/scaled_offline
 ```shell
 mkdir -p checkpoints
 wget -P checkpoints https://huggingface.co/facebook/cotracker3/resolve/main/scaled_offline.pth
+```
+
+DOT (`dot`). `-m model="'dot'"` uses the CoTracker2 initializer. Other names are `cotracker3`, `tapir`, and `bootstapir`. `cotracker3` reuses `checkpoints/scaled_offline.pth` from the download above. The RAFT estimator and refiner are shared:
+
+```shell
+mkdir -p checkpoints
+wget -P checkpoints https://huggingface.co/16lemoing/dot/resolve/main/cvo_raft_patch_8.pth
+wget -P checkpoints https://huggingface.co/16lemoing/dot/resolve/main/movi_f_raft_patch_4_alpha.pth
+wget -P checkpoints https://huggingface.co/16lemoing/dot/resolve/main/movi_f_cotracker2_patch_4_wind_8.pth
+wget -P checkpoints https://huggingface.co/16lemoing/dot/resolve/main/panning_movi_e_tapir.pth
+wget -P checkpoints https://huggingface.co/16lemoing/dot/resolve/main/panning_movi_e_plus_bootstapir.pth
 ```
 
 VGGT commercial checkpoint (`vggt`, default `checkpoints/vggt_1B_commercial.pt`):
@@ -131,7 +142,7 @@ mkdir -p checkpoints
 
 UniFlowMatch (`uniflowmatch`) downloads a Hugging Face repo on first use. `-m model="'base'"` selects `infinity1096/UFM-Base`. Other names are `refine`, `base-980`, `refine-980`, `base-dinov2l-init`, and `base-dinov2g-init`.
 
-RAFT (`raft`) uses torchvision `raft_large` ([optical flow tutorial](https://docs.pytorch.org/vision/0.12/auto_examples/plot_optical_flow.html)). Weights download on first use. `-m model="'small'"` selects `raft_small`. `-m num_flow_updates=12` is the iteration count; the last flow is the track.
+RAFT (`raft`) uses torchvision `raft_large` ([optical flow tutorial](https://docs.pytorch.org/vision/0.12/auto_examples/plot_optical_flow.html)). Weights download on first use. `-m model="'small'"` selects `raft_small`. `-m num_flow_updates=12` is the iteration count; the last flow is the track. `-m max_resolution=512` shrinks a frame only when its long side is above 512. Smaller frames keep their own size. The model has no input resize of its own, and its correlation volume is quadratic in the resolution it receives.
 
 OpenD4RT checkpoint and model config (`d4rt`, default `checkpoints/OpenD4RT_48CLIP_9Mix_NoCropAUG/opend4rt.ckpt`):
 
@@ -169,6 +180,7 @@ python -c "import track_4dgs; print(track_4dgs.get_available_point_trackers())"
 | `mvroma` | `MVRoMaPointTracker` | single-view | yes |
 | `uniflowmatch` | `UniFlowMatchPointTracker` | single-view | yes |
 | `raft` | `RAFTPointTracker` | single-view | yes |
+| `dot` | `DOTPointTracker` | single-view | yes |
 | `mvtap` | `MVTAPPointTracker` | joint multi-view | no |
 | `blender` | `BlenderPointTracker` | joint mesh | no |
 

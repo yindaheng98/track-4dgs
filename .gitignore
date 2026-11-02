@@ -9,6 +9,7 @@ checkpoints/
 /track_4dgs/matcha/utils/
 /uniflowmatch/
 /mvroma/
+/dot/
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]

@@ -7,6 +7,7 @@ from .matcha import MatchaPointTracker
 from .mvroma import MVRoMaPointTracker
 from .ufm import UniFlowMatchPointTracker
 from .raft import RAFTPointTracker
+from .dot import DOTPointTracker
 from .blender import BlenderPointTracker, BlenderScene, BlenderDataset
 from .dataset import AbstractDataset, AbstractGroupArgsDataset, SavedDataset, Supervision
 from .dataset import AbstractPointTrackerDataset, PointSampleSpec, SamplePointSpec, SamplePointTrackerDataset
@@ -27,7 +28,7 @@ __all__ = [
     "build_camera_dataset_tracker", "prepare_datasets",
     "Cotracker3PointTracker", "VGGTPointTracker", "VGGSfMPointTracker",
     "MVTAPPointTracker", "D4RTPointTracker", "MatchaPointTracker",
-    "MVRoMaPointTracker", "UniFlowMatchPointTracker", "RAFTPointTracker", "BlenderPointTracker",
+    "MVRoMaPointTracker", "UniFlowMatchPointTracker", "RAFTPointTracker", "DOTPointTracker", "BlenderPointTracker",
     "AbstractDataset", "AbstractGroupArgsDataset", "SavedDataset", "Supervision",
     "AbstractPointTrackerDataset", "PointSampleSpec", "SamplePointSpec", "SamplePointTrackerDataset",
     "GaussianPointSampleSpec", "GaussianSplattingPointTrackerDataset",
