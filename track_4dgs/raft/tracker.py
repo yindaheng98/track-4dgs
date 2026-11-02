@@ -29,21 +29,51 @@ def load_raft(model: str = "large"):
     return loaded
 
 
-def preprocess(image: torch.Tensor) -> torch.Tensor:
-    """Map one RGB ``[3, H, W]`` frame in ``[0, 1]`` to the RAFT input.
+def flow_size(height: int, width: int, max_resolution: int) -> tuple[int, int]:
+    """Return the image size RAFT should see before the multiple-of-8 pad.
 
-    The tutorial maps ``[0, 1]`` to ``[-1, 1]`` with mean ``0.5`` and std
-    ``0.5``. H and W must be divisible by 8, so the frame is padded on the
-    right and bottom. Flow is cropped back to the original size.
+    A frame whose long side is already within ``max_resolution`` keeps its
+    own size. A larger frame is shrunk so the long side is at most
+    ``max_resolution``, rounding down to a multiple of 8. RAFT's feature
+    encoder still only strides by 8, so this resize is what limits the
+    correlation volume.
     """
-    # torchvision Normalize(mean=0.5, std=0.5): [0, 1] -> [-1, 1]
-    image = image.float().mul(2).sub(1)
+    if max_resolution < 128:
+        raise ValueError("max_resolution must be at least 128")
+    if max(height, width) <= max_resolution:
+        new_h, new_w = height, width
+    elif height >= width:
+        new_h = max_resolution // 8 * 8
+        new_w = (width * new_h // height) // 8 * 8
+    else:
+        new_w = max_resolution // 8 * 8
+        new_h = (height * new_w // width) // 8 * 8
+    padded_h = new_h + (8 - new_h % 8) % 8
+    padded_w = new_w + (8 - new_w % 8) % 8
+    if padded_h < 128 or padded_w < 128:
+        raise ValueError("RAFTPointTracker needs both sides at least 128")
+    return new_h, new_w
+
+
+def preprocess(image: torch.Tensor, size: tuple[int, int]) -> torch.Tensor:
+    """Map one RGB ``[3, H, W]`` frame in ``[0, 1]`` to a RAFT input.
+
+    ``size`` is the content size. It is smaller than the frame only when the
+    long side exceeds ``max_resolution``. Otherwise the frame is left as-is
+    and padded on the right and bottom so H and W are divisible by 8.
+    Values are mapped from ``[0, 1]`` to ``[-1, 1]``.
+    """
+    image = image.float()
+    if image.shape[-2:] != size:
+        image = F.interpolate(
+            image.unsqueeze(0), size=size, mode="bilinear", align_corners=False, antialias=True,
+        ).squeeze(0)
     _, height, width = image.shape
     pad_h = (8 - height % 8) % 8
     pad_w = (8 - width % 8) % 8
     if pad_h or pad_w:
         image = F.pad(image, (0, pad_w, 0, pad_h), mode="replicate")
-    return image
+    return image.clamp(0, 1).mul(2).sub(1)
 
 
 def sample_flow(flow: torch.Tensor, points: torch.Tensor) -> torch.Tensor:
@@ -67,23 +97,27 @@ def sample_flow(flow: torch.Tensor, points: torch.Tensor) -> torch.Tensor:
 class RAFTPointTracker(AbstractViewPointTracker):
     """Track queried points with torchvision RAFT optical flow.
 
-    Frames are RGB ``[3, H, W]`` tensors in ``[0, 1]``, at least 128 pixels
-    on each side, and share one resolution. Query points are ``[x, y]``
-    pixels in their source frames.
-    Each source frame is matched to every other frame with one RAFT forward,
-    the same pair input as the torchvision optical-flow tutorial. The last
-    flow iterate is ``[2, H, W]`` with channels ``(dx, dy)`` in source pixels.
+    Frames are RGB ``[3, H, W]`` tensors in ``[0, 1]`` and share one
+    resolution. Query points are ``[x, y]`` pixels in their source frames.
+    A frame whose long side is already within ``max_resolution`` is not
+    resized. A larger frame is shrunk so its long side is at most
+    ``max_resolution``. Each source frame is then matched with one RAFT
+    forward. The last flow iterate is sampled in that image and scaled back
+    to source pixels. Channels are ``(dx, dy)``.
 
     The source frame keeps the query coordinate. Predicted points are the
     query plus the sampled flow. RAFT has no occlusion or confidence head, so
     ``visibility`` and ``confidence`` are 1.
     """
 
-    def __init__(self, model: str = "large", num_flow_updates: int = 12):
+    def __init__(self, model: str = "large", num_flow_updates: int = 12, max_resolution: int = 512):
         if num_flow_updates <= 0:
             raise ValueError("num_flow_updates must be a positive integer")
+        if max_resolution < 128:
+            raise ValueError("max_resolution must be at least 128")
         self.model = load_raft(model)
         self.num_flow_updates = num_flow_updates
+        self.max_resolution = max_resolution
         self.device = torch.device("cpu")
         self.model.eval()
 
@@ -111,13 +145,9 @@ class RAFTPointTracker(AbstractViewPointTracker):
             raise ValueError("frame_indices must point at frames in the sequence")
 
         height, width = frames[0].shape[-2:]
-        # Downsampled by 8. The correlation pyramid needs a feature map of at least 16.
-        padded_h = height + (8 - height % 8) % 8
-        padded_w = width + (8 - width % 8) % 8
-        if padded_h < 128 or padded_w < 128:
-            raise ValueError("RAFTPointTracker expects frames of at least 128x128")
+        new_h, new_w = flow_size(height, width, self.max_resolution)
         images = [
-            preprocess(frame.detach().clamp(0, 1)).to(self.device)
+            preprocess(frame.detach().clamp(0, 1), (new_h, new_w)).to(self.device)
             for frame in frames
         ]
         query_points = points.to(device=self.device, dtype=torch.float32)
@@ -141,8 +171,13 @@ class RAFTPointTracker(AbstractViewPointTracker):
                     target.unsqueeze(0),
                     num_flow_updates=self.num_flow_updates,
                 )
-                flow = flows[-1][0, :, :height, :width]
-                displacement = sample_flow(flow, source_points)
+                flow = flows[-1][0, :, :new_h, :new_w]
+                resized_points = torch.stack([
+                    (source_points[:, 0] + 0.5) * new_w / width - 0.5,
+                    (source_points[:, 1] + 0.5) * new_h / height - 0.5,
+                ], dim=-1)
+                displacement = sample_flow(flow, resized_points)
+                displacement = displacement * displacement.new_tensor([width / new_w, height / new_h])
                 pred[target_index, selected] = source_points + displacement.to(source_points.dtype)
 
         pred = pred.to(device=points.device, dtype=points.dtype)
