@@ -157,29 +157,48 @@ class AbstractPairDensePointTracker(AbstractDensePointTracker):
             source_index: int) -> DenseTrack:
         del frame_masks
         source = frames[source_index]
-        pairs = [
-            None if index == source_index else self.track_pair_dense(source, frame)
-            for index, frame in enumerate(frames)
-        ]
-        known = next((pair for pair in pairs if pair is not None), None)
-        if known is None:
-            return DenseTrack(flow=source.new_zeros(1, 2, *source.shape[-2:]))
-        zero = torch.zeros_like(known.flow[0])
-        flow = torch.stack([zero if pair is None else pair.flow[0] for pair in pairs])
-        visibility = None
-        if known.visibility is not None:
-            one = torch.ones_like(known.visibility[0])
-            visibility = torch.stack([one if pair is None else pair.visibility[0] for pair in pairs])
-        confidence = None
-        if known.confidence is not None:
-            one = torch.ones_like(known.confidence[0])
-            confidence = torch.stack([one if pair is None else pair.confidence[0] for pair in pairs])
+        height, width = source.shape[-2:]
+        flow, visibility, confidence = [], [], []
+        for index, frame in enumerate(frames):
+            if index == source_index:
+                flow.append(None)
+                visibility.append(None)
+                confidence.append(None)
+                continue
+            pair_flow, pair_visibility, pair_confidence = self.track_pair_dense(source, frame)
+            assert pair_flow.ndim == 3 and tuple(pair_flow.shape) == (2, height, width)
+            if pair_visibility is not None:
+                assert pair_visibility.ndim == 2 and tuple(pair_visibility.shape) == (height, width)
+            if pair_confidence is not None:
+                assert pair_confidence.ndim == 2 and tuple(pair_confidence.shape) == (height, width)
+            flow.append(pair_flow)
+            visibility.append(pair_visibility)
+            confidence.append(pair_confidence)
+        if all(item is None for item in flow):
+            flow = source.new_zeros(1, 2, *source.shape[-2:])
+        else:
+            flow[source_index] = torch.zeros_like(next(item for item in flow if item is not None))
+            flow = torch.stack(flow)
+        if all(item is None for item in visibility):
+            visibility = None
+        else:
+            visibility[source_index] = torch.ones_like(next(item for item in visibility if item is not None))
+            visibility = torch.stack(visibility)
+        if all(item is None for item in confidence):
+            confidence = None
+        else:
+            confidence[source_index] = torch.ones_like(next(item for item in confidence if item is not None))
+            confidence = torch.stack(confidence)
         return DenseTrack(flow=flow, visibility=visibility, confidence=confidence)
 
     @abstractmethod
-    def track_pair_dense(self, source: torch.Tensor, target: torch.Tensor) -> DenseTrack:
-        """Predict a one-frame dense correspondence from ``source`` to ``target``.
+    def track_pair_dense(
+            self,
+            source: torch.Tensor,
+            target: torch.Tensor) -> tuple[torch.Tensor, Optional[torch.Tensor], Optional[torch.Tensor]]:
+        """Predict one dense correspondence from ``source`` to ``target``.
 
-        The returned flow is ``[1, 2, H, W]`` in the source frame's pixels.
+        Returns ``flow`` ``[2, H, W]`` in the source frame's pixels, and
+        optional ``visibility`` and ``confidence`` maps ``[H, W]``.
         """
         raise NotImplementedError
