@@ -1,8 +1,10 @@
+from typing import Optional
+
 import torch
 import torch.nn.functional as F
 from torchvision.models.optical_flow import Raft_Large_Weights, Raft_Small_Weights, raft_large, raft_small
 
-from track_4dgs.tracker import AbstractDensePointTracker, DenseTrack
+from track_4dgs.tracker import AbstractPairDensePointTracker
 from track_4dgs.tracker.dense import sample_dense
 
 # https://docs.pytorch.org/vision/0.12/auto_examples/plot_optical_flow.html
@@ -80,14 +82,14 @@ def sample_flow(flow: torch.Tensor, points: torch.Tensor) -> torch.Tensor:
     return sample_dense(flow, points)
 
 
-class RAFTPointTracker(AbstractDensePointTracker):
+class RAFTPointTracker(AbstractPairDensePointTracker):
     """Track queried points with torchvision RAFT optical flow.
 
     Frames are RGB ``[3, H, W]`` tensors in ``[0, 1]`` and share one
     resolution. Query points are ``[x, y]`` pixels in their source frames.
     A frame whose long side is already within ``max_resolution`` is not
     resized. A larger frame is shrunk so its long side is at most
-    ``max_resolution``. ``track_dense`` runs one RAFT forward and returns the
+    ``max_resolution``. ``track_pair_dense`` runs one RAFT forward and returns the
     last flow iterate scaled back onto the source frame. Channels are
     ``(dx, dy)``.
 
@@ -113,7 +115,10 @@ class RAFTPointTracker(AbstractDensePointTracker):
         return self
 
     @torch.no_grad()
-    def track_dense(self, source: torch.Tensor, target: torch.Tensor) -> DenseTrack:
+    def track_pair_dense(
+            self,
+            source: torch.Tensor,
+            target: torch.Tensor) -> tuple[torch.Tensor, Optional[torch.Tensor], Optional[torch.Tensor]]:
         if source.shape[-2:] != target.shape[-2:]:
             raise ValueError("RAFTPointTracker expects all frames in a view to have the same resolution")
         height, width = source.shape[-2:]
@@ -132,4 +137,4 @@ class RAFTPointTracker(AbstractDensePointTracker):
             flow = F.interpolate(
                 flow.unsqueeze(0), size=(height, width), mode="bilinear", align_corners=False,
             ).squeeze(0)
-        return DenseTrack(flow=flow)
+        return flow, None, None

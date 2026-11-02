@@ -6,7 +6,7 @@ from .d4rt import D4RTPointTracker
 from .mvroma import MVRoMaPointTracker
 from .ufm import UniFlowMatchPointTracker
 from .raft import RAFTPointTracker
-from .dot import DOTPointTracker
+from .dot import DOTPointTracker, DOTDensePointTracker
 from .blender import BlenderPointTracker, BlenderScene, BlenderDataset
 from .dataset import AbstractDataset, AbstractGroupArgsDataset, SavedDataset, Supervision
 from .dataset import AbstractPointTrackerDataset, PointSampleSpec, SamplePointSpec, SamplePointTrackerDataset
@@ -15,19 +15,19 @@ from .dataset import TrackedCameraDataset, CameraDatasetTracker, build_camera_da
 from .dataset import register_supervision_dataset, get_available_supervision_datasets, get_supervision_dataset
 from .registry import register_point_tracker, get_available_point_trackers, build_point_tracker
 from .tracker import Query, Track, DenseTrack, AbstractPointTracker
-from .tracker import AbstractViewPointTracker, AbstractDensePointTracker
+from .tracker import AbstractViewPointTracker, AbstractDensePointTracker, AbstractPairDensePointTracker
 from .tracker import CameraTrack
 
 __all__ = [
     "Query", "Track", "DenseTrack", "AbstractPointTracker",
-    "AbstractViewPointTracker", "AbstractDensePointTracker",
+    "AbstractViewPointTracker", "AbstractDensePointTracker", "AbstractPairDensePointTracker",
     "CameraTrack", "TrackedCameraDataset", "CameraDatasetTracker",
     "register_point_tracker", "get_available_point_trackers", "build_point_tracker",
     "register_supervision_dataset", "get_available_supervision_datasets", "get_supervision_dataset",
     "build_camera_dataset_tracker", "prepare_datasets",
     "Cotracker3PointTracker", "VGGTPointTracker", "VGGSfMPointTracker",
     "MVTAPPointTracker", "D4RTPointTracker",
-    "MVRoMaPointTracker", "UniFlowMatchPointTracker", "RAFTPointTracker", "DOTPointTracker", "BlenderPointTracker",
+    "MVRoMaPointTracker", "UniFlowMatchPointTracker", "RAFTPointTracker", "DOTPointTracker", "DOTDensePointTracker", "BlenderPointTracker",
     "AbstractDataset", "AbstractGroupArgsDataset", "SavedDataset", "Supervision",
     "AbstractPointTrackerDataset", "PointSampleSpec", "SamplePointSpec", "SamplePointTrackerDataset",
     "GaussianPointSampleSpec", "GaussianSplattingPointTrackerDataset",

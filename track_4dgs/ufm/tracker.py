@@ -1,7 +1,9 @@
+from typing import Optional
+
 import torch
 from uniflowmatch.models.ufm import UniFlowMatchClassificationRefinement, UniFlowMatchConfidence
 
-from track_4dgs.tracker import AbstractDensePointTracker, DenseTrack
+from track_4dgs.tracker import AbstractPairDensePointTracker
 
 # submodules/UFM/example_inference.py#L110-L117
 MODEL_REPOS = {
@@ -59,11 +61,11 @@ def predict_correspondences(model, source_image, target_image):
     return flow_output, covisibility
 
 
-class UniFlowMatchPointTracker(AbstractDensePointTracker):
+class UniFlowMatchPointTracker(AbstractPairDensePointTracker):
     """Track queried points with UniFlowMatch dense correspondences.
 
     Frames are RGB ``[3, H, W]`` tensors in ``[0, 1]``. Query points are
-    ``[x, y]`` pixels in their source frames. ``track_dense`` converts the
+    ``[x, y]`` pixels in their source frames. ``track_pair_dense`` converts the
     pair to uint8 RGB and calls ``predict_correspondences_batched``, the
     example inference path. The match does not depend on the query points.
 
@@ -83,7 +85,10 @@ class UniFlowMatchPointTracker(AbstractDensePointTracker):
         return self
 
     @torch.no_grad()
-    def track_dense(self, source: torch.Tensor, target: torch.Tensor) -> DenseTrack:
+    def track_pair_dense(
+            self,
+            source: torch.Tensor,
+            target: torch.Tensor) -> tuple[torch.Tensor, Optional[torch.Tensor], Optional[torch.Tensor]]:
         # example_inference.py loads RGB uint8 HWC. predict_correspondences_batched
         # normalizes uint8 itself, so float frames in [0, 1] are converted here.
         source_image = source.detach().clamp(0, 1).mul(255).byte().permute(1, 2, 0).contiguous().to(self.device)
@@ -91,4 +96,4 @@ class UniFlowMatchPointTracker(AbstractDensePointTracker):
         # submodules/UFM/uniflowmatch/utils/viz.py#L39-L42
         # target pixel = source pixel + (flow_x, flow_y)
         flow_output, covisibility = predict_correspondences(self.model, source_image, target_image)
-        return DenseTrack(flow=flow_output, visibility=covisibility, confidence=covisibility)
+        return flow_output, covisibility, covisibility
