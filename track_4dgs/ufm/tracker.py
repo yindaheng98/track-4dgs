@@ -70,7 +70,8 @@ class UniFlowMatchPointTracker(AbstractPairDensePointTracker):
     example inference path. The match does not depend on the query points.
 
     Flow channels are ``(dx, dy)`` in the source image's pixel frame.
-    ``visibility`` and ``confidence`` are the covisibility map in ``[0, 1]``.
+    ``visibility`` is the covisibility map in ``[0, 1]``. ``confidence`` is
+    ``None``; the released models have no localization score.
     """
 
     def __init__(self, model: str = "base"):
@@ -96,4 +97,4 @@ class UniFlowMatchPointTracker(AbstractPairDensePointTracker):
         # submodules/UFM/uniflowmatch/utils/viz.py#L39-L42
         # target pixel = source pixel + (flow_x, flow_y)
         flow_output, covisibility = predict_correspondences(self.model, source_image, target_image)
-        return flow_output, covisibility, covisibility
+        return flow_output, covisibility, None
