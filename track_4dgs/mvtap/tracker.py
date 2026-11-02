@@ -4,7 +4,7 @@ import torch
 import torch.nn.functional as F
 from gaussian_splatting.dataset import CameraDataset
 
-from track_4dgs.tracker import AbstractBatchPointTracker, Query, Track
+from track_4dgs.tracker import AbstractPointTracker, Query, Track
 
 from .models.mvtap import MVTAP
 
@@ -16,7 +16,7 @@ def load_mvtap(checkpoint: str = "checkpoints/mvtap.ckpt", **model_kwargs) -> MV
     return model
 
 
-class MVTAPPointTracker(AbstractBatchPointTracker):
+class MVTAPPointTracker(AbstractPointTracker):
     """Track queried points with MV-TAP.
 
     Frames are expected to be RGB ``[3, H, W]`` tensors in ``[0, 1]`` and query
@@ -60,7 +60,7 @@ class MVTAPPointTracker(AbstractBatchPointTracker):
         return self
 
     @torch.no_grad()
-    def track_batch(
+    def track(
             self,
             query: Query,
             frames: Sequence[CameraDataset]) -> Sequence[Track]:

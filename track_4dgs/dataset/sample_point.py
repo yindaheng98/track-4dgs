@@ -70,7 +70,6 @@ class SamplePointTrackerDataset(AbstractPointTrackerDataset[SamplePointSpec], Ab
         parser.add_argument("--device", default="cuda", type=str)
         parser.add_argument("--tracker", type=str, default="cotracker3", choices=get_available_point_trackers())
         parser.add_argument("-m", "--option_tracker", default=[], action="append", type=str)
-        parser.add_argument("--batch-size", default=None, type=int)
         parser.add_argument("--num-points", default=256, type=int)
         parser.add_argument("--visible-cameras", default=2, type=int, help="Keep a point only when more cameras than this see it.")
         return parser
@@ -125,7 +124,7 @@ class SamplePointTrackerDataset(AbstractPointTrackerDataset[SamplePointSpec], Ab
         assert group_args, "at least one --sources is required"
         tracker = cls.tracker_from_args(common_args)
         samples = tuple(cls.spec_from_args(common_args, group) for group in group_args)
-        return cls(tracker, *samples, batch_size=common_args.batch_size)
+        return cls(tracker, *samples)
 
 
 register_supervision_dataset("tracker", SamplePointTrackerDataset)

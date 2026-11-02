@@ -3,7 +3,6 @@ from .vggt import VGGTPointTracker
 from .vggsfm import VGGSfMPointTracker
 from .mvtap import MVTAPPointTracker
 from .d4rt import D4RTPointTracker
-from .matcha import MatchaPointTracker
 from .mvroma import MVRoMaPointTracker
 from .ufm import UniFlowMatchPointTracker
 from .raft import RAFTPointTracker
@@ -16,18 +15,18 @@ from .dataset import TrackedCameraDataset, CameraDatasetTracker, build_camera_da
 from .dataset import register_supervision_dataset, get_available_supervision_datasets, get_supervision_dataset
 from .registry import register_point_tracker, get_available_point_trackers, build_point_tracker
 from .tracker import Query, Track, DenseTrack, AbstractPointTracker
-from .tracker import AbstractViewPointTracker, AbstractBatchPointTracker, AbstractDensePointTracker
+from .tracker import AbstractViewPointTracker, AbstractDensePointTracker
 from .tracker import CameraTrack
 
 __all__ = [
     "Query", "Track", "DenseTrack", "AbstractPointTracker",
-    "AbstractViewPointTracker", "AbstractBatchPointTracker", "AbstractDensePointTracker",
+    "AbstractViewPointTracker", "AbstractDensePointTracker",
     "CameraTrack", "TrackedCameraDataset", "CameraDatasetTracker",
     "register_point_tracker", "get_available_point_trackers", "build_point_tracker",
     "register_supervision_dataset", "get_available_supervision_datasets", "get_supervision_dataset",
     "build_camera_dataset_tracker", "prepare_datasets",
     "Cotracker3PointTracker", "VGGTPointTracker", "VGGSfMPointTracker",
-    "MVTAPPointTracker", "D4RTPointTracker", "MatchaPointTracker",
+    "MVTAPPointTracker", "D4RTPointTracker",
     "MVRoMaPointTracker", "UniFlowMatchPointTracker", "RAFTPointTracker", "DOTPointTracker", "BlenderPointTracker",
     "AbstractDataset", "AbstractGroupArgsDataset", "SavedDataset", "Supervision",
     "AbstractPointTrackerDataset", "PointSampleSpec", "SamplePointSpec", "SamplePointTrackerDataset",

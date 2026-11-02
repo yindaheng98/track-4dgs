@@ -53,7 +53,7 @@ class Cotracker3PointTracker(AbstractViewPointTracker):
         self.model.eval()
         return self
 
-    def track_batch(
+    def track_view(
             self,
             points: torch.Tensor,
             frame_indices: torch.Tensor,

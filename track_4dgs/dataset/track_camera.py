@@ -1,5 +1,4 @@
 from collections.abc import Sequence
-from typing import Optional
 
 from gaussian_splatting.dataset import CameraDataset
 from gaussian_splatting.camera import Camera
@@ -53,21 +52,19 @@ class CameraDatasetTracker:
     def __call__(
             self,
             query: Query,
-            frames: Sequence[CameraDataset],
-            batch_size: Optional[int] = None) -> list[TrackedCameraDataset]:
+            frames: Sequence[CameraDataset]) -> list[TrackedCameraDataset]:
         """Track points for a frame-major collection of camera datasets.
 
         ``query`` is view-major: one row per camera/view.
         ``frames`` is frame-major: one CameraDataset per frame, and
         each dataset is expected to contain cameras/views in the same order as
         ``query``.  The return value keeps the frame-major layout.
-        ``batch_size`` is forwarded to the underlying point tracker.
         """
         frames = list(frames)
         if len(frames) == 0:
             return []
 
-        view_tracks = self.tracker(query, frames, batch_size=batch_size)
+        view_tracks = self.tracker(query, frames)
         return self.attach_view_tracks(frames, view_tracks)
 
     @staticmethod

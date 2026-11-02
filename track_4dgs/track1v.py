@@ -111,7 +111,6 @@ if __name__ == "__main__":
     parser.add_argument("--tracker", type=str, default="cotracker3", choices=get_available_point_trackers())
     parser.add_argument("-m", "--option_tracker", default=[], action="append", type=str)
     parser.add_argument("--num-points", default=256, type=int)
-    parser.add_argument("--batch-size", default=None, type=int)
     parser.add_argument("--line-width", default=1, type=int)
     parser.add_argument("--point-size", default=2, type=int)
     args = parser.parse_args()
@@ -125,6 +124,6 @@ if __name__ == "__main__":
             raise TypeError("track1v requires an AbstractViewPointTracker")
         track = tracker.track_view(
             points, frame_indices,
-            frames, [None] * len(frames), batch_size=args.batch_size,
+            frames, [None] * len(frames),
         )
         rendering(frames, track, args.destination, line_width=args.line_width, point_size=args.point_size)

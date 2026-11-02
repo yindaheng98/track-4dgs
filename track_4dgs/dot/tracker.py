@@ -106,7 +106,7 @@ class DOTPointTracker(AbstractViewPointTracker):
         return self
 
     @torch.no_grad()
-    def track_batch(
+    def track_view(
             self,
             points: torch.Tensor,
             frame_indices: torch.Tensor,
