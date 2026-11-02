@@ -122,8 +122,5 @@ if __name__ == "__main__":
         tracker = build_point_tracker(args.tracker, **tracker_configs).to(args.device)
         if not isinstance(tracker, AbstractViewPointTracker):
             raise TypeError("track1v requires an AbstractViewPointTracker")
-        track = tracker.track_view(
-            points, frame_indices,
-            frames, [None] * len(frames),
-        )
+        track = tracker.track_view(points, frame_indices, frames)
         rendering(frames, track, args.destination, line_width=args.line_width, point_size=args.point_size)

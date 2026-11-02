@@ -449,7 +449,7 @@ print(camera_track.points.shape)        # [num_points, 2] for this camera in thi
 query + frames -> validate + track -> view_tracks -> tracked camera datasets
 ```
 
-Single-view trackers (`AbstractViewPointTracker`, e.g. CoTracker3 / VGGT / DOT) split the query by view and implement `track_view(points, frame_indices, frames, masks)` for one camera sequence. MV-TAP and Blender subclass `AbstractPointTracker` and implement `track(query, frames)` for all views at once. MV-TAP splits query points with its constructor `batch_size` when it is set.
+Single-view trackers (`AbstractViewPointTracker`, e.g. CoTracker3 / VGGT / DOT) split the query by view and implement `track_view(points, frame_indices, frames)` for one camera sequence. MV-TAP and Blender subclass `AbstractPointTracker` and implement `track(query, frames)` for all views at once. MV-TAP splits query points with its constructor `batch_size` when it is set.
 
 ```text
 Frame 0 cameras --\
@@ -483,7 +483,6 @@ class MyPointTracker(AbstractViewPointTracker):
         points: torch.Tensor,
         frame_indices: torch.Tensor,
         frames: Sequence[torch.Tensor],
-        frame_masks: Sequence[torch.Tensor | None],
     ) -> Track:
         ...
 ```

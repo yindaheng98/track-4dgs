@@ -99,8 +99,7 @@ class AbstractDensePointTracker(AbstractViewPointTracker):
             self,
             points: torch.Tensor,
             frame_indices: torch.Tensor,
-            frames: Sequence[torch.Tensor],
-            frame_masks: Sequence[Optional[torch.Tensor]]) -> Track:
+            frames: Sequence[torch.Tensor]) -> Track:
         name = type(self).__name__
         if any(frame.ndim != 3 or frame.shape[0] != 3 for frame in frames):
             raise ValueError(f"{name} expects RGB frames with shape [3, H, W]")
@@ -117,7 +116,7 @@ class AbstractDensePointTracker(AbstractViewPointTracker):
 
         for source_index in torch.unique(frame_indices).tolist():
             selected = frame_indices == source_index
-            sampled = self.track_dense(frames, frame_masks, int(source_index)).sample(points[selected])
+            sampled = self.track_dense(frames, int(source_index)).sample(points[selected])
             pred[:, selected] = sampled.points
             visibility[:, selected] = sampled.visibility
             confidence[:, selected] = sampled.confidence
@@ -133,7 +132,6 @@ class AbstractDensePointTracker(AbstractViewPointTracker):
     def track_dense(
             self,
             frames: Sequence[torch.Tensor],
-            frame_masks: Sequence[Optional[torch.Tensor]],
             source_index: int) -> DenseTrack:
         """Predict a dense correspondence from ``frames[source_index]`` to every frame.
 
@@ -153,9 +151,7 @@ class AbstractPairDensePointTracker(AbstractDensePointTracker):
     def track_dense(
             self,
             frames: Sequence[torch.Tensor],
-            frame_masks: Sequence[Optional[torch.Tensor]],
             source_index: int) -> DenseTrack:
-        del frame_masks
         source = frames[source_index]
         height, width = source.shape[-2:]
         flow, visibility, confidence = [], [], []

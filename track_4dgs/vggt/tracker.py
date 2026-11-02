@@ -108,8 +108,7 @@ class VGGTPointTracker(AbstractViewPointTracker):
             self,
             points: torch.Tensor,
             frame_indices: torch.Tensor,
-            frames: Sequence[torch.Tensor],
-            frame_masks: Sequence[torch.Tensor | None]) -> Track:
+            frames: Sequence[torch.Tensor]) -> Track:
         if any(frame.shape[0] != 3 for frame in frames):
             raise ValueError("VGGTPointTracker expects RGB frames with shape [3, H, W]")
         assert torch.all(frame_indices == 0), "VGGT TrackHead expects query points from the first frame"

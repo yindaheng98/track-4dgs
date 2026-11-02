@@ -1,5 +1,4 @@
 from collections.abc import Sequence
-from typing import Optional
 
 import torch
 import torch.nn.functional as F
@@ -38,9 +37,7 @@ class DOTDensePointTracker(AbstractDensePointTracker):
     def track_dense(
             self,
             frames: Sequence[torch.Tensor],
-            frame_masks: Sequence[Optional[torch.Tensor]],
             source_index: int) -> DenseTrack:
-        del frame_masks
         if any(frame.shape[-2:] != frames[0].shape[-2:] for frame in frames):
             raise ValueError("DOTDensePointTracker expects all frames in a view to have the same resolution")
         _, height, width = frames[0].shape

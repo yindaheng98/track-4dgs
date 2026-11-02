@@ -115,9 +115,7 @@ class VGGSfMPointTracker(AbstractViewPointTracker):
             self,
             points: torch.Tensor,
             frame_indices: torch.Tensor,
-            frames: Sequence[torch.Tensor],
-            frame_masks: Sequence[torch.Tensor | None]) -> Track:
-        del frame_masks
+            frames: Sequence[torch.Tensor]) -> Track:
         if any(frame.shape[0] != 3 for frame in frames):
             raise ValueError("VGGSfMPointTracker expects RGB frames with shape [3, H, W]")
         if points.shape[0] == 0:

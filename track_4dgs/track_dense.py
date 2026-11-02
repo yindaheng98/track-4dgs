@@ -104,5 +104,5 @@ if __name__ == "__main__":
         tracker = build_point_tracker(args.tracker, **tracker_configs).to(args.device)
         if not isinstance(tracker, AbstractDensePointTracker):
             raise TypeError("track_dense requires an AbstractDensePointTracker")
-        dense = tracker.track_dense(frames, [None] * len(frames), args.source_index)
+        dense = tracker.track_dense(frames, args.source_index)
         rendering(frames, dense, args.destination, overlay_factor=args.overlay_factor)

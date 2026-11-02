@@ -110,9 +110,7 @@ class DOTPointTracker(AbstractViewPointTracker):
             self,
             points: torch.Tensor,
             frame_indices: torch.Tensor,
-            frames: Sequence[torch.Tensor],
-            frame_masks: Sequence[torch.Tensor | None]) -> Track:
-        del frame_masks
+            frames: Sequence[torch.Tensor]) -> Track:
         if any(frame.shape[0] != 3 for frame in frames):
             raise ValueError("DOTPointTracker expects RGB frames with shape [3, H, W]")
         if any(frame.shape[-2:] != frames[0].shape[-2:] for frame in frames):

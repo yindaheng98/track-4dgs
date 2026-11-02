@@ -57,8 +57,7 @@ class Cotracker3PointTracker(AbstractViewPointTracker):
             self,
             points: torch.Tensor,
             frame_indices: torch.Tensor,
-            frames: Sequence[torch.Tensor],
-            frame_masks: Sequence[torch.Tensor | None]) -> Track:
+            frames: Sequence[torch.Tensor]) -> Track:
         assert all(frame.shape == frames[0].shape for frame in frames)
 
         video = torch.stack(frames, dim=0).unsqueeze(0)

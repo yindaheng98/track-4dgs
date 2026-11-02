@@ -1,6 +1,5 @@
 from abc import abstractmethod
 from collections.abc import Sequence
-from typing import Optional
 
 import torch
 from gaussian_splatting.dataset import CameraDataset
@@ -22,11 +21,9 @@ class AbstractViewPointTracker(AbstractPointTracker):
         view_tracks = []
         for view_idx in tqdm(range(query.points.shape[0]), desc="Tracking views", position=self.tqdm_position, leave=self.tqdm_leave, dynamic_ncols=True):
             views = []
-            frame_masks = []
             for dataset in frames:
                 camera = dataset[view_idx]
                 views.append(camera.ground_truth_image)
-                frame_masks.append(camera.ground_truth_image_mask)
 
             points = query.points[view_idx]
             frame_indices = query.frame_indices[view_idx]
@@ -43,7 +40,6 @@ class AbstractViewPointTracker(AbstractPointTracker):
                     points[valid],
                     frame_indices[valid],
                     views,
-                    frame_masks,
                 )
                 result_points[:, valid] = track.points
                 result_visibility[:, valid] = track.visibility
@@ -63,8 +59,7 @@ class AbstractViewPointTracker(AbstractPointTracker):
             self,
             points: torch.Tensor,
             frame_indices: torch.Tensor,
-            frames: Sequence[torch.Tensor],
-            frame_masks: Sequence[Optional[torch.Tensor]]) -> Track:
+            frames: Sequence[torch.Tensor]) -> Track:
         """Track query points through ``frames`` for one view.
 
         Implementations should return a :class:`Track` whose ``points`` tensor

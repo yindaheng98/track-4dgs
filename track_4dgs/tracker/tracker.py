@@ -261,8 +261,7 @@ class AbstractPointTracker(metaclass=ABCMeta):
         each dataset is expected to contain cameras/views in the same order as
         ``query``. Returns one :class:`Track` per view.
 
-        For each view, ``frames`` and ``frame_masks`` are frame-major:
-        frames are ``[C, H, W]`` tensors, masks are optional ``[H, W]`` tensors.
+        For each view, ``frames`` are frame-major ``[C, H, W]`` tensors.
         Each view in ``query`` contains ``N`` points on these frames, and the returned
         :class:`Track` must contain ``points`` with shape ``[D, N, 2]`` and
         ``visibility`` / ``confidence`` / ``mask`` with shape ``[D, N]``, where
@@ -281,14 +280,8 @@ class AbstractPointTracker(metaclass=ABCMeta):
                 if camera.ground_truth_image is None:
                     raise ValueError("Point tracking requires cameras with loaded ground_truth_image tensors")
                 frame = camera.ground_truth_image
-                frame_mask = camera.ground_truth_image_mask
                 if frame.ndim != 3:
                     raise ValueError("frames entries must have shape [C, H, W]")
-                if frame_mask is not None:
-                    if frame_mask.ndim != 2:
-                        raise ValueError("frame_masks entries must have shape [H, W]")
-                    if frame_mask.shape != frame.shape[-2:]:
-                        raise ValueError("frame_masks entries must match their frame spatial dimensions")
 
             if query.points.shape[1] == 0:
                 raise ValueError("Query.points must not be empty")
