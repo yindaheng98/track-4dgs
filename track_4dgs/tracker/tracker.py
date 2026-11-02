@@ -1,7 +1,7 @@
 from abc import ABCMeta, abstractmethod
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Optional, Union
+from typing import Union
 
 import torch
 from gaussian_splatting.dataset import CameraDataset
@@ -253,8 +253,7 @@ class AbstractPointTracker(metaclass=ABCMeta):
     def __call__(
             self,
             query: Query,
-            frames: Sequence[CameraDataset],
-            batch_size: Optional[int] = None) -> Sequence[Track]:
+            frames: Sequence[CameraDataset]) -> Sequence[Track]:
         """Validate inputs, run tracking, and validate the returned tracks.
 
         ``query`` is view-major with one row per camera/view.
@@ -268,9 +267,6 @@ class AbstractPointTracker(metaclass=ABCMeta):
         :class:`Track` must contain ``points`` with shape ``[D, N, 2]`` and
         ``visibility`` / ``confidence`` / ``mask`` with shape ``[D, N]``, where
         ``D == len(frames)``.
-
-        Query points are forwarded to :meth:`track` in chunks of ``batch_size``.
-        ``None`` tracks all points in one call.
         """
         if len(frames) == 0:
             return []
@@ -301,10 +297,7 @@ class AbstractPointTracker(metaclass=ABCMeta):
             if query.frame_indices[view_idx].max().item() >= len(frames):
                 raise ValueError("Query.frame_indices must be within the frames sequence")
 
-        if batch_size is not None and batch_size <= 0:
-            raise ValueError("batch_size must be a positive integer")
-
-        view_tracks = self.track(query, frames, batch_size)
+        view_tracks = self.track(query, frames)
         if len(view_tracks) != n_views:
             raise ValueError(f"AbstractPointTracker.track must return one Track per view, got {len(view_tracks)}")
         n_points = query.points.shape[1]
@@ -323,8 +316,7 @@ class AbstractPointTracker(metaclass=ABCMeta):
     def track(
             self,
             query: Query,
-            frames: Sequence[CameraDataset],
-            batch_size: Optional[int] = None) -> Sequence[Track]:
+            frames: Sequence[CameraDataset]) -> Sequence[Track]:
         """Track ``query`` across ``frames``.
 
         Implementations should return one :class:`Track` per view.

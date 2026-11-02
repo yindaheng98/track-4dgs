@@ -1,6 +1,5 @@
 from .tracker import Query, Track, AbstractPointTracker, CameraTrack
 from .singleview import AbstractViewPointTracker
-from .batch import AbstractBatchPointTracker
 from .dense import AbstractDensePointTracker, DenseTrack
 
 __all__ = [
@@ -9,7 +8,6 @@ __all__ = [
     "DenseTrack",
     "AbstractPointTracker",
     "AbstractViewPointTracker",
-    "AbstractBatchPointTracker",
     "AbstractDensePointTracker",
     "CameraTrack",
 ]

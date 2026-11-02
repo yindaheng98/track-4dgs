@@ -85,13 +85,13 @@ class AbstractDensePointTracker(AbstractViewPointTracker):
     """Point tracker that samples a dense source-to-target correspondence.
 
     :meth:`track_dense` predicts one dense map from a source frame to a
-    target frame. :meth:`track_batch` calls it for each queried source and
+    target frame. :meth:`track_view` calls it for each queried source and
     every other frame, then samples that map with :meth:`DenseTrack.sample`.
     The source frame keeps the query coordinate.
     """
 
     @torch.no_grad()
-    def track_batch(
+    def track_view(
             self,
             points: torch.Tensor,
             frame_indices: torch.Tensor,
