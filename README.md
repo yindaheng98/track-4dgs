@@ -1,6 +1,6 @@
 # Point Tracking for 4DGS
 
-This repo is the **point tracking Python extension for 4D Gaussian Splatting**. It wraps sequence point trackers such as [CoTracker3](https://github.com/facebookresearch/co-tracker), [VGGT](https://github.com/facebookresearch/vggt), [MV-TAP](https://github.com/cvlab-kaist/MV-TAP), [OpenD4RT](https://github.com/Lijiaxin0111/Open-d4rt), [MATCHA](https://github.com/nv-dvl/matcha), [MV-RoMa](https://github.com/IceTea-CV/MV-RoMa), and [UniFlowMatch](https://github.com/UniFlowMatch/UFM) behind one small registry, then applies them either to plain image sequences or to multi-timestep Gaussian Splatting camera datasets.
+This repo is the **point tracking Python extension for 4D Gaussian Splatting**. It wraps sequence point trackers such as [CoTracker3](https://github.com/facebookresearch/co-tracker), [VGGT](https://github.com/facebookresearch/vggt), [MV-TAP](https://github.com/cvlab-kaist/MV-TAP), [OpenD4RT](https://github.com/Lijiaxin0111/Open-d4rt), [MATCHA](https://github.com/nv-dvl/matcha), [MV-RoMa](https://github.com/IceTea-CV/MV-RoMa), [UniFlowMatch](https://github.com/UniFlowMatch/UFM), and torchvision [RAFT](https://docs.pytorch.org/vision/0.12/auto_examples/plot_optical_flow.html) behind one small registry, then applies them either to plain image sequences or to multi-timestep Gaussian Splatting camera datasets.
 
 The package provides three common workflows:
 
@@ -11,7 +11,7 @@ The package provides three common workflows:
 ## Features
 
 - [x] Organised as a standard Python package with `pip install` support
-- [x] Shared point tracker registry with `cotracker3`, `vggt`, `vggsfm`, `mvtap`, `d4rt`, `matcha`, `mvroma`, `uniflowmatch`, and `blender`
+- [x] Shared point tracker registry with `cotracker3`, `vggt`, `vggsfm`, `mvtap`, `d4rt`, `matcha`, `mvroma`, `uniflowmatch`, `raft`, and `blender`
 - [x] Single-view image sequence tracking and rendering
 - [x] Multi-timestep Gaussian Splatting camera dataset tracking
 - [x] Point batching through `--batch-size` for long tracks
@@ -131,6 +131,8 @@ mkdir -p checkpoints
 
 UniFlowMatch (`uniflowmatch`) downloads a Hugging Face repo on first use. `-m model="'base'"` selects `infinity1096/UFM-Base`. Other names are `refine`, `base-980`, `refine-980`, `base-dinov2l-init`, and `base-dinov2g-init`.
 
+RAFT (`raft`) uses torchvision `raft_large` ([optical flow tutorial](https://docs.pytorch.org/vision/0.12/auto_examples/plot_optical_flow.html)). Weights download on first use. `-m model="'small'"` selects `raft_small`. `-m num_flow_updates=12` is the iteration count; the last flow is the track.
+
 OpenD4RT checkpoint and model config (`d4rt`, default `checkpoints/OpenD4RT_48CLIP_9Mix_NoCropAUG/opend4rt.ckpt`):
 
 ```shell
@@ -166,6 +168,7 @@ python -c "import track_4dgs; print(track_4dgs.get_available_point_trackers())"
 | `matcha` | `MatchaPointTracker` | single-view | yes |
 | `mvroma` | `MVRoMaPointTracker` | single-view | yes |
 | `uniflowmatch` | `UniFlowMatchPointTracker` | single-view | yes |
+| `raft` | `RAFTPointTracker` | single-view | yes |
 | `mvtap` | `MVTAPPointTracker` | joint multi-view | no |
 | `blender` | `BlenderPointTracker` | joint mesh | no |
 
@@ -501,4 +504,4 @@ Import the module that calls `register_point_tracker` before `build_point_tracke
 
 ## Acknowledgement
 
-This repo is developed based on [CoTracker](https://github.com/facebookresearch/co-tracker), [VGGT](https://github.com/facebookresearch/vggt), [MV-TAP](https://github.com/cvlab-kaist/MV-TAP), [OpenD4RT](https://github.com/Lijiaxin0111/Open-d4rt), [MATCHA](https://github.com/nv-dvl/matcha), [MV-RoMa](https://github.com/IceTea-CV/MV-RoMa), [UniFlowMatch](https://github.com/UniFlowMatch/UFM), [UniCeption](https://github.com/castacks/UniCeption), [LightGlue](https://github.com/jytime/LightGlue), [gaussian-splatting (packaged)](https://github.com/yindaheng98/gaussian-splatting), and [NVS2COLMAP](https://github.com/yindaheng98/NVS2COLMAP). Many thanks to the authors for open-sourcing their codebases.
+This repo is developed based on [CoTracker](https://github.com/facebookresearch/co-tracker), [VGGT](https://github.com/facebookresearch/vggt), [MV-TAP](https://github.com/cvlab-kaist/MV-TAP), [OpenD4RT](https://github.com/Lijiaxin0111/Open-d4rt), [MATCHA](https://github.com/nv-dvl/matcha), [MV-RoMa](https://github.com/IceTea-CV/MV-RoMa), [UniFlowMatch](https://github.com/UniFlowMatch/UFM), [torchvision RAFT](https://docs.pytorch.org/vision/0.12/auto_examples/plot_optical_flow.html), [UniCeption](https://github.com/castacks/UniCeption), [LightGlue](https://github.com/jytime/LightGlue), [gaussian-splatting (packaged)](https://github.com/yindaheng98/gaussian-splatting), and [NVS2COLMAP](https://github.com/yindaheng98/NVS2COLMAP). Many thanks to the authors for open-sourcing their codebases.
