@@ -4,6 +4,7 @@ from .tracker import DOTPointTracker
 from .dense import DOTDensePointTracker
 
 register_point_tracker("dot", DOTPointTracker)
+register_point_tracker("dotdense", DOTDensePointTracker)
 
 __all__ = [
     "DOTPointTracker",
