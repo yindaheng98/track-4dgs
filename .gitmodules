@@ -7,3 +7,6 @@
 [submodule "submodules/UFM"]
 	path = submodules/UFM
 	url = https://github.com/UniFlowMatch/UFM
+[submodule "submodules/dot"]
+	path = submodules/dot
+	url = https://github.com/16lemoing/dot
