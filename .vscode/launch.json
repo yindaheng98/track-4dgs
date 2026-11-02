@@ -26,6 +26,28 @@
             ]
         },
         {
+            "name": "track dense dot",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "track_4dgs.track_dense",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "cwd": "${workspaceFolder}",
+            "args": [
+                "--tracker",
+                "dotdense",
+                "-s",
+                "data/taekwondo/frame1/input/0.png",
+                "data/taekwondo/frame11/input/0.png",
+                "data/taekwondo/frame21/input/0.png",
+                "data/taekwondo/frame31/input/0.png",
+                "data/taekwondo/frame41/input/0.png",
+                "data/taekwondo/frame51/input/0.png",
+                "-d",
+                "output/taekwondo/track-dense-dot",
+            ]
+        },
+        {
             "name": "track2d cotracker3",
             "type": "debugpy",
             "request": "launch",
