@@ -9,7 +9,7 @@ from typing import Optional
 import torch
 from gaussian_splatting.dataset import CameraDataset
 
-from ..tracker import AbstractBatchPointTracker, Query, Track
+from ..tracker import AbstractPointTracker, Query, Track
 from .kernels import project_visibility, track_points
 from .workers import MeshFrame, MeshTopology
 
@@ -99,7 +99,7 @@ def evaluated_meshes(
     return topology, iter_frames(connection, n_frames, server, listener, command)
 
 
-class BlenderPointTracker(AbstractBatchPointTracker):
+class BlenderPointTracker(AbstractPointTracker):
     """Track query pixels by binding them to evaluated meshes in a blend file.
 
     The export returns triangles and the first frame together, then one later frame at a time.
@@ -197,7 +197,7 @@ class BlenderPointTracker(AbstractBatchPointTracker):
         return worlds, valid, points, visibility
 
     @torch.no_grad()
-    def track_batch(
+    def track(
             self,
             query: Query,
             frames: Sequence[CameraDataset]) -> Sequence[Track]:
@@ -211,7 +211,7 @@ class BlenderPointTracker(AbstractBatchPointTracker):
                 points=points[view_index],
                 visibility=visibility[view_index],
                 confidence=confidence[view_index],
-                mask=mask,
+                mask=mask & query.in_image[view_index].unsqueeze(0),
             )
             for view_index in range(n_views)
         ]

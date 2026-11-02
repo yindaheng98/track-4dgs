@@ -1,6 +1,6 @@
 # Point Tracking for 4DGS
 
-This repo is the **point tracking Python extension for 4D Gaussian Splatting**. It wraps sequence point trackers such as [CoTracker3](https://github.com/facebookresearch/co-tracker), [VGGT](https://github.com/facebookresearch/vggt), [MV-TAP](https://github.com/cvlab-kaist/MV-TAP), [OpenD4RT](https://github.com/Lijiaxin0111/Open-d4rt), [MATCHA](https://github.com/nv-dvl/matcha), [MV-RoMa](https://github.com/IceTea-CV/MV-RoMa), [UniFlowMatch](https://github.com/UniFlowMatch/UFM), and torchvision [RAFT](https://docs.pytorch.org/vision/0.12/auto_examples/plot_optical_flow.html) behind one small registry, then applies them either to plain image sequences or to multi-timestep Gaussian Splatting camera datasets.
+This repo is the **point tracking Python extension for 4D Gaussian Splatting**. It wraps sequence point trackers such as [CoTracker3](https://github.com/facebookresearch/co-tracker), [VGGT](https://github.com/facebookresearch/vggt), [MV-TAP](https://github.com/cvlab-kaist/MV-TAP), [OpenD4RT](https://github.com/Lijiaxin0111/Open-d4rt), [MV-RoMa](https://github.com/IceTea-CV/MV-RoMa), [UniFlowMatch](https://github.com/UniFlowMatch/UFM), and torchvision [RAFT](https://docs.pytorch.org/vision/0.12/auto_examples/plot_optical_flow.html) behind one small registry, then applies them either to plain image sequences or to multi-timestep Gaussian Splatting camera datasets.
 
 The package provides three common workflows:
 
@@ -11,10 +11,10 @@ The package provides three common workflows:
 ## Features
 
 - [x] Organised as a standard Python package with `pip install` support
-- [x] Shared point tracker registry with `cotracker3`, `vggt`, `vggsfm`, `mvtap`, `d4rt`, `matcha`, `mvroma`, `uniflowmatch`, `raft`, `dot`, and `blender`
+- [x] Shared point tracker registry with `cotracker3`, `vggt`, `vggsfm`, `mvtap`, `d4rt`, `mvroma`, `uniflowmatch`, `raft`, `dot`, and `blender`
 - [x] Single-view image sequence tracking and rendering
 - [x] Multi-timestep Gaussian Splatting camera dataset tracking
-- [x] Point batching through `--batch-size` for long tracks
+- [x] Point batching inside trackers that take a constructor `batch_size`
 - [x] Camera dataset reordering against a selected reference timestep
 - [x] Blender mesh tracking for scenes rendered by [NVS2COLMAP](https://github.com/yindaheng98/NVS2COLMAP)
 - [x] Supervision datasets (`tracker`, `gstracker`, `blender`) that save query, frames, and tracks
@@ -29,7 +29,7 @@ The package provides three common workflows:
 - [CUDA Toolkit](https://developer.nvidia.com/cuda-toolkit) matching your PyTorch installation
 - [`gaussian-splatting`](https://github.com/yindaheng98/gaussian-splatting) `>= 2.3.8`
 
-`pip install track-4dgs` also installs `Pillow`, `einops`, `timm`, `PyYAML`, `numpy`, `opencv-python`, `warp-lang`, and `diffusers>=0.30,<0.36`. Keep `diffusers` below `0.36` so it does not pull `huggingface-hub` 1.x, which breaks `transformers<5`.
+`pip install track-4dgs` also installs `Pillow`, `einops`, `timm`, `PyYAML`, `numpy`, `opencv-python`, and `warp-lang`.
 
 The published wheel leaves out Git dependencies. Install them for the trackers that need them:
 
@@ -49,7 +49,7 @@ pip install --upgrade "git+https://github.com/jytime/LightGlue.git#egg=lightglue
 pip install --upgrade "git+https://github.com/castacks/UniCeption.git@ee7fa0b50d8295b3f0485e42c1d133fb534bfce7"
 ```
 
-`matcha`, `mvroma`, `uniflowmatch`, and `dot` ship inside this package. Their source trees are the `submodules/matcha`, `submodules/MV-RoMa`, `submodules/UFM`, and `submodules/dot` submodules, so a source install needs `git clone --recursive`.
+`mvroma`, `uniflowmatch`, and `dot` ship inside this package. Their source trees are the `submodules/MV-RoMa`, `submodules/UFM`, and `submodules/dot` submodules, so a source install needs `git clone --recursive`.
 
 If you have trouble with `gaussian-splatting`, try installing it from source:
 
@@ -119,13 +119,6 @@ wget -P checkpoints https://huggingface.co/facebook/VGGSfM/resolve/main/vggsfm_v
 
 If the checkpoint is not present, `load_vggsfm` downloads it from that URL.
 
-MATCHA checkpoint (`matcha`, default `checkpoints/matcha_pretrained.pth`, from the [MATCHA release](https://drive.google.com/file/d/17p0-ne4B9H60cC_AF6G284SetuImDUDO/view?usp=sharing)):
-
-```shell
-mkdir -p checkpoints
-# save the downloaded file as checkpoints/matcha_pretrained.pth
-```
-
 MV-TAP checkpoint (`mvtap`, default `checkpoints/mvtap.ckpt`, from the [MV-TAP release](https://drive.google.com/file/d/1sCml0BL6VQGy-MGgpidz2-BdymAJhboU/view?usp=sharing)):
 
 ```shell
@@ -176,7 +169,6 @@ python -c "import track_4dgs; print(track_4dgs.get_available_point_trackers())"
 | `vggt` | `VGGTPointTracker` | single-view | yes |
 | `vggsfm` | `VGGSfMPointTracker` | single-view | yes |
 | `d4rt` | `D4RTPointTracker` | single-view | yes |
-| `matcha` | `MatchaPointTracker` | single-view | yes |
 | `mvroma` | `MVRoMaPointTracker` | single-view | yes |
 | `uniflowmatch` | `UniFlowMatchPointTracker` | single-view | yes |
 | `raft` | `RAFTPointTracker` | single-view | yes |
@@ -198,15 +190,15 @@ python -m track_4dgs.track1v \
 
 The command samples random query points on the first image, tracks them through all source images, and saves a rendered track overlay sequence under the destination directory. Overlay color follows confidence: red is low, green is high.
 
-Tracker-specific options can be passed with repeated `-m/--option_tracker` values. `--batch-size` forwards chunks of query points to the tracker; omit it to track every point in one call.
+Tracker-specific options can be passed with repeated `-m/--option_tracker` values. Trackers that chunk query points take that size as a constructor `batch_size`. Omit it to track every point in one call.
 
 ```shell
 python -m track_4dgs.track1v \
     -s data/frame_000.png data/frame_001.png data/frame_002.png \
     -d output/track1v-vggt \
     --tracker vggt \
-    --batch-size 128 \
     -m checkpoint="'checkpoints/vggt_1B_commercial.pt'" \
+    -m batch_size=128 \
     -m iters=4
 ```
 
@@ -260,7 +252,7 @@ python -m track_4dgs.build_dataset \
     -d output/sequence \
     -i 30000 \
     --num-points 256 \
-    --batch-size 32 \
+    -m batch_size=32 \
     --save-folder output/sequence/dataset-mvtap \
     --vis-folder output/sequence/dataset-mvtap-vis
 ```
@@ -422,7 +414,7 @@ queries = query_views_from_gaussians(
     init_dataset_index=0,
     num_points=256,
 )
-tracked_datasets = dataset_tracker(queries, datasets, batch_size=128)
+tracked_datasets = dataset_tracker(queries, datasets)
 
 camera_track = tracked_datasets[0][0].custom_data["track"]
 print(camera_track.points.shape)  # [num_points, 2] for this camera in this frame
@@ -449,7 +441,7 @@ print(camera_track.points.shape)        # [num_points, 2] for this camera in thi
 
 ## Design: Point Tracker Registry
 
-`AbstractPointTracker.__call__` validates inputs, then calls `track`. It takes a view-major `Query` (`points` `[V, N, 2]`, `frame_indices` `[V, N]`, `in_image` `[V, N]`) and frame-major camera datasets, and returns one `Track` per view. `batch_size` splits the point dimension; `None` tracks every point in one call. `build_dataset` keeps that view-major `Supervision` layout.
+`AbstractPointTracker.__call__` validates inputs, then calls `track`. It takes a view-major `Query` (`points` `[V, N, 2]`, `frame_indices` `[V, N]`, `in_image` `[V, N]`) and frame-major camera datasets, and returns one `Track` per view. A tracker that chunks query points reads `batch_size` from its constructor. `build_dataset` keeps that view-major `Supervision` layout.
 
 `CameraDatasetTracker` and `build_camera_dataset_tracker` are reserved for a later step that hangs those tracks back on the cameras. `build_camera_dataset_tracker(tracker_name, device, tracker_configs)` builds a registered point tracker and wraps it. Calling the wrapper with a view-major `Query` and frame-major camera datasets returns one `TrackedCameraDataset` per frame. Each camera then carries its `CameraTrack` on `camera.custom_data["track"]`. A saved sample can rebuild one frame of that layout with `Supervision.tracked_camera_dataset(index)` without running the tracker again. `build_dataset` does not call this path:
 
@@ -457,7 +449,7 @@ print(camera_track.points.shape)        # [num_points, 2] for this camera in thi
 query + frames -> validate + track -> view_tracks -> tracked camera datasets
 ```
 
-Single-view trackers (`AbstractViewPointTracker`, e.g. CoTracker3 / VGGT / MATCHA) split the query by view and implement `track_batch(points, frame_indices, frames, masks)` for one camera sequence. Joint trackers (`AbstractBatchPointTracker`, e.g. MV-TAP / Blender) consume all views at once through `track_batch(query, frames)` and batch along the point dimension.
+Single-view trackers (`AbstractViewPointTracker`, e.g. CoTracker3 / VGGT / DOT) split the query by view and implement `track_view(points, frame_indices, frames, masks)` for one camera sequence. MV-TAP and Blender subclass `AbstractPointTracker` and implement `track(query, frames)` for all views at once. MV-TAP splits query points with its constructor `batch_size` when it is set.
 
 ```text
 Frame 0 cameras --\
@@ -471,7 +463,7 @@ This keeps model-specific code isolated in tracker implementations while the 4DG
 
 ## Extending: Adding a New Point Tracker
 
-Single-view trackers return `Track(points=[D, N, 2], visibility=[D, N], confidence=[D, N], mask=[D, N])` from `track_batch`:
+Single-view trackers return `Track(points=[D, N, 2], visibility=[D, N], confidence=[D, N], mask=[D, N])` from `track_view`:
 
 ```python
 from collections.abc import Sequence
@@ -486,7 +478,7 @@ class MyPointTracker(AbstractViewPointTracker):
         self.device = torch.device(device)
         return self
 
-    def track_batch(
+    def track_view(
         self,
         points: torch.Tensor,
         frame_indices: torch.Tensor,
@@ -496,7 +488,7 @@ class MyPointTracker(AbstractViewPointTracker):
         ...
 ```
 
-A joint tracker subclasses `AbstractBatchPointTracker` and implements `track_batch(self, query, frames) -> Sequence[Track]`, one `Track` per view.
+A multi-view tracker subclasses `AbstractPointTracker` and implements `track(self, query, frames) -> Sequence[Track]`, one `Track` per view. Fold `in_image` into `Track.mask`.
 
 Register it at import time:
 
@@ -516,4 +508,4 @@ Import the module that calls `register_point_tracker` before `build_point_tracke
 
 ## Acknowledgement
 
-This repo is developed based on [CoTracker](https://github.com/facebookresearch/co-tracker), [VGGT](https://github.com/facebookresearch/vggt), [MV-TAP](https://github.com/cvlab-kaist/MV-TAP), [OpenD4RT](https://github.com/Lijiaxin0111/Open-d4rt), [MATCHA](https://github.com/nv-dvl/matcha), [MV-RoMa](https://github.com/IceTea-CV/MV-RoMa), [UniFlowMatch](https://github.com/UniFlowMatch/UFM), [torchvision RAFT](https://docs.pytorch.org/vision/0.12/auto_examples/plot_optical_flow.html), [UniCeption](https://github.com/castacks/UniCeption), [LightGlue](https://github.com/jytime/LightGlue), [gaussian-splatting (packaged)](https://github.com/yindaheng98/gaussian-splatting), and [NVS2COLMAP](https://github.com/yindaheng98/NVS2COLMAP). Many thanks to the authors for open-sourcing their codebases.
+This repo is developed based on [CoTracker](https://github.com/facebookresearch/co-tracker), [VGGT](https://github.com/facebookresearch/vggt), [MV-TAP](https://github.com/cvlab-kaist/MV-TAP), [OpenD4RT](https://github.com/Lijiaxin0111/Open-d4rt), [MV-RoMa](https://github.com/IceTea-CV/MV-RoMa), [UniFlowMatch](https://github.com/UniFlowMatch/UFM), [torchvision RAFT](https://docs.pytorch.org/vision/0.12/auto_examples/plot_optical_flow.html), [UniCeption](https://github.com/castacks/UniCeption), [LightGlue](https://github.com/jytime/LightGlue), [gaussian-splatting (packaged)](https://github.com/yindaheng98/gaussian-splatting), and [NVS2COLMAP](https://github.com/yindaheng98/NVS2COLMAP). Many thanks to the authors for open-sourcing their codebases.
