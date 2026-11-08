@@ -5,16 +5,17 @@ import torch.nn.functional as F
 
 from track_4dgs.tracker import AbstractDensePointTracker, DenseTrack
 
-from .tracker import NUM_TRACKS, SIM_TRACKS, load_dot, resize_model
+from .tracker import NUM_TRACKS, SIM_TRACKS, load_dot, resize_model, resize_video
 
 
 class DOTDensePointTracker(AbstractDensePointTracker):
     """Dense tracks with DOT from one source frame to every other frame.
 
     Frames are RGB ``[3, H, W]`` tensors in ``[0, 1]`` and share one
-    resolution. ``model`` selects the sparse initializer: ``dot`` (CoTracker2),
+    resolution. ``model`` selects the sparse initializer:     ``dot`` (CoTracker2),
     ``cotracker3``, ``tapir``, or ``bootstapir``. The working resolution
-    follows the frame, rounded down to a multiple of 8.
+    follows the frame, rounded down to a multiple of 8, unless
+    ``max_resolution`` caps the long side.
 
     ``track_dense`` rolls the video so ``source_index`` is first, calls
     ``get_tracks_from_first_to_every_other_frame``, and rolls the maps back.
@@ -22,8 +23,11 @@ class DOTDensePointTracker(AbstractDensePointTracker):
     ``confidence`` are the refiner alpha.
     """
 
-    def __init__(self, model: str = "dot"):
+    def __init__(self, model: str = "dot", max_resolution: int | None = None):
+        if max_resolution is not None and max_resolution < 8:
+            raise ValueError("max_resolution must be at least 8")
         self.model = load_dot(model)
+        self.max_resolution = max_resolution
         self.device = torch.device("cpu")
         self.model.eval()
 
@@ -41,11 +45,13 @@ class DOTDensePointTracker(AbstractDensePointTracker):
         if any(frame.shape[-2:] != frames[0].shape[-2:] for frame in frames):
             raise ValueError("DOTDensePointTracker expects all frames in a view to have the same resolution")
         _, height, width = frames[0].shape
-        self.model = resize_model(self.model, height, width, self.device)
+        self.model = resize_model(self.model, height, width, self.device, self.max_resolution)
         video = torch.stack([
             frame.detach().clamp(0, 1).to(device=self.device, dtype=torch.float32)
             for frame in frames
         ], dim=0).unsqueeze(0)
+        model_h, model_w = (int(value) for value in self.model.resolution)
+        video = resize_video(video, model_h, model_w)
         video = torch.roll(video, shifts=-source_index, dims=1)
         prediction = self.model.get_tracks_from_first_to_every_other_frame(
             {"video": video},

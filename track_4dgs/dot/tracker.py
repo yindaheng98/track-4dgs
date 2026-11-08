@@ -1,6 +1,7 @@
 from collections.abc import Sequence
 
 import torch
+import torch.nn.functional as F
 from dot.models.dense_optical_tracking import DenseOpticalTracker
 from dot.utils.torch import get_grid
 
@@ -35,12 +36,40 @@ NUM_TRACKS = 1024
 SIM_TRACKS = 1024
 
 
-def resize_model(model: DenseOpticalTracker, height: int, width: int, device: torch.device) -> DenseOpticalTracker:
+def resize_video(video: torch.Tensor, height: int, width: int) -> torch.Tensor:
+    """Resize ``[B, T, C, H, W]`` so the estimator sees a multiple of 8.
+
+    DOT's RAFT estimator returns flow on the next multiple of its patch size.
+    A frame whose sides are not multiples of 8 makes that map disagree with
+    the image, and motion-boundary sampling then fails.
+    """
+    batch, time, channels, src_h, src_w = video.shape
+    if (src_h, src_w) == (height, width):
+        return video
+    flat = video.reshape(batch * time, channels, src_h, src_w)
+    flat = F.interpolate(flat, size=(height, width), mode="bilinear", align_corners=True)
+    return flat.reshape(batch, time, channels, height, width)
+
+
+def resize_model(
+        model: DenseOpticalTracker,
+        height: int,
+        width: int,
+        device: torch.device,
+        max_resolution: int | None = None,
+) -> DenseOpticalTracker:
     """Point the fixed estimator and refiner grids at this frame size.
 
     Both sides are rounded down to a multiple of 8, matching TrackerSplat's
     ``rescale_factor=1`` path. The estimator patch is 8 and the refiner patch is 4.
+    ``max_resolution`` caps the long side before that rounding. The refiner's
+    correlation is quadratic in the feature-map area, so a 2MP frame does not
+    fit on a 10GB GPU.
     """
+    if max_resolution is not None and max(height, width) > max_resolution:
+        scale = max_resolution / max(height, width)
+        height = int(height * scale)
+        width = int(width * scale)
     height = height // 8 * 8
     width = width // 8 * 8
     if height < 8 or width < 8:
@@ -87,15 +116,19 @@ class DOTPointTracker(AbstractViewPointTracker):
     One call runs ``tracks_for_queries``. DOT tracks 1024 sparse points,
     refines a dense flow from each source frame, and samples that flow at the
     queries. The working resolution follows the frame, rounded down to a
-    multiple of 8. Queries and predictions stay in the original pixel frame.
+    multiple of 8, unless ``max_resolution`` caps the long side. Queries and
+    predictions stay in the original pixel frame.
 
     DOT queries are ``[t, y, x]``. Returned tracks are ``[x, y, visibility]``.
     ``visibility`` and ``confidence`` are that score. The refiner thresholds
     it, so both are 0 or 1, and 1 on the source frame.
     """
 
-    def __init__(self, model: str = "dot"):
+    def __init__(self, model: str = "dot", max_resolution: int | None = None):
+        if max_resolution is not None and max_resolution < 8:
+            raise ValueError("max_resolution must be at least 8")
         self.model = load_dot(model)
+        self.max_resolution = max_resolution
         self.device = torch.device("cpu")
         self.model.eval()
 
@@ -121,12 +154,18 @@ class DOTPointTracker(AbstractViewPointTracker):
             raise ValueError("frame_indices must point at frames in the sequence")
 
         _, height, width = frames[0].shape
-        self.model = resize_model(self.model, height, width, self.device)
+        self.model = resize_model(self.model, height, width, self.device, self.max_resolution)
+        model_h, model_w = (int(value) for value in self.model.resolution)
         video = torch.stack([
             frame.detach().clamp(0, 1).to(device=self.device, dtype=torch.float32)
             for frame in frames
         ], dim=0).unsqueeze(0)
+        video = resize_video(video, model_h, model_w)
         query_xy = points.to(device=self.device, dtype=torch.float32)
+        query_xy = query_xy * query_xy.new_tensor([
+            (model_w - 1) / (width - 1),
+            (model_h - 1) / (height - 1),
+        ])
         query_t = frame_indices.to(device=self.device, dtype=torch.float32)
         # submodules/dot/dot/models/dense_optical_tracking.py#L100-L104
         # query_points is [B, S, 3] as [t, y, x] in the original frame's pixels.
@@ -141,6 +180,7 @@ class DOTPointTracker(AbstractViewPointTracker):
         # submodules/dot/dot/models/dense_optical_tracking.py#L213-L216
         tracks = prediction["tracks"][0]
         pred = tracks[..., :2].to(device=points.device, dtype=points.dtype)
+        pred = pred * pred.new_tensor([(width - 1) / (model_w - 1), (height - 1) / (model_h - 1)])
         visibility = tracks[..., 2].to(device=points.device, dtype=points.dtype).clamp(0, 1)
         return Track(
             points=pred,
