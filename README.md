@@ -153,6 +153,67 @@ wget -P checkpoints/OpenD4RT_32CLIP_9Dataset_NoAUG https://huggingface.co/Lijiax
 
 Each model requires both `opend4rt.ckpt` and its adjacent `model.yaml`. Pass either the checkpoint file or its containing directory through the `checkpoint` tracker option.
 
+### Download Datasets
+
+[DexYCB](https://dex-ycb.github.io/) ([CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/)). Download the per-folder archives from the project page. Each subject is 12G. `bop.tar.gz` is 1.2G, `models.tar.gz` is 1.4G, and `calibration.tar.gz` is 16K. `gdown` downloads each Google Drive file. The loop extracts every archive into `data/dex-ycb`. That directory is `DEX_YCB_DIR` for [dex-ycb-toolkit](https://github.com/NVlabs/dex-ycb-toolkit): `20200709-subject-01/` through `20201022-subject-10/`, plus `calibration/` and `models/`.
+
+```shell
+pip install gdown
+mkdir -p data/dex-ycb
+while read -r name id; do
+  [ -n "$name" ] || continue
+  gdown --fuzzy "https://drive.google.com/file/d/${id}/view" -O "data/dex-ycb/$name"
+  tar -C data/dex-ycb -zxvf "data/dex-ycb/$name"
+done <<'EOF'
+20200709-subject-01.tar.gz 1Ehh92wDE3CWAiKG7E9E73HjN2Xk2XfEk
+20200813-subject-02.tar.gz 1Uo7MLqTbXEa-8s7YQZ3duugJ1nXFEo62
+20200820-subject-03.tar.gz 1FkUxas8sv8UcVGgAzmSZlJw1eI5W5CXq
+20200903-subject-04.tar.gz 14up6qsTpvgEyqOQ5hir-QbjMB_dHfdpA
+20200908-subject-05.tar.gz 1NBA_FPyGWOQF5-X9ueAat5g8lDMz-EmS
+20200918-subject-06.tar.gz 1UWIN2-wOBZX2T0dkAi4ctAAW8KffkXMQ
+20200928-subject-07.tar.gz 1oWEYD_o3PVh39pLzMlJcArkDtMj4nzI0
+20201002-subject-08.tar.gz 1GTNZwhWbs7Mfez0krTgXwLPndvrw1Ztv
+20201015-subject-09.tar.gz 1j0BLkaCjIuwjakmywKdOO9vynHTWR0UH
+20201022-subject-10.tar.gz 1FvFlRfX-p5a5sAWoKEGc17zKJWwKaSB-
+bop.tar.gz 1CPqLjsaYNjE3xSJbuWmqaMsGvyGIxiKL
+calibration.tar.gz 1UAwVKT4Rgb1fLcFoa1o71_-0NtSvvLAQ
+models.tar.gz 1cAzlQBpcTatI5ykYQ8ziQiHLUG_a_UpM
+EOF
+```
+
+[Harmony4D](https://huggingface.co/datasets/Jyun-Ting/Harmony4D) ([project page](https://jyuntins.github.io/harmony4d/), [download notes](https://github.com/jyuntins/harmony4d/blob/main/assets/DOWNLOAD.md)). The repo is about 352G of zip archives under `train/` and `test/`, licensed under MIT. `hf download` writes them to `data/harmony4d`. Install the [Hugging Face CLI](https://huggingface.co/docs/huggingface_hub/guides/cli) if `hf` is not on `PATH`.
+
+```shell
+mkdir -p data/harmony4d
+hf download Jyun-Ting/Harmony4D --type dataset --local-dir data/harmony4d
+```
+
+One sequence is the same command with `--include`. `train/04_sword` is split across `train/04_sword_part1.zip` and `train/04_sword_part2.zip`.
+
+```shell
+hf download Jyun-Ting/Harmony4D --type dataset --include "train/01_hugging.zip" --local-dir data/harmony4d
+```
+
+Unzip each archive inside `train/` or `test/`. The [download notes](https://github.com/jyuntins/harmony4d/blob/main/assets/DOWNLOAD.md) expect one sequence folder per activity:
+
+```shell
+for z in data/harmony4d/train/*.zip data/harmony4d/test/*.zip; do
+  unzip -n -d "$(dirname "$z")" "$z"
+done
+```
+
+```text
+data/harmony4d/
+├── train/
+│   ├── 01_hugging/
+│   ├── 02_grappling/
+│   └── ...
+└── test/
+    ├── 01_hugging/
+    ├── 03_grappling2/
+    └── ...
+```
+
 ## Command-Line Usage
 
 ### List Registered Point Trackers
