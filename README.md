@@ -162,8 +162,8 @@ pip install gdown
 mkdir -p data/dex-ycb
 while read -r name id; do
   [ -n "$name" ] || continue
-  gdown --fuzzy "https://drive.google.com/file/d/${id}/view" -O "data/dex-ycb/$name"
-  tar -C data/dex-ycb -zxvf "data/dex-ycb/$name"
+  gdown "$id" -O "data/dex-ycb/$name" &&
+    tar -C data/dex-ycb -zxvf "data/dex-ycb/$name"
 done <<'EOF'
 20200709-subject-01.tar.gz 1Ehh92wDE3CWAiKG7E9E73HjN2Xk2XfEk
 20200813-subject-02.tar.gz 1Uo7MLqTbXEa-8s7YQZ3duugJ1nXFEo62
