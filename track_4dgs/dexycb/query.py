@@ -5,7 +5,6 @@ from collections.abc import Sequence
 import torch
 
 from ..tracker.tracker import Query, Track
-from ..utils import normalize_index
 
 
 def query_and_tracks_from_trajectories(
@@ -34,7 +33,6 @@ def query_and_tracks_from_trajectories(
         raise ValueError("points must contain at least one view, frame, and point")
     if len(widths) != n_views or len(heights) != n_views:
         raise ValueError("widths and heights must have one entry per view")
-    start_index = normalize_index(start_index, n_frames, "start index")
 
     seen = valid[:, start_index]
     query_points = points[:, start_index]
