@@ -8,6 +8,8 @@ from .ufm import UniFlowMatchPointTracker
 from .raft import RAFTPointTracker
 from .dot import DOTPointTracker, DOTDensePointTracker
 from .blender import BlenderPointTracker, BlenderScene, BlenderDataset
+from .dexycb import DexYCBDataset, DexYCBSpec
+from .harmony4d import Harmony4DDataset, Harmony4DSpec
 from .dataset import AbstractDataset, AbstractGroupArgsDataset, SavedDataset, Supervision
 from .dataset import AbstractPointTrackerDataset, PointSampleSpec, SamplePointSpec, SamplePointTrackerDataset
 from .dataset import AbstractLazyLoadDataset, SupervisionSpec
@@ -30,6 +32,7 @@ __all__ = [
     "MVTAPPointTracker", "D4RTPointTracker",
     "MVRoMaPointTracker", "UniFlowMatchPointTracker", "RAFTPointTracker", "DOTPointTracker", "DOTDensePointTracker", "BlenderPointTracker",
     "AbstractDataset", "AbstractGroupArgsDataset", "SavedDataset", "Supervision",
+    "DexYCBDataset", "DexYCBSpec", "Harmony4DDataset", "Harmony4DSpec",
     "AbstractPointTrackerDataset", "PointSampleSpec", "SamplePointSpec", "SamplePointTrackerDataset",
     "AbstractLazyLoadDataset", "SupervisionSpec",
     "GaussianPointSampleSpec", "GaussianSplattingPointTrackerDataset",
