@@ -4,7 +4,6 @@ Each frame is a :class:`~gaussian_splatting.dataset.LazyCameraDataset`.
 ``len`` counts cameras. An image is read when that camera is indexed.
 """
 
-import os
 from dataclasses import dataclass
 
 import torch
@@ -49,31 +48,10 @@ class DexYCBCameraSpec:
 
 
 class DexYCBFrame(LazyCameraDataset):
-    """The DexYCB views at one timestep."""
+    """The DexYCB views at one timestep.
 
-    def __init__(
-            self,
-            sequence: str,
-            serials: list[str],
-            intrinsics: list[tuple[float, float, float, float]],
-            rotations: list[torch.Tensor],
-            translations: list[torch.Tensor],
-            frame_index: int,
-            device: str = "cpu",
-    ):
-        specs = []
-        for serial, intrinsic, rotation, translation in zip(serials, intrinsics, rotations, translations):
-            fx, fy, cx, cy = intrinsic
-            folder = os.path.join(sequence, serial)
-            specs.append(DexYCBCameraSpec(
-                serial=serial,
-                fx=fx,
-                fy=fy,
-                cx=cx,
-                cy=cy,
-                rotation=rotation,
-                translation=translation,
-                image_path=os.path.join(folder, f"color_{frame_index:06d}.jpg"),
-                depth_path=os.path.join(folder, f"aligned_depth_to_color_{frame_index:06d}.png"),
-            ))
-        super().__init__(specs, load_mask=False, load_depth=True, device=device)
+    ``camera_specs`` is one :class:`DexYCBCameraSpec` per color camera.
+    """
+
+    def __init__(self, camera_specs: list[DexYCBCameraSpec], load_depth: bool, device: str = "cpu"):
+        super().__init__(camera_specs, load_mask=False, load_depth=load_depth, device=device)
