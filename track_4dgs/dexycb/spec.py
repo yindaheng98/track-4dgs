@@ -43,3 +43,17 @@ def load_extrinsics(calibration_dir: str, sequence_meta: dict) -> tuple[list[tor
         translations.append(torch.tensor(w2c[:3, 3], dtype=torch.float32))
     return rotations, translations
 
+
+def load_intrinsics(calibration_dir: str, sequence_meta: dict) -> tuple[list[float], list[float], list[float], list[float]]:
+    focals_x = []
+    focals_y = []
+    centers_x = []
+    centers_y = []
+    for serial in sequence_meta["serials"]:
+        path = os.path.join(calibration_dir, "intrinsics", f"{serial}_{IMAGE_WIDTH}x{IMAGE_HEIGHT}.yml")
+        color = load_yaml(path)["color"]
+        focals_x.append(float(color["fx"]))
+        focals_y.append(float(color["fy"]))
+        centers_x.append(float(color["ppx"]))
+        centers_y.append(float(color["ppy"]))
+    return focals_x, focals_y, centers_x, centers_y
