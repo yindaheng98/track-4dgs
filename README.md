@@ -27,7 +27,7 @@ The package provides three common workflows:
 
 - [PyTorch](https://pytorch.org/) (CUDA build recommended)
 - [CUDA Toolkit](https://developer.nvidia.com/cuda-toolkit) matching your PyTorch installation
-- [`gaussian-splatting`](https://github.com/yindaheng98/gaussian-splatting) `>= 2.3.8`
+- [`gaussian-splatting`](https://github.com/yindaheng98/gaussian-splatting) `>= 2.12.0`
 
 `pip install track-4dgs` also installs `Pillow`, `einops`, `timm`, `PyYAML`, `numpy`, `opencv-python`, and `warp-lang`.
 
@@ -35,7 +35,7 @@ The published wheel leaves out Git dependencies. Install them for the trackers t
 
 ```shell
 pip install wheel setuptools
-pip install --upgrade "gaussian-splatting>=2.3.8"
+pip install --upgrade "gaussian-splatting>=2.12.0"
 
 # cotracker3
 pip install --upgrade git+https://github.com/facebookresearch/co-tracker.git@main

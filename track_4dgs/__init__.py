@@ -10,6 +10,7 @@ from .dot import DOTPointTracker, DOTDensePointTracker
 from .blender import BlenderPointTracker, BlenderScene, BlenderDataset
 from .dataset import AbstractDataset, AbstractGroupArgsDataset, SavedDataset, Supervision
 from .dataset import AbstractPointTrackerDataset, PointSampleSpec, SamplePointSpec, SamplePointTrackerDataset
+from .dataset import AbstractLazyLoadDataset, SupervisionSpec
 from .dataset import GaussianPointSampleSpec, GaussianSplattingPointTrackerDataset
 from .dataset import TrackedCameraDataset, CameraDatasetTracker, build_camera_dataset_tracker, prepare_datasets
 from .dataset import register_supervision_dataset, get_available_supervision_datasets, get_supervision_dataset
@@ -30,6 +31,7 @@ __all__ = [
     "MVRoMaPointTracker", "UniFlowMatchPointTracker", "RAFTPointTracker", "DOTPointTracker", "DOTDensePointTracker", "BlenderPointTracker",
     "AbstractDataset", "AbstractGroupArgsDataset", "SavedDataset", "Supervision",
     "AbstractPointTrackerDataset", "PointSampleSpec", "SamplePointSpec", "SamplePointTrackerDataset",
+    "AbstractLazyLoadDataset", "SupervisionSpec",
     "GaussianPointSampleSpec", "GaussianSplattingPointTrackerDataset",
     "BlenderScene", "BlenderDataset",
 ]
