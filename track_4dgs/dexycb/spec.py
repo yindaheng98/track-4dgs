@@ -57,3 +57,83 @@ def load_intrinsics(calibration_dir: str, sequence_meta: dict) -> tuple[list[flo
         centers_x.append(float(color["ppx"]))
         centers_y.append(float(color["ppy"]))
     return focals_x, focals_y, centers_x, centers_y
+
+
+def load_joint_tracks(sequence_dir: str, sequence_meta: dict) -> tuple[torch.Tensor, torch.Tensor]:
+    """MANO ``joint_2d`` for every view. Missing joints are marked ``-1`` by DexYCB."""
+
+    serials = [str(serial) for serial in sequence_meta["serials"]]
+    num_frames = int(sequence_meta["num_frames"])
+    views = []
+    for serial in serials:
+        folder = os.path.join(sequence_dir, serial)
+        frames = []
+        for frame_index in range(num_frames):
+            with np.load(os.path.join(folder, f"labels_{frame_index:06d}.npz")) as label:
+                frames.append(np.asarray(label["joint_2d"][0], dtype=np.float32))
+        views.append(np.stack(frames))
+    points = torch.from_numpy(np.stack(views))
+    valid = torch.isfinite(points).all(dim=-1) & (points >= 0).all(dim=-1)
+    return points, valid
+
+
+@dataclass(frozen=True)
+class DexYCBSpec:
+    """One DexYCB capture. Cameras and joints are read in :meth:`load`.
+
+    ``sequence_dir`` contains ``meta.yml`` and one image folder per camera.
+    ``calibration_dir`` contains ``intrinsics/`` and ``extrinsics_*/``.
+    """
+
+    sequence_dir: str
+    calibration_dir: str
+    start_index: int
+    load_depth: bool = True
+
+    def load(self, device) -> tuple[Query, list[DexYCBFrame], list[Track]]:
+        meta = load_yaml(os.path.join(self.sequence_dir, "meta.yml"))
+        serials = [str(serial) for serial in meta["serials"]]
+        num_frames = int(meta["num_frames"])
+        if len(serials) == 0:
+            raise ValueError(f"{self.sequence_dir} has no cameras")
+        if num_frames <= 0:
+            raise ValueError(f"{self.sequence_dir} has no frames")
+        if self.start_index >= num_frames:
+            raise ValueError(f"{self.sequence_dir} start_index {self.start_index} is outside 0..{num_frames - 1}")
+        rotations, translations = load_extrinsics(self.calibration_dir, meta)
+        focals_x, focals_y, centers_x, centers_y = load_intrinsics(self.calibration_dir, meta)
+        camera_specs = [[] for _ in range(num_frames)]
+        for serial, fx, fy, cx, cy, rotation, translation in zip(
+                serials, focals_x, focals_y, centers_x, centers_y, rotations, translations, strict=True):
+            folder = os.path.join(self.sequence_dir, serial)
+            for frame_index in range(num_frames):
+                camera_specs[frame_index].append(DexYCBCameraSpec(
+                    serial=serial,
+                    fx=fx,
+                    fy=fy,
+                    cx=cx,
+                    cy=cy,
+                    rotation=rotation,
+                    translation=translation,
+                    image_path=os.path.join(folder, f"color_{frame_index:06d}.jpg"),
+                    depth_path=os.path.join(folder, f"aligned_depth_to_color_{frame_index:06d}.png"),
+                ))
+        frames = [DexYCBFrame(specs, load_depth=self.load_depth, device=device) for specs in camera_specs]
+        points, valid = load_joint_tracks(self.sequence_dir, meta)
+        if device is not None:
+            points = points.to(device)
+            valid = valid.to(device)
+        start_indices = torch.full(
+            (points.shape[0], points.shape[2]),
+            self.start_index,
+            dtype=torch.int64,
+            device=points.device,
+        )
+        query, tracks = query_and_tracks_from_trajectories(
+            points,
+            valid,
+            [IMAGE_WIDTH] * len(serials),
+            [IMAGE_HEIGHT] * len(serials),
+            start_indices,
+        )
+        return query, frames, tracks
