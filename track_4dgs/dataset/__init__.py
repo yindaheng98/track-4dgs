@@ -1,5 +1,6 @@
 from .dataset import AbstractDataset, SavedDataset
 from .track_point import AbstractPointTrackerDataset, PointSampleSpec
+from .lazy_load import AbstractLazyLoadDataset, SupervisionSpec
 from .group_args import AbstractGroupArgsDataset
 from .supervision import Supervision
 from .sample_point import SamplePointSpec, SamplePointTrackerDataset
@@ -15,6 +16,8 @@ __all__ = [
     "Supervision",
     "AbstractPointTrackerDataset",
     "PointSampleSpec",
+    "AbstractLazyLoadDataset",
+    "SupervisionSpec",
     "SamplePointSpec",
     "SamplePointTrackerDataset",
     "prepare_datasets",
