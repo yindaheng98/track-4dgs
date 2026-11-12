@@ -10,6 +10,7 @@ checkpoints/
 /uniflowmatch/
 /mvroma/
 /dot/
+/vggt/
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]

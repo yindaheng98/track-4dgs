@@ -7,3 +7,6 @@
 [submodule "submodules/dot"]
 	path = submodules/dot
 	url = https://github.com/16lemoing/dot
+[submodule "submodules/vggt"]
+	path = submodules/vggt
+	url = https://github.com/facebookresearch/vggt

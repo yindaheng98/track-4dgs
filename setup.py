@@ -13,6 +13,7 @@ packages = ['track_4dgs'] + ["track_4dgs." + package for package in find_package
 packages_uniflowmatch = ["uniflowmatch"] + ["uniflowmatch." + package for package in find_namespace_packages(where="submodules/UFM/uniflowmatch")]
 packages_mvroma = ["mvroma"] + ["mvroma." + package for package in find_namespace_packages(where="submodules/MV-RoMa/src/mvroma")]
 packages_dot = ["dot"] + ["dot." + package for package in find_namespace_packages(where="submodules/dot/dot")]
+packages_vggt = ["vggt"] + ["vggt." + package for package in find_namespace_packages(where="submodules/vggt/vggt")]
 
 setup(
     name="track_4dgs",
@@ -26,12 +27,13 @@ setup(
     classifiers=[
         "Programming Language :: Python :: 3",
     ],
-    packages=packages + packages_uniflowmatch + packages_mvroma + packages_dot,
+    packages=packages + packages_uniflowmatch + packages_mvroma + packages_dot + packages_vggt,
     package_dir={
         "track_4dgs": "track_4dgs",
         "uniflowmatch": "submodules/UFM/uniflowmatch",
         "mvroma": "submodules/MV-RoMa/src/mvroma",
         "dot": "submodules/dot/dot",
+        "vggt": "submodules/vggt/vggt",
     },
     install_requires=[
         "gaussian-splatting >= 2.12.1",
@@ -43,13 +45,17 @@ setup(
         "numpy",
         "opencv-python",
         "warp-lang",
+        # VGGT runtime dependencies
+        'numpy',
+        'huggingface_hub',
+        'einops',
+        'safetensors',
     ] + ([
         # CoTracker3
         "cotracker @ git+https://github.com/facebookresearch/co-tracker.git@main",
         # VGGT and its dependencies
         "hydra-core",
         "omegaconf",
-        "vggt @ git+https://github.com/facebookresearch/vggt.git@main",
         "lightglue @ git+https://github.com/jytime/LightGlue.git#egg=lightglue",
         # UniCeption (UFM encoder / info-sharing / prediction heads)
         "uniception @ git+https://github.com/castacks/UniCeption.git@ee7fa0b50d8295b3f0485e42c1d133fb534bfce7",

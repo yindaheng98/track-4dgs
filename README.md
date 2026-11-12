@@ -29,7 +29,7 @@ The package provides three common workflows:
 - [CUDA Toolkit](https://developer.nvidia.com/cuda-toolkit) matching your PyTorch installation
 - [`gaussian-splatting`](https://github.com/yindaheng98/gaussian-splatting) `>= 2.12.0`
 
-`pip install track-4dgs` also installs `Pillow`, `einops`, `timm`, `PyYAML`, `numpy`, `opencv-python`, and `warp-lang`.
+`pip install track-4dgs` also installs `Pillow`, `einops`, `timm`, `PyYAML`, `numpy`, `opencv-python`, `warp-lang`, `huggingface_hub`, `safetensors`, `hydra-core`, and `omegaconf`.
 
 The published wheel leaves out Git dependencies. Install them for the trackers that need them:
 
@@ -40,16 +40,14 @@ pip install --upgrade "gaussian-splatting>=2.12.0"
 # cotracker3
 pip install --upgrade git+https://github.com/facebookresearch/co-tracker.git@main
 
-# vggt and vggsfm
-pip install --upgrade hydra-core omegaconf
-pip install --upgrade git+https://github.com/facebookresearch/vggt.git@main
+# VGGT COLMAP demo only. vggt and vggsfm point tracking do not import LightGlue.
 pip install --upgrade "git+https://github.com/jytime/LightGlue.git#egg=lightglue"
 
 # uniflowmatch and mvroma
 pip install --upgrade "git+https://github.com/castacks/UniCeption.git@ee7fa0b50d8295b3f0485e42c1d133fb534bfce7"
 ```
 
-`mvroma`, `uniflowmatch`, and `dot` ship inside this package. Their source trees are the `submodules/MV-RoMa`, `submodules/UFM`, and `submodules/dot` submodules, so a source install needs `git clone --recursive`.
+`mvroma`, `uniflowmatch`, `dot`, and `vggt` ship inside this package. Their source trees are the `submodules/MV-RoMa`, `submodules/UFM`, `submodules/dot`, and `submodules/vggt` submodules, so a source install needs `git clone --recursive`.
 
 If you have trouble with `gaussian-splatting`, try installing it from source:
 
