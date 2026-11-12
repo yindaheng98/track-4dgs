@@ -453,6 +453,7 @@ sources = [
 datasets = prepare_datasets(
     sources=sources,
     device="cuda",
+    cache_size=2 ** 16,
     reorder_reference_idx=0,
 )
 gaussians = prepare_gaussians(

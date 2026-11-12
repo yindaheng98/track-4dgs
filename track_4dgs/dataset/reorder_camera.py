@@ -63,6 +63,7 @@ class ReorderedCameraDataset(CameraDataset):
 def prepare_datasets(
         sources: List[str], device: str,
         trainable_camera: bool = False, load_cameras: Optional[List[str]] = None, load_mask=True, load_depth=True,
+        cache_size: int = 2 ** 16,
         reorder_reference_idx: Optional[int] = None,
 ) -> List[CameraDataset]:
     """Load cameras for all sources and optionally align them to a reference.
@@ -81,6 +82,7 @@ def prepare_datasets(
             source=source, device=device,
             trainable_camera=trainable_camera, load_camera=load_camera,
             load_mask=load_mask, load_depth=load_depth,
+            cache_size=cache_size,
         )
         for source, load_camera in zip(sources, load_cameras)
     ]

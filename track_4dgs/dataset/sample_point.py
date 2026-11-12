@@ -26,6 +26,7 @@ class SamplePointSpec:
     num_points: int
     device: str
     visible_cameras: int = 2
+    cache_size: int = 2 ** 16
 
     def load_frames(self) -> list[CameraDataset]:
         """Load this sample's cameras and align them to ``sources[init_dataset_index]``."""
@@ -37,6 +38,7 @@ class SamplePointSpec:
             load_cameras=None if self.load_cameras is None else list(self.load_cameras),
             load_mask=False,
             load_depth=False,
+            cache_size=self.cache_size,
             reorder_reference_idx=self.init_dataset_index,
         )
 
@@ -72,6 +74,7 @@ class SamplePointTrackerDataset(AbstractPointTrackerDataset[SamplePointSpec], Ab
         parser.add_argument("-m", "--option_tracker", default=[], action="append", type=str)
         parser.add_argument("--num-points", default=256, type=int)
         parser.add_argument("--visible-cameras", default=2, type=int, help="Keep a point only when more cameras than this see it.")
+        parser.add_argument("--cache-size", default=2 ** 16, type=int, help="Number of loaded cameras kept in each source dataset. Defaults to 65536.")
         return parser
 
     @staticmethod
@@ -99,6 +102,7 @@ class SamplePointTrackerDataset(AbstractPointTrackerDataset[SamplePointSpec], Ab
             num_points=common_args.num_points,
             visible_cameras=common_args.visible_cameras,
             device=common_args.device,
+            cache_size=common_args.cache_size,
         )
 
     @classmethod
@@ -113,7 +117,7 @@ class SamplePointTrackerDataset(AbstractPointTrackerDataset[SamplePointSpec], Ab
 
     @classmethod
     def parse_known_common_argv(cls, argv: list[str] = []) -> tuple[Namespace, list[str]]:
-        """Parse tracker inputs, how many points to draw, and the visible-camera limit."""
+        """Parse tracker inputs, how many points to draw, the visible-camera limit, and the camera cache size."""
         parser = ArgumentParser(allow_abbrev=False)
         cls.add_common_argument(parser)
         return parser.parse_known_args(argv)
