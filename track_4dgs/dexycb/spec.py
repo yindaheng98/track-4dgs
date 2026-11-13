@@ -119,7 +119,12 @@ class DexYCBSpec:
             if self.init_dataset_index >= n_frames:
                 raise ValueError("--init-dataset-index must index one frame")
 
-    def load(self, device) -> tuple[Query, list[DexYCBFrame], list[Track]]:
+    def load_frames(self, device) -> tuple[list[DexYCBFrame], dict]:
+        """Read the selected cameras and ``meta.yml``.
+
+        Frames are ``range(frame_start, frame_end + 1, frame_step)``.
+        """
+
         meta = load_yaml(os.path.join(self.sequence_dir, "meta.yml"))
         serials = [str(serial) for serial in meta["serials"]]
         num_frames = int(meta["num_frames"])
@@ -149,6 +154,13 @@ class DexYCBSpec:
                     depth_path=os.path.join(folder, f"aligned_depth_to_color_{frame_index:06d}.png"),
                 ))
         frames = [DexYCBFrame(specs, load_depth=self.load_depth, device=device) for specs in camera_specs]
+        return frames, meta
+
+    def load(self, device) -> tuple[Query, list[DexYCBFrame], list[Track]]:
+        frames, meta = self.load_frames(device)
+        serials = [str(serial) for serial in meta["serials"]]
+        num_frames = int(meta["num_frames"])
+        indices = selected_frame_indices(self.frame_start, self.frame_end, self.frame_step, num_frames)
         points, valid = load_joint_tracks(self.sequence_dir, meta)
         points = points[:, indices]
         valid = valid[:, indices]
