@@ -2,12 +2,14 @@
 
 import os
 from dataclasses import dataclass
+from typing import Optional
 
 import numpy as np
 import torch
 import yaml
 
 from ..tracker import Query, Track
+from ..utils import selected_frame_indices
 from .frame import IMAGE_HEIGHT, IMAGE_WIDTH, DexYCBCameraSpec, DexYCBFrame
 from .trajectory import query_and_tracks_from_trajectories
 
@@ -94,12 +96,28 @@ class DexYCBSpec:
 
     ``sequence_dir`` contains ``meta.yml`` and one image folder per camera.
     ``calibration_dir`` contains ``intrinsics/`` and ``extrinsics_*/``.
+    Frames are ``range(frame_start, frame_end + 1, frame_step)`` using 0-based
+    frame indices. ``frame_end`` defaults to the last frame. ``frame_step``
+    defaults to 1. ``init_dataset_index`` indexes that range and is the query.
     """
 
     sequence_dir: str
     calibration_dir: str
-    start_index: int
-    load_depth: bool = True
+    frame_start: int = 0
+    frame_end: Optional[int] = None
+    frame_step: int = 1
+    init_dataset_index: int = 0
+    load_depth: bool = False
+
+    def __post_init__(self):
+        if self.frame_step == 0:
+            raise ValueError("frame_step must not be 0")
+        if self.init_dataset_index < 0:
+            raise ValueError("--init-dataset-index must index one frame")
+        if self.frame_end is not None and self.frame_step is not None:
+            n_frames = len(range(self.frame_start, self.frame_end + 1, self.frame_step))
+            if self.init_dataset_index >= n_frames:
+                raise ValueError("--init-dataset-index must index one frame")
 
     def load(self, device) -> tuple[Query, list[DexYCBFrame], list[Track]]:
         meta = load_yaml(os.path.join(self.sequence_dir, "meta.yml"))
@@ -109,16 +127,17 @@ class DexYCBSpec:
             raise ValueError(f"{self.sequence_dir} has no cameras")
         if num_frames <= 0:
             raise ValueError(f"{self.sequence_dir} has no frames")
-        if self.start_index >= num_frames:
-            raise ValueError(f"{self.sequence_dir} start_index {self.start_index} is outside 0..{num_frames - 1}")
+        indices = selected_frame_indices(self.frame_start, self.frame_end, self.frame_step, num_frames)
+        if self.init_dataset_index >= len(indices):
+            raise ValueError("--init-dataset-index must index one frame")
         rotations, translations = load_extrinsics(self.calibration_dir, meta)
         focals_x, focals_y, centers_x, centers_y = load_intrinsics(self.calibration_dir, meta)
-        camera_specs = [[] for _ in range(num_frames)]
+        camera_specs = [[] for _ in indices]
         for serial, fx, fy, cx, cy, rotation, translation in zip(
                 serials, focals_x, focals_y, centers_x, centers_y, rotations, translations, strict=True):
             folder = os.path.join(self.sequence_dir, serial)
-            for frame_index in range(num_frames):
-                camera_specs[frame_index].append(DexYCBCameraSpec(
+            for slot, frame_index in enumerate(indices):
+                camera_specs[slot].append(DexYCBCameraSpec(
                     serial=serial,
                     fx=fx,
                     fy=fy,
@@ -131,12 +150,14 @@ class DexYCBSpec:
                 ))
         frames = [DexYCBFrame(specs, load_depth=self.load_depth, device=device) for specs in camera_specs]
         points, valid = load_joint_tracks(self.sequence_dir, meta)
+        points = points[:, indices]
+        valid = valid[:, indices]
         if device is not None:
             points = points.to(device)
             valid = valid.to(device)
         start_indices = torch.full(
             (points.shape[0], points.shape[2]),
-            self.start_index,
+            self.init_dataset_index,
             dtype=torch.int64,
             device=points.device,
         )
