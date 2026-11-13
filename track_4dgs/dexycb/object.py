@@ -14,6 +14,30 @@ from .dataset import DexYCBDataset
 from .frame import DexYCBFrame
 from .spec import DexYCBSpec, load_extrinsics
 
+YCB_MODEL_NAMES = {
+    1: "002_master_chef_can",
+    2: "003_cracker_box",
+    3: "004_sugar_box",
+    4: "005_tomato_soup_can",
+    5: "006_mustard_bottle",
+    6: "007_tuna_fish_can",
+    7: "008_pudding_box",
+    8: "009_gelatin_box",
+    9: "010_potted_meat_can",
+    10: "011_banana",
+    11: "019_pitcher_base",
+    12: "021_bleach_cleanser",
+    13: "024_bowl",
+    14: "025_mug",
+    15: "035_power_drill",
+    16: "036_wood_block",
+    17: "037_scissors",
+    18: "040_large_marker",
+    19: "051_large_clamp",
+    20: "052_extra_large_clamp",
+    21: "061_foam_brick",
+}
+
 
 def load_obj(path: str) -> tuple[torch.Tensor, torch.Tensor]:
     """Triangles from a Wavefront ``.obj``.
@@ -76,6 +100,129 @@ def load_c2w(calibration_dir: str, sequence_meta: dict) -> torch.Tensor:
         w2c[:3, 3] = translation
         poses.append(torch.linalg.inv(w2c))
     return torch.stack(poses)
+
+
+def posed_ycb_meshes(
+        sequence_dir: str,
+        calibration_dir: str,
+        models_dir: str,
+        meta: dict,
+        indices: list[int],
+) -> tuple[list[torch.Tensor], list[torch.Tensor]]:
+    """Pose every YCB object that has a ``pose_y`` on every selected frame.
+
+    ``meta`` is ``meta.yml``. ``indices`` are the selected frame numbers.
+    Object ids come from ``meta["ycb_ids"]``. Poses are read from each camera's
+    labels and mapped into the capture world with that camera's extrinsics.
+    A frame uses the first camera whose pose is not all zeros.
+    Meshes are ``models_dir/<name>/textured_simple.obj``.
+    Returns one ``(F, V_i, 3)`` tensor and one ``(T_i, 3)`` face tensor per object.
+    """
+
+    if "ycb_ids" not in meta:
+        raise ValueError(f"{sequence_dir} has no ycb_ids")
+    ycb_ids = [int(ycb_id) for ycb_id in meta["ycb_ids"]]
+    serials = [str(serial) for serial in meta["serials"]]
+    poses = load_pose_y(sequence_dir, serials, indices)
+    c2w = load_c2w(calibration_dir, meta)
+    if poses.shape[2] != len(ycb_ids):
+        raise ValueError(f"pose_y has {poses.shape[2]} objects and meta.yml lists {len(ycb_ids)}")
+    missing = poses.reshape(*poses.shape[:-2], -1).abs().sum(dim=-1) == 0
+    available = ~missing
+    keep = available.any(dim=0).all(dim=0)
+    if not bool(keep.any()):
+        raise ValueError("no YCB object has a pose on every selected frame")
+    view_index = available.long().argmax(dim=0)
+    frame_index = torch.arange(poses.shape[1])
+    verts = []
+    mesh_faces = []
+    for obj in keep.nonzero(as_tuple=False).flatten().tolist():
+        name = YCB_MODEL_NAMES.get(ycb_ids[obj])
+        if name is None:
+            raise ValueError(f"unknown YCB id {ycb_ids[obj]}")
+        path = os.path.join(models_dir, name, "textured_simple.obj")
+        vertices, faces = load_obj(path)
+        views = view_index[:, obj]
+        pose = poses[views, frame_index, obj]
+        object_c2w = c2w[views]
+        verts_camera = torch.einsum("fij,vj->fvi", pose[:, :3, :3], vertices) + pose[:, :3, 3].unsqueeze(1)
+        verts_world = torch.einsum("fij,fvj->fvi", object_c2w[:, :3, :3], verts_camera) + object_c2w[:, :3, 3].unsqueeze(1)
+        verts.append(verts_world)
+        mesh_faces.append(faces)
+    return verts, mesh_faces
+
+
+@dataclass(frozen=True)
+class DexYCBObjectSpec(DexYCBSpec):
+    """One DexYCB capture whose tracks are samples on the posed YCB meshes.
+
+    Cameras come from :meth:`DexYCBSpec.load_frames`. ``pose_y`` poses
+    ``textured_simple.obj``. Points are drawn on the mesh at ``init_dataset_index``
+    and carried with that triangle for the other frames.
+    ``models_dir`` contains one folder per YCB object. It is keyword-only because
+    the frame fields inherited from :class:`DexYCBSpec` already have defaults.
+    """
+
+    models_dir: str = field(kw_only=True)
+    num_points: int = 256
+    visible_cameras: int = 0
+    inward_distance: float = 0.0
+    outward_distance: float = 0.0
+    occlusion_eps: float = 1e-2
+
+    def __post_init__(self):
+        super().__post_init__()
+        if self.num_points < 1:
+            raise ValueError("num_points must be positive")
+        if self.inward_distance < 0 or self.outward_distance < 0:
+            raise ValueError("inward_distance and outward_distance must be non-negative")
+        if self.occlusion_eps < 0:
+            raise ValueError("occlusion_eps must be non-negative")
+
+    def load(self, device) -> tuple[Query, list[DexYCBFrame], list[Track]]:
+        frames, meta = self.load_frames(device)
+        indices = selected_frame_indices(self.frame_start, self.frame_end, self.frame_step, int(meta["num_frames"]))
+        verts, faces = posed_ycb_meshes(
+            self.sequence_dir, self.calibration_dir, self.models_dir, meta, indices,
+        )
+        mesh_device = torch.device("cpu" if device is None else device)
+        verts = [obj.to(mesh_device) for obj in verts]
+        faces = [obj.to(mesh_device) for obj in faces]
+        warp_device = str(mesh_device)
+        with torch.no_grad():
+            binding = sample_near_surface(
+                [obj[self.init_dataset_index] for obj in verts],
+                faces,
+                frames[self.init_dataset_index],
+                self.num_points,
+                self.visible_cameras,
+                self.inward_distance,
+                self.outward_distance,
+                self.occlusion_eps,
+                warp_device,
+            )
+            frame_indices = torch.full(
+                (binding.xyz.shape[0],), self.init_dataset_index, dtype=torch.long, device=binding.xyz.device,
+            )
+            query = Query.from_projection(binding.xyz, frames, frame_indices)
+            worlds, valid, world_verts, scene_faces, _owner = track_bind_points(verts, faces, frames, binding)
+            points, visibility = project_visibility(
+                query, frames, worlds, world_verts, scene_faces, valid,
+                self.occlusion_eps, warp_device, binding.face,
+            )
+            n_views, n_frames, n_points, _ = points.shape
+            confidence = points.new_ones((n_views, n_frames, n_points))
+            mask = valid.to(dtype=torch.bool).expand(n_frames, n_points)
+            tracks = [
+                Track(
+                    points=points[view_index],
+                    visibility=visibility[view_index],
+                    confidence=confidence[view_index],
+                    mask=mask,
+                )
+                for view_index in range(n_views)
+            ]
+        return query, frames, tracks
 
 
 class DexYCBObjectDataset(DexYCBDataset):
