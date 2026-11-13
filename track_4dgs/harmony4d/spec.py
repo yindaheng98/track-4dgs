@@ -1,6 +1,7 @@
 """One Harmony4D sequence and the readers that build its cameras and poses."""
 
 import os
+import pickle
 from dataclasses import dataclass
 
 import numpy as np
@@ -9,7 +10,7 @@ from gaussian_splatting.dataset.colmap.read_write_model import qvec2rotmat
 
 from ..dexycb import query_and_tracks_from_trajectories
 from ..tracker import Query, Track
-from ..utils import fisheye_undistort_grid
+from ..utils import fisheye_undistort_grid, full_proj_transform, project
 from .frame import Harmony4DFrame, HarmonyCameraSpec
 
 
@@ -19,7 +20,6 @@ class HarmonyView:
 
     name: str
     image_dir: str
-    pose_dir: str
     width: int
     height: int
     fx: float
@@ -99,15 +99,13 @@ def iter_view_dirs(sequence: str):
     if os.path.isdir(ego_root):
         for name in sorted(os.listdir(ego_root)):
             image_dir = os.path.join(ego_root, name, "images", "rgb")
-            pose_dir = os.path.join(sequence, "processed_data", "poses2d", name, "rgb")
             if os.path.isdir(image_dir):
-                yield name, image_dir, pose_dir
+                yield name, image_dir
     exo_root = os.path.join(sequence, "exo")
     for name in sorted(os.listdir(exo_root)):
         image_dir = os.path.join(exo_root, name, "images")
-        pose_dir = os.path.join(sequence, "processed_data", "poses2d", name)
         if os.path.isdir(image_dir):
-            yield name, image_dir, pose_dir
+            yield name, image_dir
 
 
 def load_views(sequence: str) -> tuple[list[HarmonyView], int]:
@@ -116,7 +114,7 @@ def load_views(sequence: str) -> tuple[list[HarmonyView], int]:
     poses = read_colmap_poses(os.path.join(workplace, "images.txt"))
     views = []
     num_frames = None
-    for name, image_dir, pose_dir in iter_view_dirs(sequence):
+    for name, image_dir in iter_view_dirs(sequence):
         count = jpg_count(image_dir)
         if num_frames is None:
             num_frames = count
@@ -138,7 +136,6 @@ def load_views(sequence: str) -> tuple[list[HarmonyView], int]:
         views.append(HarmonyView(
             name=name,
             image_dir=image_dir,
-            pose_dir=pose_dir,
             width=width,
             height=height,
             fx=params[0],
@@ -155,54 +152,104 @@ def load_views(sequence: str) -> tuple[list[HarmonyView], int]:
     return views, num_frames
 
 
-def read_pose_file(path: str) -> dict[str, np.ndarray]:
+COCO_JOINT_COUNT = 17
+
+
+def load_colmap_from_aria_transforms(sequence: str) -> torch.Tensor:
+    """The ``aria01`` entry of ``colmap/workplace/colmap_from_aria_transforms.pkl``.
+
+    It maps the pose world, where the checked 3D joints are stored, into the COLMAP world.
+    """
+
+    path = os.path.join(sequence, "colmap", "workplace", "colmap_from_aria_transforms.pkl")
+    with open(path, "rb") as handle:
+        transforms = pickle.load(handle)
+    transform = torch.tensor(transforms["aria01"], dtype=torch.float32)
+    if transform.shape != (4, 4):
+        raise ValueError(f"{path} aria01 has shape {tuple(transform.shape)}, expected (4, 4)")
+    return transform
+
+
+def read_pose3d(path: str) -> dict[str, torch.Tensor]:
+    """One frame: person name to ``(17, 4)`` pose-world joints.
+
+    A missing file is a frame where nobody was checked. The fourth column is
+    the COCO score and is unused after that check.
+    """
+
     if not os.path.isfile(path):
         return {}
-    data = np.load(path, allow_pickle=True)
-    item = data.item()
+    item = np.load(path, allow_pickle=True).item()
     if not isinstance(item, dict):
         raise ValueError(f"{path} does not store a person-to-joints dict")
-    return {str(person): np.asarray(joints, dtype=np.float32)[..., :2] for person, joints in item.items()}
+    poses = {}
+    for person, joints in item.items():
+        pose = torch.tensor(joints, dtype=torch.float32)
+        if pose.shape != (COCO_JOINT_COUNT, 4):
+            raise ValueError(f"{path} {person} has shape {tuple(pose.shape)}, expected ({COCO_JOINT_COUNT}, 4)")
+        poses[str(person)] = pose
+    return poses
 
 
-def load_pose_tracks(views: list[HarmonyView], num_frames: int) -> tuple[torch.Tensor, torch.Tensor]:
-    """SMPL-45 2D joints for every person, concatenated in person-name order."""
+def load_pose3d_tracks(
+        views: list[HarmonyView],
+        num_frames: int,
+        sequence: str,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Project the checked COCO joints into every view.
 
-    people = set()
-    joint_count = None
-    for view in views:
-        for person, joints in read_pose_file(os.path.join(view.pose_dir, "00001.npy")).items():
-            people.add(person)
-            if joint_count is None:
-                joint_count = int(joints.shape[0])
-            elif joints.shape[0] != joint_count:
-                raise ValueError(f"{person} joint count {joints.shape[0]} does not match {joint_count}")
-    if not people or joint_count is None:
-        raise FileNotFoundError("Harmony4D sequence has no 2D pose on frame 1")
-    names = sorted(people)
-    n_points = len(names) * joint_count
-    points = np.full((len(views), num_frames, n_points, 2), -1.0, dtype=np.float32)
+    People are concatenated in name order, so point ``person * 17 + joint``
+    is the same joint in every view. Joints stay in the pose world.
+    ``project`` multiplies row vectors on the right, and
+    ``colmap_from_aria`` maps that world into the COLMAP world, so the camera
+    matrix is ``colmap_from_aria.T @ full_proj_transform``. A joint is invalid
+    when its person is absent, it is behind the camera, or the pixel leaves
+    the image.
+    """
+
+    colmap_from_aria = load_colmap_from_aria_transforms(sequence)
+    pose_dir = os.path.join(sequence, "processed_data", "poses3d")
+    frames = [
+        read_pose3d(os.path.join(pose_dir, f"{frame_index + 1:05d}.npy"))
+        for frame_index in range(num_frames)
+    ]
+    names = sorted({person for frame in frames for person in frame})
+    if not names:
+        raise FileNotFoundError(f"{pose_dir} has no 3D pose")
+
+    n_points = len(names) * COCO_JOINT_COUNT
+    xyz = torch.zeros((num_frames, n_points, 3))
+    present = torch.zeros((num_frames, n_points), dtype=torch.bool)
+    for frame_index, pose in enumerate(frames):
+        for person_index, person in enumerate(names):
+            joints = pose.get(person)
+            if joints is None:
+                continue
+            slot = slice(person_index * COCO_JOINT_COUNT, (person_index + 1) * COCO_JOINT_COUNT)
+            xyz[frame_index, slot] = joints[:, :3]
+            present[frame_index, slot] = True
+
+    points = torch.full((len(views), num_frames, n_points, 2), -1.0)
+    valid = torch.zeros((len(views), num_frames, n_points), dtype=torch.bool)
     for view_index, view in enumerate(views):
         for frame_index in range(num_frames):
-            pose = read_pose_file(os.path.join(view.pose_dir, f"{frame_index + 1:05d}.npy"))
-            for person_index, person in enumerate(names):
-                if person not in pose:
-                    continue
-                joints = pose[person]
-                if joints.shape[0] != joint_count:
-                    raise ValueError(f"{view.name} frame {frame_index + 1} {person} joint count changed")
-                start = person_index * joint_count
-                points[view_index, frame_index, start:start + joint_count] = joints
-    tensor = torch.from_numpy(points)
-    valid = torch.isfinite(tensor).all(dim=-1) & (tensor >= 0).all(dim=-1)
-    return tensor, valid
+            rotation, translation, _pose_frame = view.pose_at(frame_index)
+            full_proj = full_proj_transform(
+                view.fx, view.fy, view.cx, view.cy, view.width, view.height, rotation, translation,
+            )
+            uv, in_frustum = project(xyz[frame_index], colmap_from_aria.T @ full_proj, view.width, view.height)
+            seen = present[frame_index]
+            points[view_index, frame_index, seen] = uv[seen]
+            valid[view_index, frame_index, seen] = in_frustum[seen]
+    return points, valid
 
 
 @dataclass(frozen=True)
 class Harmony4DSpec:
-    """One Harmony4D sequence. Cameras and poses are read in :meth:`load`.
+    """One Harmony4D sequence. Cameras and the checked 3D pose are read in :meth:`load`.
 
     ``sequence`` contains ``ego/``, ``exo/``, ``processed_data/``, and ``colmap/workplace``.
+    Tracks are the 17 COCO joints in ``processed_data/poses3d``, projected into each view.
     """
 
     sequence: str
@@ -240,7 +287,7 @@ class Harmony4DSpec:
                     pose_frame=pose_frame,
                 ))
         frames = [Harmony4DFrame(specs, device=device) for specs in camera_specs]
-        points, valid = load_pose_tracks(views, num_frames)
+        points, valid = load_pose3d_tracks(views, num_frames, self.sequence)
         if device is not None:
             points = points.to(device)
             valid = valid.to(device)
