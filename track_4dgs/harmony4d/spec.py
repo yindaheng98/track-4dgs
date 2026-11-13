@@ -35,8 +35,7 @@ class HarmonyView:
         """World-to-camera pose for ``frame_index``.
 
         Exo cameras are registered on a few frames and those poses agree, so
-        other frames use the nearest one. An ego frame with its own COLMAP
-        image uses that pose; otherwise it uses the nearest registered frame.
+        other frames use the nearest one.
         """
 
         if not self.poses:
@@ -95,12 +94,6 @@ def read_colmap_poses(path: str) -> dict[str, dict[int, tuple[int, torch.Tensor,
 
 
 def iter_view_dirs(sequence: str):
-    ego_root = os.path.join(sequence, "ego")
-    if os.path.isdir(ego_root):
-        for name in sorted(os.listdir(ego_root)):
-            image_dir = os.path.join(ego_root, name, "images", "rgb")
-            if os.path.isdir(image_dir):
-                yield name, image_dir
     exo_root = os.path.join(sequence, "exo")
     for name in sorted(os.listdir(exo_root)):
         image_dir = os.path.join(exo_root, name, "images")
@@ -248,8 +241,9 @@ def load_pose3d_tracks(
 class Harmony4DSpec:
     """One Harmony4D sequence. Cameras and the checked 3D pose are read in :meth:`load`.
 
-    ``sequence`` contains ``ego/``, ``exo/``, ``processed_data/``, and ``colmap/workplace``.
-    Tracks are the 17 COCO joints in ``processed_data/poses3d``, projected into each view.
+    ``sequence`` contains ``exo/``, ``processed_data/``, and ``colmap/workplace``.
+    Tracks are the 17 COCO joints in ``processed_data/poses3d``, projected into each exo view.
+    Ego cameras are omitted: their images use Aria's own distortion and a rotated frame.
     """
 
     sequence: str

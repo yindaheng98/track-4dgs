@@ -25,7 +25,7 @@ class Harmony4DDataset(AbstractLazyLoadDataset[Harmony4DSpec]):
     """One sample is one Harmony4D sequence.
 
     ``root`` contains ``train/`` and ``test/`` activity folders. Views are the
-    ego RGB cameras followed by the exo cameras. Tracks are the 17 COCO
+    exo cameras. Tracks are the 17 COCO
     joints that were triangulated and manually checked, projected into each
     view. ``start_index`` is the frame used as the query.
     Construction records one :class:`Harmony4DSpec` per sequence.
