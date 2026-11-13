@@ -35,6 +35,40 @@ def project(
     return uv, in_frustum
 
 
+def full_proj_transform(
+    fx: float,
+    fy: float,
+    cx: float,
+    cy: float,
+    image_width: int,
+    image_height: int,
+    R: torch.Tensor,
+    T: torch.Tensor,
+) -> torch.Tensor:
+    """World-to-clip matrix for a pinhole camera, in the same layout as a camera's.
+
+    ``R`` and ``T`` are world-to-camera. The near and far planes are ``0.01`` and
+    ``100``. Points are row vectors, so the returned matrix is applied on the right.
+    """
+
+    R = R.to(dtype=torch.float32)
+    T = T.to(device=R.device, dtype=torch.float32)
+    znear = 0.01
+    zfar = 100.0
+    world_view = torch.eye(4, device=R.device, dtype=torch.float32)
+    world_view[:3, :3] = R
+    world_view[:3, 3] = T
+    projection = torch.zeros((4, 4), device=R.device, dtype=torch.float32)
+    projection[0, 0] = 2.0 * fx / image_width
+    projection[1, 1] = 2.0 * fy / image_height
+    projection[0, 2] = 2.0 * cx / image_width - 1.0
+    projection[1, 2] = 2.0 * cy / image_height - 1.0
+    projection[2, 2] = zfar / (zfar - znear)
+    projection[2, 3] = -(zfar * znear) / (zfar - znear)
+    projection[3, 2] = 1.0
+    return world_view.T @ projection.T
+
+
 def project_points(
     xyz: torch.Tensor,
     camera: Camera,
