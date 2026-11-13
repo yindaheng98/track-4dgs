@@ -3,14 +3,15 @@
 import os
 import pickle
 from dataclasses import dataclass
+from typing import Optional
 
 import numpy as np
 import torch
 from gaussian_splatting.dataset.colmap.read_write_model import qvec2rotmat
 
-from ..dexycb import query_and_tracks_from_trajectories
+from ..dexycb.trajectory import query_and_tracks_from_trajectories
 from ..tracker import Query, Track
-from ..utils import fisheye_undistort_grid, full_proj_transform, project
+from ..utils import fisheye_undistort_grid, full_proj_transform, project, selected_frame_indices
 from .frame import Harmony4DFrame, HarmonyCameraSpec
 
 
@@ -244,18 +245,35 @@ class Harmony4DSpec:
     ``sequence`` contains ``exo/``, ``processed_data/``, and ``colmap/workplace``.
     Tracks are the 17 COCO joints in ``processed_data/poses3d``, projected into each exo view.
     Ego cameras are omitted: their images use Aria's own distortion and a rotated frame.
+    Frames are ``range(frame_start, frame_end + 1, frame_step)`` using 0-based
+    frame indices. ``frame_end`` defaults to the last frame. ``frame_step``
+    defaults to 1. ``init_dataset_index`` indexes that range and is the query.
     """
 
     sequence: str
-    start_index: int
+    frame_start: int = 0
+    frame_end: Optional[int] = None
+    frame_step: int = 1
+    init_dataset_index: int = 0
+
+    def __post_init__(self):
+        if self.frame_step == 0:
+            raise ValueError("frame_step must not be 0")
+        if self.init_dataset_index < 0:
+            raise ValueError("--init-dataset-index must index one frame")
+        if self.frame_end is not None and self.frame_step is not None:
+            n_frames = len(range(self.frame_start, self.frame_end + 1, self.frame_step))
+            if self.init_dataset_index >= n_frames:
+                raise ValueError("--init-dataset-index must index one frame")
 
     def load(self, device) -> tuple[Query, list[Harmony4DFrame], list[Track]]:
         views, num_frames = load_views(self.sequence)
         if num_frames <= 0:
             raise ValueError("Harmony4D sequence has no frames")
-        if self.start_index >= num_frames:
-            raise ValueError(f"start_index {self.start_index} is outside 0..{num_frames - 1}")
-        camera_specs = [[] for _ in range(num_frames)]
+        indices = selected_frame_indices(self.frame_start, self.frame_end, self.frame_step, num_frames)
+        if self.init_dataset_index >= len(indices):
+            raise ValueError("--init-dataset-index must index one frame")
+        camera_specs = [[] for _ in indices]
         for view in views:
             grid = fisheye_undistort_grid(
                 view.width, view.height,
@@ -263,9 +281,9 @@ class Harmony4DSpec:
                 view.cx, view.cy,
                 view.model, view.distortion,
             )
-            for frame_index in range(num_frames):
+            for slot, frame_index in enumerate(indices):
                 rotation, translation, pose_frame = view.pose_at(frame_index)
-                camera_specs[frame_index].append(HarmonyCameraSpec(
+                camera_specs[slot].append(HarmonyCameraSpec(
                     name=view.name,
                     width=view.width,
                     height=view.height,
@@ -282,12 +300,14 @@ class Harmony4DSpec:
                 ))
         frames = [Harmony4DFrame(specs, device=device) for specs in camera_specs]
         points, valid = load_pose3d_tracks(views, num_frames, self.sequence)
+        points = points[:, indices]
+        valid = valid[:, indices]
         if device is not None:
             points = points.to(device)
             valid = valid.to(device)
         start_indices = torch.full(
             (points.shape[0], points.shape[2]),
-            self.start_index,
+            self.init_dataset_index,
             dtype=torch.int64,
             device=points.device,
         )
