@@ -180,14 +180,15 @@ class BlenderDataset(AbstractLazyLoadDataset[BlenderScene], AbstractGroupArgsDat
     :meth:`__getitem__` replays the sampled surface binding. It does not call ``tracker(query, frames)``.
 
     :meth:`from_args` records specs. :meth:`__init__` starts one
-    :class:`~track_4dgs.blender.render_server.RenderServer` and stores it on every scene.
+    :class:`~track_4dgs.blender.render_server.RenderServer`, stores it on this dataset,
+    and attaches the same server to every scene.
     """
 
     arg_group_starters = ("--blend",)
 
     def __init__(self, *scenes: BlenderScene, blender: str = "blender"):
-        render_server = RenderServer(blender)
-        super().__init__(*(replace(scene, blender=blender, render_server=render_server) for scene in scenes))
+        self.render_server = RenderServer(blender)
+        super().__init__(*(replace(scene, blender=blender, render_server=self.render_server) for scene in scenes))
 
     @staticmethod
     def add_group_argument(parser: ArgumentParser) -> ArgumentParser:
