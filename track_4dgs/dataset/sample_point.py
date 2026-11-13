@@ -10,30 +10,29 @@ from gaussian_splatting.dataset import CameraDataset
 from ..registry import build_point_tracker, get_available_point_trackers
 from ..tracker import AbstractPointTracker, Query
 from ..utils import sample_uniform_xyz
-from .track_point import AbstractPointTrackerDataset
+from .track_point import AbstractPointTrackerDataset, PointSampleSpec
 from .group_args import AbstractGroupArgsDataset
 from .registry import register_supervision_dataset
 from .reorder_camera import prepare_datasets
 
 
-@dataclass(frozen=True)
-class SamplePointSpec:
-    """Uniform scene-cube query. Cameras and the projection wait for :meth:`load`."""
+@dataclass(frozen=True, kw_only=True)
+class SamplePointSpec(PointSampleSpec):
+    """Uniform scene-cube query. Cameras and the projection wait for :meth:`load_query`."""
 
     sources: tuple[str, ...]
     load_cameras: Optional[tuple[str, ...]]
     init_dataset_index: int
     num_points: int
-    device: str
     visible_cameras: int = 2
     cache_size: int = 2 ** 16
 
-    def load_frames(self) -> list[CameraDataset]:
-        """Load this sample's cameras and align them to ``sources[init_dataset_index]``."""
+    def load_frames(self, device) -> list[CameraDataset]:
+        """Load this sample's cameras on ``device`` and align them to ``sources[init_dataset_index]``."""
 
         return prepare_datasets(
             sources=list(self.sources),
-            device=self.device,
+            device=device,
             trainable_camera=False,
             load_cameras=None if self.load_cameras is None else list(self.load_cameras),
             load_mask=False,
@@ -42,18 +41,17 @@ class SamplePointSpec:
             reorder_reference_idx=self.init_dataset_index,
         )
 
-    def load(self) -> tuple[Query, list[CameraDataset]]:
-        with torch.no_grad():
-            frames = self.load_frames()
-            xyz = sample_uniform_xyz(frames[self.init_dataset_index], self.num_points, self.visible_cameras, self.device)
-            frame_indices = torch.full((self.num_points,), self.init_dataset_index, dtype=torch.long, device=self.device)
-            return Query.from_projection(xyz, frames, frame_indices), frames
+    def load_query(self, device) -> tuple[Query, list[CameraDataset]]:
+        frames = self.load_frames(device)
+        xyz = sample_uniform_xyz(frames[self.init_dataset_index], self.num_points, self.visible_cameras, device)
+        frame_indices = torch.full((self.num_points,), self.init_dataset_index, dtype=torch.long, device=device)
+        return Query.from_projection(xyz, frames, frame_indices), frames
 
 
 class SamplePointTrackerDataset(AbstractPointTrackerDataset[SamplePointSpec], AbstractGroupArgsDataset):
     """One uniformly sampled query per ``--sources`` group.
 
-    :meth:`from_args` records specs. :meth:`SamplePointSpec.load` reads the cameras.
+    :meth:`from_args` records specs. :meth:`SamplePointSpec.load_query` reads the cameras.
     """
 
     arg_group_starters = ("-s", "--sources")
@@ -69,7 +67,6 @@ class SamplePointTrackerDataset(AbstractPointTrackerDataset[SamplePointSpec], Ab
     @staticmethod
     def add_common_argument(parser: ArgumentParser) -> ArgumentParser:
         """Register shared flags on ``parser`` and return ``parser``."""
-        parser.add_argument("--device", default="cuda", type=str)
         parser.add_argument("--tracker", type=str, default="cotracker3", choices=get_available_point_trackers())
         parser.add_argument("-m", "--option_tracker", default=[], action="append", type=str)
         parser.add_argument("--num-points", default=256, type=int)
@@ -81,13 +78,13 @@ class SamplePointTrackerDataset(AbstractPointTrackerDataset[SamplePointSpec], Ab
     def tracker_from_args(common_args: Namespace) -> AbstractPointTracker:
         """Build the point tracker named by ``common_args``."""
         configs = {o.split("=", 1)[0]: eval(o.split("=", 1)[1]) for o in common_args.option_tracker}
-        return build_point_tracker(common_args.tracker, **configs).to(common_args.device)
+        return build_point_tracker(common_args.tracker, **configs)
 
     @staticmethod
     def spec_from_args(common_args: Namespace, group_args: Namespace) -> SamplePointSpec:
         """One :class:`SamplePointSpec` for this ``--sources`` group.
 
-        Does not read cameras. :meth:`SamplePointSpec.load` does that.
+        Does not read cameras. :meth:`SamplePointSpec.load_query` does that.
         """
         sources = group_args.sources
         cameras = group_args.load_cameras
@@ -101,7 +98,6 @@ class SamplePointTrackerDataset(AbstractPointTrackerDataset[SamplePointSpec], Ab
             init_dataset_index=init_dataset_index,
             num_points=common_args.num_points,
             visible_cameras=common_args.visible_cameras,
-            device=common_args.device,
             cache_size=common_args.cache_size,
         )
 

@@ -9,10 +9,10 @@ from .supervision import Supervision
 
 
 class SupervisionSpec(Protocol):
-    """Deferred supervision sample. Construction stores how to read it."""
+    """Deferred supervision sample. ``load`` returns the query, frames, and tracks."""
 
-    def load(self, device) -> tuple[Query, Sequence[CameraDataset], Sequence[Track]]:
-        """Read this sample on ``device`` and return the query, frames, and tracks."""
+    def load(self, device) -> tuple[Query, Sequence[CameraDataset], Sequence[Track] | None]:
+        """Read this sample on ``device``. ``tracks`` is ``None`` when the sample has no tracker."""
         ...
 
 
@@ -23,6 +23,7 @@ class AbstractLazyLoadDataset(AbstractDataset, Generic[SupervisionSpecType]):
     """Load each :class:`SupervisionSpec` into one :class:`Supervision`.
 
     Specs stay unloaded until :meth:`__getitem__`.
+    ``device`` stays ``None`` until :meth:`to`. The caller chooses it.
     """
 
     def __init__(self, *samples: SupervisionSpecType):

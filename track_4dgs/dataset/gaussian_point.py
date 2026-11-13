@@ -35,23 +35,22 @@ class GaussianPointSampleSpec(SamplePointSpec):
     destination: str
     iteration: int
 
-    def load(self) -> tuple[Query, list[CameraDataset]]:
-        with torch.no_grad():
-            frames = self.load_frames()
-            load_ply = os.path.join(self.destination, "point_cloud", "iteration_" + str(self.iteration), "point_cloud.ply")
-            gaussians = prepare_gaussians(
-                sh_degree=self.sh_degree, source=self.sources[self.init_dataset_index], device=self.device,
-                trainable_camera=False, load_ply=load_ply)
-            query = query_views_from_gaussians(
-                datasets=frames, gaussians=gaussians,
-                init_dataset_index=self.init_dataset_index, num_points=self.num_points)
-            return query, frames
+    def load_query(self, device) -> tuple[Query, list[CameraDataset]]:
+        frames = self.load_frames(device)
+        load_ply = os.path.join(self.destination, "point_cloud", "iteration_" + str(self.iteration), "point_cloud.ply")
+        gaussians = prepare_gaussians(
+            sh_degree=self.sh_degree, source=self.sources[self.init_dataset_index], device=device,
+            trainable_camera=False, load_ply=load_ply)
+        query = query_views_from_gaussians(
+            datasets=frames, gaussians=gaussians,
+            init_dataset_index=self.init_dataset_index, num_points=self.num_points)
+        return query, frames
 
 
 class GaussianSplattingPointTrackerDataset(SamplePointTrackerDataset):
     """Like :class:`SamplePointTrackerDataset`, but each query is a random subset of a 3DGS point cloud.
 
-    The checkpoint is read in :meth:`GaussianPointSampleSpec.load`, not at construction.
+    The checkpoint is read in :meth:`GaussianPointSampleSpec.load_query`, not at construction.
     """
 
     @staticmethod
