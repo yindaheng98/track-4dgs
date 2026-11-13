@@ -7,6 +7,7 @@ Each frame is a :class:`~gaussian_splatting.dataset.LazyCameraDataset`.
 from dataclasses import dataclass
 
 import torch
+import torch.nn.functional as F
 from gaussian_splatting.camera import Camera, build_camera
 from gaussian_splatting.dataset import LazyCameraDataset
 from gaussian_splatting.utils import focal2fov
@@ -27,12 +28,13 @@ class HarmonyCameraSpec:
     translation: torch.Tensor
     image_path: str
     camera_id: int
-    model: str
-    distortion: tuple[float, ...]
+    grid: torch.Tensor
     pose_frame: int
 
     def load(self, load_mask: bool, load_depth: bool, device) -> Camera:
-        return build_camera(
+        """Read the image and remap it through :attr:`grid`."""
+
+        camera = build_camera(
             image_width=self.width,
             image_height=self.height,
             FoVx=focal2fov(self.fx, self.width),
@@ -46,11 +48,18 @@ class HarmonyCameraSpec:
             custom_data={
                 "name": self.name,
                 "camera_id": self.camera_id,
-                "model": self.model,
-                "distortion": self.distortion,
                 "pose_frame": self.pose_frame,
             },
         )
+        image = camera.ground_truth_image
+        image = F.grid_sample(
+            image.unsqueeze(0),
+            self.grid.to(device=image.device, dtype=image.dtype).unsqueeze(0),
+            mode="bilinear",
+            padding_mode="zeros",
+            align_corners=True,
+        ).squeeze(0)
+        return camera._replace(ground_truth_image=image)
 
 
 class Harmony4DFrame(LazyCameraDataset):

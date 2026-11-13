@@ -9,6 +9,7 @@ from gaussian_splatting.dataset.colmap.read_write_model import qvec2rotmat
 
 from ..dexycb import query_and_tracks_from_trajectories
 from ..tracker import Query, Track
+from ..utils import fisheye_undistort_grid
 from .frame import Harmony4DFrame, HarmonyCameraSpec
 
 
@@ -215,6 +216,12 @@ class Harmony4DSpec:
             raise ValueError(f"start_index {self.start_index} is outside 0..{num_frames - 1}")
         camera_specs = [[] for _ in range(num_frames)]
         for view in views:
+            grid = fisheye_undistort_grid(
+                view.width, view.height,
+                view.fx, view.fy,
+                view.cx, view.cy,
+                view.model, view.distortion,
+            )
             for frame_index in range(num_frames):
                 rotation, translation, pose_frame = view.pose_at(frame_index)
                 camera_specs[frame_index].append(HarmonyCameraSpec(
@@ -229,8 +236,7 @@ class Harmony4DSpec:
                     translation=translation,
                     image_path=os.path.join(view.image_dir, f"{frame_index + 1:05d}.jpg"),
                     camera_id=view.camera_id,
-                    model=view.model,
-                    distortion=view.distortion,
+                    grid=grid,
                     pose_frame=pose_frame,
                 ))
         frames = [Harmony4DFrame(specs, device=device) for specs in camera_specs]
