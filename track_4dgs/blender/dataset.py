@@ -29,7 +29,7 @@ class BlenderScene:
 
     This is not a :class:`~track_4dgs.dataset.PointSampleSpec`.
     :meth:`load` returns the query, the stills, and the tracks of the sampled surface binding together.
-    A :class:`~track_4dgs.dataset.PointSampleSpec` returns only a query and frames for a tracker.
+    A :class:`~track_4dgs.dataset.PointSampleSpec` reads the query in :meth:`~track_4dgs.dataset.PointSampleSpec.load_query` and tracks it when ``tracker`` is set.
 
     Construction records the arguments. ``blender`` is the Blender executable.
     ``render_server`` is attached by :class:`BlenderDataset`.
