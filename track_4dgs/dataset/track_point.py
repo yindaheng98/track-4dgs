@@ -1,50 +1,63 @@
+from abc import ABC, abstractmethod
 from collections.abc import Sequence
-from typing import Generic, Protocol, TypeVar
+from dataclasses import dataclass, replace
+from typing import TypeVar
 
+import torch
 from gaussian_splatting.dataset import CameraDataset
 
-from ..tracker import AbstractPointTracker, Query
-from .dataset import AbstractDataset
+from ..tracker import AbstractPointTracker, Query, Track
+from .lazy_load import AbstractLazyLoadDataset
 from .supervision import Supervision
 
 
-class PointSampleSpec(Protocol):
-    """Deferred tracker input. Construction stores how to build the query and frames."""
+@dataclass(frozen=True, kw_only=True)
+class PointSampleSpec(ABC):
+    """Deferred tracker input.
 
-    def load(self) -> tuple[Query, Sequence[CameraDataset]]:
-        """Read this sample's cameras and return the query and frame-major datasets."""
-        ...
+    ``tracker`` stays ``None`` until a dataset copies one in with :func:`dataclasses.replace`.
+    :meth:`load_query` reads the query and frames.
+    :meth:`load` tracks them. ``tracks`` is ``None`` when ``tracker`` is ``None``.
+    """
+
+    tracker: AbstractPointTracker | None = None
+
+    @abstractmethod
+    def load_query(self, device) -> tuple[Query, Sequence[CameraDataset]]:
+        """Read this sample on ``device`` and return the query and frame-major datasets."""
+
+        raise NotImplementedError
+
+    def load(self, device) -> tuple[Query, Sequence[CameraDataset], Sequence[Track] | None]:
+        """Read this sample on ``device`` and track the query when ``tracker`` is set."""
+
+        with torch.no_grad():
+            query, frames = self.load_query(device)
+            tracks = None if self.tracker is None else self.tracker(query, frames)
+            return query, frames, tracks
 
 
 PointSampleSpecType = TypeVar("PointSampleSpecType", bound=PointSampleSpec)
 
 
-class AbstractPointTrackerDataset(AbstractDataset, Generic[PointSampleSpecType]):
+class AbstractPointTrackerDataset(AbstractLazyLoadDataset[PointSampleSpecType]):
     """Track each :class:`PointSampleSpec` into one :class:`Supervision`.
 
-    ``tracker(query, frames)`` supplies the tracks.
-    Specs stay unloaded until :meth:`__getitem__`.
+    :meth:`__getitem__` copies ``tracker`` onto the spec, then :meth:`PointSampleSpec.load` tracks the query.
+    :meth:`to` moves that tracker and selects the device passed to :meth:`load`.
     """
 
     def __init__(self, tracker: AbstractPointTracker, *samples: PointSampleSpecType):
+        super().__init__(*samples)
         self.tracker = tracker
-        self.samples = samples
-        self.device = None
-
-    def __len__(self) -> int:
-        return len(self.samples)
 
     def to(self, device) -> 'AbstractPointTrackerDataset':
-        """Move the tracker now. Loaded samples follow in :meth:`__getitem__`."""
+        """Move the tracker and select the device used by :meth:`PointSampleSpec.load`."""
 
         self.tracker = self.tracker.to(device)
-        self.device = device
+        super().to(device)
         return self
 
     def __getitem__(self, index: int) -> Supervision:
-        query, frames = self.samples[index].load()
-        if self.device is not None:
-            query = query.to(self.device)
-            frames = tuple(dataset.to(self.device) for dataset in frames)
-        tracks = self.tracker(query, frames)
+        query, frames, tracks = replace(self.samples[index], tracker=self.tracker).load(self.device)
         return Supervision(query=query, frames=frames, tracks=tracks)
