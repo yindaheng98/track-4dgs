@@ -15,6 +15,56 @@ from .frame import DexYCBFrame
 from .spec import DexYCBSpec, load_extrinsics
 
 
+def load_obj(path: str) -> tuple[torch.Tensor, torch.Tensor]:
+    """Triangles from a Wavefront ``.obj``.
+
+    Vertex lines are ``v x y z``. Face indices are 1-based and may carry
+    ``vertex/texcoord/normal`` suffixes. Polygons are fanned into triangles.
+    Returns ``(V, 3)`` float vertices and ``(T, 3)`` int32 faces.
+    """
+
+    vertices = []
+    faces = []
+    with open(path, "r", encoding="utf-8") as handle:
+        for line in handle:
+            if line.startswith("v "):
+                vertices.append([float(value) for value in line.split()[1:4]])
+            elif line.startswith("f "):
+                corners = [int(part.split("/")[0]) for part in line.split()[1:]]
+                for index in range(1, len(corners) - 1):
+                    faces.append((corners[0] - 1, corners[index] - 1, corners[index + 1] - 1))
+    if not vertices or not faces:
+        raise ValueError(f"{path} has no triangles")
+    return torch.tensor(vertices, dtype=torch.float32), torch.tensor(faces, dtype=torch.int32)
+
+
+def load_pose_y(sequence_dir: str, serials: list[str], indices: list[int]) -> torch.Tensor:
+    """``pose_y`` for every camera on the selected frames.
+
+    Returns ``(V, F, O, 3, 4)`` float32. Each ``(3, 4)`` is ``[R|t]`` in that
+    camera's frame. An all-zero pose is missing.
+    """
+
+    views = []
+    count = None
+    for serial in serials:
+        folder = os.path.join(sequence_dir, serial)
+        frames = []
+        for frame_index in indices:
+            path = os.path.join(folder, f"labels_{frame_index:06d}.npz")
+            with np.load(path) as label:
+                pose = np.asarray(label["pose_y"], dtype=np.float32)
+            if pose.ndim != 3 or pose.shape[1:] != (3, 4):
+                raise ValueError(f"{path} pose_y has shape {pose.shape}, expected (O, 3, 4)")
+            if count is None:
+                count = pose.shape[0]
+            elif pose.shape[0] != count:
+                raise ValueError(f"{path} pose_y has {pose.shape[0]} objects, expected {count}")
+            frames.append(pose)
+        views.append(np.stack(frames))
+    return torch.from_numpy(np.stack(views))
+
+
 class DexYCBObjectDataset(DexYCBDataset):
     """One sample is one DexYCB capture, tracked on its YCB meshes.
 
