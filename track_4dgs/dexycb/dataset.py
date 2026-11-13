@@ -27,11 +27,10 @@ class DexYCBDataset(AbstractLazyLoadDataset[DexYCBSpec], AbstractGroupArgsDatase
 
     arg_group_starters = ("--sequence",)
 
-    def __init__(self, *samples: DexYCBSpec, device: str = "cpu"):
+    def __init__(self, *samples: DexYCBSpec):
         if not samples:
             raise ValueError("at least one --sequence is required")
         super().__init__(*samples)
-        self.device = device
 
     @staticmethod
     def add_group_argument(parser: ArgumentParser) -> ArgumentParser:
@@ -50,7 +49,6 @@ class DexYCBDataset(AbstractLazyLoadDataset[DexYCBSpec], AbstractGroupArgsDatase
 
         parser.add_argument("--calibration-dir", required=True, type=str)
         parser.add_argument("--load-depth", action="store_true")
-        parser.add_argument("--device", default="cpu", type=str)
         return parser
 
     @staticmethod
@@ -85,7 +83,7 @@ class DexYCBDataset(AbstractLazyLoadDataset[DexYCBSpec], AbstractGroupArgsDatase
 
     @classmethod
     def parse_known_common_argv(cls, argv: list[str] = []) -> tuple[Namespace, list[str]]:
-        """Parse the calibration directory, whether to read depth, and the device."""
+        """Parse the calibration directory and whether to read depth."""
 
         parser = ArgumentParser(allow_abbrev=False)
         cls.add_common_argument(parser)
@@ -97,4 +95,4 @@ class DexYCBDataset(AbstractLazyLoadDataset[DexYCBSpec], AbstractGroupArgsDatase
 
         assert group_args, "at least one --sequence is required"
         samples = tuple(cls.spec_from_args(common_args, group) for group in group_args)
-        return cls(*samples, device=common_args.device)
+        return cls(*samples)

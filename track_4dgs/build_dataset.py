@@ -36,11 +36,13 @@ if __name__ == "__main__":
     parser.add_argument("--vis-folder", default=None, type=str)
     parser.add_argument("--line-width", default=1, type=int)
     parser.add_argument("--point-size", default=2, type=int)
+    parser.add_argument("--device", default="cuda", type=str)
     args, rest = parser.parse_known_args()
     assert args.save_folder is not None or args.vis_folder is not None, "--save-folder and --vis-folder cannot both be None"
     dataset, unknown = get_supervision_dataset(args.dataset).from_argv(rest)
     if unknown:
         parser.error("unrecognized arguments: " + " ".join(unknown))
+    dataset.to(args.device)
 
     with torch.no_grad():
         if args.save_folder is not None:

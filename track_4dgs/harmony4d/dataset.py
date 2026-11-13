@@ -26,11 +26,10 @@ class Harmony4DDataset(AbstractLazyLoadDataset[Harmony4DSpec], AbstractGroupArgs
 
     arg_group_starters = ("--sequence",)
 
-    def __init__(self, *samples: Harmony4DSpec, device: str = "cpu"):
+    def __init__(self, *samples: Harmony4DSpec):
         if not samples:
             raise ValueError("at least one --sequence is required")
         super().__init__(*samples)
-        self.device = device
 
     @staticmethod
     def add_group_argument(parser: ArgumentParser) -> ArgumentParser:
@@ -45,9 +44,11 @@ class Harmony4DDataset(AbstractLazyLoadDataset[Harmony4DSpec], AbstractGroupArgs
 
     @staticmethod
     def add_common_argument(parser: ArgumentParser) -> ArgumentParser:
-        """Register flags shared by every sequence and return ``parser``."""
+        """Register flags shared by every sequence and return ``parser``.
 
-        parser.add_argument("--device", default="cpu", type=str)
+        This dataset has none. The caller selects the device with :meth:`to`.
+        """
+
         return parser
 
     @staticmethod
@@ -80,7 +81,7 @@ class Harmony4DDataset(AbstractLazyLoadDataset[Harmony4DSpec], AbstractGroupArgs
 
     @classmethod
     def parse_known_common_argv(cls, argv: list[str] = []) -> tuple[Namespace, list[str]]:
-        """Parse the device used when a sample is loaded."""
+        """Parse flags shared by every sequence. This dataset has none."""
 
         parser = ArgumentParser(allow_abbrev=False)
         cls.add_common_argument(parser)
@@ -92,4 +93,4 @@ class Harmony4DDataset(AbstractLazyLoadDataset[Harmony4DSpec], AbstractGroupArgs
 
         assert group_args, "at least one --sequence is required"
         samples = tuple(cls.spec_from_args(common_args, group) for group in group_args)
-        return cls(*samples, device=common_args.device)
+        return cls(*samples)
