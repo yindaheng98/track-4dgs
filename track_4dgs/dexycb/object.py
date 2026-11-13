@@ -65,6 +65,19 @@ def load_pose_y(sequence_dir: str, serials: list[str], indices: list[int]) -> to
     return torch.from_numpy(np.stack(views))
 
 
+def load_c2w(calibration_dir: str, sequence_meta: dict) -> torch.Tensor:
+    """``(V, 4, 4)`` camera-to-world for each serial, in :func:`~track_4dgs.dexycb.spec.load_extrinsics` order."""
+
+    rotations, translations = load_extrinsics(calibration_dir, sequence_meta)
+    poses = []
+    for rotation, translation in zip(rotations, translations, strict=True):
+        w2c = torch.eye(4, dtype=rotation.dtype)
+        w2c[:3, :3] = rotation
+        w2c[:3, 3] = translation
+        poses.append(torch.linalg.inv(w2c))
+    return torch.stack(poses)
+
+
 class DexYCBObjectDataset(DexYCBDataset):
     """One sample is one DexYCB capture, tracked on its YCB meshes.
 
