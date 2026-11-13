@@ -185,10 +185,9 @@ class BlenderDataset(AbstractLazyLoadDataset[BlenderScene], AbstractGroupArgsDat
 
     arg_group_starters = ("--blend",)
 
-    def __init__(self, *scenes: BlenderScene, blender: str = "blender", device: str = "cuda"):
+    def __init__(self, *scenes: BlenderScene, blender: str = "blender"):
         render_server = RenderServer(blender)
         super().__init__(*(replace(scene, blender=blender, render_server=render_server) for scene in scenes))
-        self.device = device
 
     @staticmethod
     def add_group_argument(parser: ArgumentParser) -> ArgumentParser:
@@ -212,7 +211,6 @@ class BlenderDataset(AbstractLazyLoadDataset[BlenderScene], AbstractGroupArgsDat
         parser.add_argument("--axis", type=float, nargs=2, default=(0.0, 90.0), metavar=("AZIMUTH", "ELEVATION"), help="Cap axis direction in degrees. Azimuth 0 points along +X; elevation 90 points straight up.")
         parser.add_argument("--cap-angle", type=float, nargs=2, default=(0.0, 90.0), metavar=("MIN", "MAX"), help="Band edges in degrees from the cap axis. 0 90 is the upper hemisphere when elevation is 90.")
         parser.add_argument("--spacing", type=float, nargs=2, default=(10.0, 45.0), metavar=("MIN", "MAX"), help="Angle in degrees between a camera and its nearest neighbor.")
-        parser.add_argument("--device", default="cuda", type=str)
         parser.add_argument("--num-points", default=256, type=int)
         parser.add_argument("--visible-cameras", default=0, type=int, help="Keep a point only when more cameras than this see it.")
         parser.add_argument("--inward-distance", default=0.0, type=float, help="How far points may move into the mesh along the face normal, in world units.")
@@ -272,4 +270,4 @@ class BlenderDataset(AbstractLazyLoadDataset[BlenderScene], AbstractGroupArgsDat
         """One deferred blend per ``--blend``. The mesh is exported in :meth:`__getitem__`."""
         assert group_args, "at least one --blend is required"
         scenes = tuple(cls.spec_from_args(common_args, group) for group in group_args)
-        return cls(*scenes, blender=common_args.blender, device=common_args.device)
+        return cls(*scenes, blender=common_args.blender)
