@@ -165,7 +165,7 @@ class DexYCBObjectSpec(DexYCBSpec):
 
     models_dir: str = field(kw_only=True)
     num_points: int = 256
-    visible_cameras: int = 0
+    visible_cameras: int = 2
     inward_distance: float = 0.0
     outward_distance: float = 0.0
     occlusion_eps: float = 1e-2
@@ -243,7 +243,7 @@ class DexYCBObjectDataset(DexYCBDataset):
         DexYCBDataset.add_common_argument(parser)
         parser.add_argument("--models-dir", required=True, type=str, help="Folder of YCB meshes. Each object has textured_simple.obj.")
         parser.add_argument("--num-points", default=256, type=int, help="Surface samples on the posed meshes. Defaults to 256.")
-        parser.add_argument("--visible-cameras", default=0, type=int, help="Keep a point only when more cameras than this see it. Defaults to 0.")
+        parser.add_argument("--visible-cameras", default=2, type=int, help="Keep a point only when more cameras than this see it. Defaults to 2.")
         parser.add_argument("--inward-distance", default=0.0, type=float, help="How far points may move into the mesh along the face normal, in world units.")
         parser.add_argument("--outward-distance", default=0.0, type=float, help="How far points may move out of the mesh along the face normal, in world units.")
         parser.add_argument("--occlusion-eps", default=1e-2, type=float, help="Occlusion depth tolerance in world units. Defaults to 1e-2.")

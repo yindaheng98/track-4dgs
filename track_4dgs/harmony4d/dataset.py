@@ -51,7 +51,7 @@ class Harmony4DDataset(AbstractLazyLoadDataset[Harmony4DSpec], AbstractGroupArgs
         parser.add_argument("--num-points", default=256, type=int, help="Total points, including the checked joints. Further points are sampled on the body. Defaults to 256.")
         parser.add_argument("--smpl-faces", default=DEFAULT_SMPL_FACES, type=str, help="Local SMPL triangle file. A file that cannot be loaded is replaced from --smpl-faces-url.")
         parser.add_argument("--smpl-faces-url", default=DEFAULT_SMPL_FACES_URL, type=str, help="Downloaded into --smpl-faces when that file cannot be loaded. Defaults to src/tf_smpl/smpl_faces.npy from akanazawa/hmr.")
-        parser.add_argument("--visible-cameras", default=0, type=int, help="Keep a surface point only when more cameras than this see it. Defaults to 0.")
+        parser.add_argument("--visible-cameras", default=2, type=int, help="Keep a surface point only when more cameras than this see it. Defaults to 2.")
         parser.add_argument("--inward-distance", default=0.0, type=float, help="How far surface points may move into the mesh along the face normal, in the COLMAP world.")
         parser.add_argument("--outward-distance", default=0.0, type=float, help="How far surface points may move out of the mesh along the face normal, in the COLMAP world.")
         parser.add_argument("--occlusion-eps", default=1e-2, type=float, help="Occlusion tolerance in pose-world meters. Scaled into the COLMAP world. Defaults to 1e-2.")

@@ -269,7 +269,7 @@ class Harmony4DSpec:
     num_points: int = 256
     smpl_faces: str = DEFAULT_SMPL_FACES
     smpl_faces_url: str = DEFAULT_SMPL_FACES_URL
-    visible_cameras: int = 0
+    visible_cameras: int = 2
     inward_distance: float = 0.0
     outward_distance: float = 0.0
     occlusion_eps: float = 1e-2
