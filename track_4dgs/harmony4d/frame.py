@@ -32,7 +32,10 @@ class HarmonyCameraSpec:
     pose_frame: int
 
     def load(self, load_mask: bool, load_depth: bool, device) -> Camera:
-        """Read the image and remap it through :attr:`grid`."""
+        """Read the image and remap it through :attr:`grid`.
+
+        ``build_camera`` scales the file to ``height`` and ``width`` when they differ.
+        """
 
         camera = build_camera(
             image_width=self.width,

@@ -21,7 +21,8 @@ class Harmony4DDataset(AbstractLazyLoadDataset[Harmony4DSpec], AbstractGroupArgs
     Each sequence folder contains ``exo/``, ``ego/``, ``processed_data/``, and
     ``colmap/``. Views are the exo cameras. ``--num-points`` is the total
     number of tracks. The checked COCO joints come first, and the rest are
-    samples on the posed SMPL meshes.
+    samples on the posed SMPL meshes. ``--max-image-size`` caps the long side
+    of each image. A larger photo is scaled down with its intrinsics.
     Construction records one :class:`Harmony4DSpec` per sequence.
     :meth:`Harmony4DSpec.load` reads the cameras, poses, and meshes.
     """
@@ -55,6 +56,7 @@ class Harmony4DDataset(AbstractLazyLoadDataset[Harmony4DSpec], AbstractGroupArgs
         parser.add_argument("--inward-distance", default=0.0, type=float, help="How far surface points may move into the mesh along the face normal, in the COLMAP world.")
         parser.add_argument("--outward-distance", default=0.0, type=float, help="How far surface points may move out of the mesh along the face normal, in the COLMAP world.")
         parser.add_argument("--occlusion-eps", default=1e-2, type=float, help="Occlusion tolerance in pose-world meters. Scaled into the COLMAP world. Defaults to 1e-2.")
+        parser.add_argument("--max-image-size", default=None, type=int, help="Longest side of a loaded image. A larger photo is scaled down with its intrinsics. Defaults to the original size.")
         return parser
 
     @staticmethod
@@ -77,6 +79,7 @@ class Harmony4DDataset(AbstractLazyLoadDataset[Harmony4DSpec], AbstractGroupArgs
             inward_distance=common_args.inward_distance,
             outward_distance=common_args.outward_distance,
             occlusion_eps=common_args.occlusion_eps,
+            max_image_size=common_args.max_image_size,
         )
 
     @classmethod
@@ -98,6 +101,7 @@ class Harmony4DDataset(AbstractLazyLoadDataset[Harmony4DSpec], AbstractGroupArgs
 
         ``--num-points`` defaults to 256. ``--smpl-faces`` and ``--smpl-faces-url``
         name the local triangle file and the URL used when that file cannot be loaded.
+        ``--max-image-size`` defaults to the original image size.
         """
 
         parser = ArgumentParser(allow_abbrev=False)

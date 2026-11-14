@@ -2,7 +2,7 @@
 
 import os
 import pickle
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Optional
 
 import numpy as np
@@ -48,6 +48,31 @@ class HarmonyView:
         source = min(self.poses, key=lambda index: (abs(index - frame_index), index))
         rotation, translation = self.poses[source]
         return rotation, translation, source
+
+
+def scale_view(view: HarmonyView, max_image_size: Optional[int] = None) -> HarmonyView:
+    """Shrink ``view`` until its long side is at most ``max_image_size``.
+
+    ``fx`` and ``cx`` scale with the width, ``fy`` and ``cy`` with the height.
+    OpenCV fisheye distortion is in normalized coordinates, so it stays put.
+    ``None``, and a view that is already small enough, return the same view.
+    Each side stays at least 2 so the undistort grid has a span.
+    """
+
+    if max_image_size is None or max(view.width, view.height) <= max_image_size:
+        return view
+    scale = max_image_size / max(view.width, view.height)
+    width = max(2, int(round(view.width * scale)))
+    height = max(2, int(round(view.height * scale)))
+    return replace(
+        view,
+        width=width,
+        height=height,
+        fx=view.fx * width / view.width,
+        fy=view.fy * height / view.height,
+        cx=view.cx * width / view.width,
+        cy=view.cy * height / view.height,
+    )
 
 
 def jpg_count(image_dir: str) -> int:
@@ -264,6 +289,9 @@ class Harmony4DSpec:
     to the surface sampler. Those distances are in the COLMAP world.
     ``occlusion_eps`` is the occlusion tolerance in pose-world meters. It is
     multiplied by the scale of the pose-to-COLMAP transform before the ray test.
+    ``max_image_size`` caps the long side of each image. A larger photo is scaled
+    down with its intrinsics, and the tracks use that smaller image. ``None``
+    keeps the original size.
     Ego cameras are omitted: their images use Aria's own distortion and a rotated frame.
     Frames are ``range(frame_start, frame_end + 1, frame_step)`` using 0-based
     frame indices. ``frame_end`` defaults to the last frame. ``frame_step``
@@ -282,6 +310,7 @@ class Harmony4DSpec:
     inward_distance: float = 0.0
     outward_distance: float = 0.0
     occlusion_eps: float = 1e-2
+    max_image_size: Optional[int] = None
 
     def __post_init__(self):
         if self.frame_step == 0:
@@ -292,6 +321,8 @@ class Harmony4DSpec:
             raise ValueError("inward_distance and outward_distance must be non-negative")
         if self.occlusion_eps < 0:
             raise ValueError("occlusion_eps must be non-negative")
+        if self.max_image_size is not None and self.max_image_size < 2:
+            raise ValueError("max_image_size must be at least 2")
         if self.init_dataset_index < 0:
             raise ValueError("--init-dataset-index must index one frame")
         if self.frame_end is not None and self.frame_step is not None:
@@ -301,6 +332,7 @@ class Harmony4DSpec:
 
     def load(self, device) -> tuple[Query, list[Harmony4DFrame], list[Track]]:
         views, num_frames = load_views(self.sequence)
+        views = [scale_view(view, self.max_image_size) for view in views]
         if num_frames <= 0:
             raise ValueError("Harmony4D sequence has no frames")
         indices = selected_frame_indices(self.frame_start, self.frame_end, self.frame_step, num_frames)
