@@ -12,6 +12,7 @@ from gaussian_splatting.dataset.colmap.read_write_model import qvec2rotmat
 from ..dexycb.trajectory import query_and_tracks_from_trajectories
 from ..tracker import Query, Track
 from ..utils import fisheye_undistort_grid, full_proj_transform, project, selected_frame_indices
+from .body import load_body_surface
 from .frame import Harmony4DFrame, HarmonyCameraSpec
 
 
@@ -243,7 +244,11 @@ class Harmony4DSpec:
     """One Harmony4D sequence. Cameras and the checked 3D pose are read in :meth:`load`.
 
     ``sequence`` contains ``exo/``, ``processed_data/``, and ``colmap/workplace``.
-    Tracks are the 17 COCO joints in ``processed_data/poses3d``, projected into each exo view.
+    ``num_points`` is the total number of tracks and defaults to 256.
+    The checked COCO joints in ``processed_data/poses3d`` come first.
+    The rest are samples on the posed meshes in ``processed_data/smpl``.
+    Vertices within 8 cm of either wrist are left out, and occluded samples are masked off.
+    ``num_points`` must be at least the number of checked joints.
     Ego cameras are omitted: their images use Aria's own distortion and a rotated frame.
     Frames are ``range(frame_start, frame_end + 1, frame_step)`` using 0-based
     frame indices. ``frame_end`` defaults to the last frame. ``frame_step``
@@ -255,10 +260,13 @@ class Harmony4DSpec:
     frame_end: Optional[int] = None
     frame_step: int = 1
     init_dataset_index: int = 0
+    num_points: int = 256
 
     def __post_init__(self):
         if self.frame_step == 0:
             raise ValueError("frame_step must not be 0")
+        if self.num_points < 0:
+            raise ValueError("num_points must be non-negative")
         if self.init_dataset_index < 0:
             raise ValueError("--init-dataset-index must index one frame")
         if self.frame_end is not None and self.frame_step is not None:
@@ -302,7 +310,22 @@ class Harmony4DSpec:
         points, valid = load_pose3d_tracks(views, num_frames, self.sequence)
         points = points[:, indices]
         valid = valid[:, indices]
-        if device is not None:
+        joint_count = points.shape[2]
+        if self.num_points < joint_count:
+            raise ValueError(f"num_points is the total and must cover the {joint_count} checked joints")
+        if self.num_points > joint_count:
+            surface_points, surface_valid = load_body_surface(
+                self.sequence,
+                indices,
+                frames,
+                self.init_dataset_index,
+                self.num_points - joint_count,
+                load_colmap_from_aria_transforms(self.sequence),
+                device,
+            )
+            points = torch.cat([points.to(surface_points.device), surface_points], dim=2)
+            valid = torch.cat([valid.to(surface_valid.device), surface_valid], dim=2)
+        elif device is not None:
             points = points.to(device)
             valid = valid.to(device)
         start_indices = torch.full(

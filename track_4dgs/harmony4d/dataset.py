@@ -18,10 +18,11 @@ class Harmony4DDataset(AbstractLazyLoadDataset[Harmony4DSpec], AbstractGroupArgs
     ``--init-dataset-index`` indexes that range and defaults to 0.
 
     Each sequence folder contains ``exo/``, ``ego/``, ``processed_data/``, and
-    ``colmap/``. Views are the exo cameras. Tracks are the 17 COCO joints that
-    were triangulated and manually checked, projected into each view.
+    ``colmap/``. Views are the exo cameras. ``--num-points`` is the total
+    number of tracks. The checked COCO joints come first, and the rest are
+    samples on the posed SMPL meshes.
     Construction records one :class:`Harmony4DSpec` per sequence.
-    :meth:`Harmony4DSpec.load` reads the cameras and poses.
+    :meth:`Harmony4DSpec.load` reads the cameras, poses, and meshes.
     """
 
     arg_group_starters = ("--sequence",)
@@ -44,15 +45,13 @@ class Harmony4DDataset(AbstractLazyLoadDataset[Harmony4DSpec], AbstractGroupArgs
 
     @staticmethod
     def add_common_argument(parser: ArgumentParser) -> ArgumentParser:
-        """Register flags shared by every sequence and return ``parser``.
+        """Register flags shared by every sequence and return ``parser``."""
 
-        This dataset has none. The caller selects the device with :meth:`to`.
-        """
-
+        parser.add_argument("--num-points", default=256, type=int, help="Total points, including the checked joints. Further points are sampled on the body. Defaults to 256.")
         return parser
 
     @staticmethod
-    def spec_from_args(_common_args: Namespace, group_args: Namespace) -> Harmony4DSpec:
+    def spec_from_args(common_args: Namespace, group_args: Namespace) -> Harmony4DSpec:
         """One :class:`Harmony4DSpec` for this ``--sequence`` group.
 
         Does not read cameras. :meth:`Harmony4DSpec.load` does that.
@@ -64,6 +63,7 @@ class Harmony4DDataset(AbstractLazyLoadDataset[Harmony4DSpec], AbstractGroupArgs
             frame_end=group_args.frame_end,
             frame_step=group_args.frame_step,
             init_dataset_index=group_args.init_dataset_index,
+            num_points=common_args.num_points,
         )
 
     @classmethod
@@ -81,7 +81,7 @@ class Harmony4DDataset(AbstractLazyLoadDataset[Harmony4DSpec], AbstractGroupArgs
 
     @classmethod
     def parse_known_common_argv(cls, argv: list[str] = []) -> tuple[Namespace, list[str]]:
-        """Parse flags shared by every sequence. This dataset has none."""
+        """Parse flags shared by every sequence. ``--num-points`` defaults to 256."""
 
         parser = ArgumentParser(allow_abbrev=False)
         cls.add_common_argument(parser)
