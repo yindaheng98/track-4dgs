@@ -4,6 +4,7 @@ from argparse import ArgumentParser, Namespace
 
 from ..dataset import AbstractGroupArgsDataset
 from ..dataset.lazy_load import AbstractLazyLoadDataset
+from .body import DEFAULT_SMPL_FACES, DEFAULT_SMPL_FACES_URL
 from .spec import Harmony4DSpec
 
 
@@ -48,6 +49,11 @@ class Harmony4DDataset(AbstractLazyLoadDataset[Harmony4DSpec], AbstractGroupArgs
         """Register flags shared by every sequence and return ``parser``."""
 
         parser.add_argument("--num-points", default=256, type=int, help="Total points, including the checked joints. Further points are sampled on the body. Defaults to 256.")
+        parser.add_argument("--smpl-faces", default=DEFAULT_SMPL_FACES, type=str, help="Local SMPL triangle file. A file that cannot be loaded is replaced from --smpl-faces-url.")
+        parser.add_argument("--smpl-faces-url", default=DEFAULT_SMPL_FACES_URL, type=str, help="Downloaded into --smpl-faces when that file cannot be loaded. Defaults to src/tf_smpl/smpl_faces.npy from akanazawa/hmr.")
+        parser.add_argument("--visible-cameras", default=0, type=int, help="Keep a surface point only when more cameras than this see it. Defaults to 0.")
+        parser.add_argument("--inward-distance", default=0.0, type=float, help="How far surface points may move into the mesh along the face normal, in the COLMAP world.")
+        parser.add_argument("--outward-distance", default=0.0, type=float, help="How far surface points may move out of the mesh along the face normal, in the COLMAP world.")
         return parser
 
     @staticmethod
@@ -64,6 +70,11 @@ class Harmony4DDataset(AbstractLazyLoadDataset[Harmony4DSpec], AbstractGroupArgs
             frame_step=group_args.frame_step,
             init_dataset_index=group_args.init_dataset_index,
             num_points=common_args.num_points,
+            smpl_faces=common_args.smpl_faces,
+            smpl_faces_url=common_args.smpl_faces_url,
+            visible_cameras=common_args.visible_cameras,
+            inward_distance=common_args.inward_distance,
+            outward_distance=common_args.outward_distance,
         )
 
     @classmethod
@@ -81,7 +92,11 @@ class Harmony4DDataset(AbstractLazyLoadDataset[Harmony4DSpec], AbstractGroupArgs
 
     @classmethod
     def parse_known_common_argv(cls, argv: list[str] = []) -> tuple[Namespace, list[str]]:
-        """Parse flags shared by every sequence. ``--num-points`` defaults to 256."""
+        """Parse flags shared by every sequence.
+
+        ``--num-points`` defaults to 256. ``--smpl-faces`` and ``--smpl-faces-url``
+        name the local triangle file and the URL used when that file cannot be loaded.
+        """
 
         parser = ArgumentParser(allow_abbrev=False)
         cls.add_common_argument(parser)

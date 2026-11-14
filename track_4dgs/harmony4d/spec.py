@@ -12,7 +12,7 @@ from gaussian_splatting.dataset.colmap.read_write_model import qvec2rotmat
 from ..dexycb.trajectory import query_and_tracks_from_trajectories
 from ..tracker import Query, Track
 from ..utils import fisheye_undistort_grid, full_proj_transform, project, selected_frame_indices
-from .body import load_body_surface
+from .body import DEFAULT_SMPL_FACES, DEFAULT_SMPL_FACES_URL, load_body_surface
 from .frame import Harmony4DFrame, HarmonyCameraSpec
 
 
@@ -249,6 +249,10 @@ class Harmony4DSpec:
     The rest are samples on the posed meshes in ``processed_data/smpl``.
     Vertices within 8 cm of either wrist are left out, and occluded samples are masked off.
     ``num_points`` must be at least the number of checked joints.
+    ``smpl_faces`` is the local triangle file. When it cannot be loaded,
+    ``smpl_faces_url`` is downloaded to that path.
+    ``visible_cameras``, ``inward_distance``, and ``outward_distance`` are passed
+    to the surface sampler. Distances are in the COLMAP world.
     Ego cameras are omitted: their images use Aria's own distortion and a rotated frame.
     Frames are ``range(frame_start, frame_end + 1, frame_step)`` using 0-based
     frame indices. ``frame_end`` defaults to the last frame. ``frame_step``
@@ -261,12 +265,19 @@ class Harmony4DSpec:
     frame_step: int = 1
     init_dataset_index: int = 0
     num_points: int = 256
+    smpl_faces: str = DEFAULT_SMPL_FACES
+    smpl_faces_url: str = DEFAULT_SMPL_FACES_URL
+    visible_cameras: int = 0
+    inward_distance: float = 0.0
+    outward_distance: float = 0.0
 
     def __post_init__(self):
         if self.frame_step == 0:
             raise ValueError("frame_step must not be 0")
         if self.num_points < 0:
             raise ValueError("num_points must be non-negative")
+        if self.inward_distance < 0 or self.outward_distance < 0:
+            raise ValueError("inward_distance and outward_distance must be non-negative")
         if self.init_dataset_index < 0:
             raise ValueError("--init-dataset-index must index one frame")
         if self.frame_end is not None and self.frame_step is not None:
@@ -321,6 +332,11 @@ class Harmony4DSpec:
                 self.init_dataset_index,
                 self.num_points - joint_count,
                 load_colmap_from_aria_transforms(self.sequence),
+                self.smpl_faces,
+                self.smpl_faces_url,
+                self.visible_cameras,
+                self.inward_distance,
+                self.outward_distance,
                 device,
             )
             points = torch.cat([points.to(surface_points.device), surface_points], dim=2)
