@@ -53,8 +53,12 @@ class HarmonyView:
 def scale_view(view: HarmonyView, max_image_size: Optional[int] = None) -> HarmonyView:
     """Shrink ``view`` until its long side is at most ``max_image_size``.
 
-    ``fx`` and ``cx`` scale with the width, ``fy`` and ``cy`` with the height.
-    OpenCV fisheye distortion is in normalized coordinates, so it stays put.
+    The smaller photo is still the fisheye image, and its undistort grid is built
+    from these intrinsics. ``build_camera`` resizes with ``align_corners=False``,
+    which sends source pixel ``u`` to ``(u + 0.5) * new / old - 0.5``. Focal
+    lengths scale by ``new / old``. The principal point uses that same mapping,
+    so the grid reads the pixel the resize actually wrote. Distortion stays in
+    normalized coordinates.
     ``None``, and a view that is already small enough, return the same view.
     Each side stays at least 2 so the undistort grid has a span.
     """
@@ -64,14 +68,16 @@ def scale_view(view: HarmonyView, max_image_size: Optional[int] = None) -> Harmo
     scale = max_image_size / max(view.width, view.height)
     width = max(2, int(round(view.width * scale)))
     height = max(2, int(round(view.height * scale)))
+    sx = width / view.width
+    sy = height / view.height
     return replace(
         view,
         width=width,
         height=height,
-        fx=view.fx * width / view.width,
-        fy=view.fy * height / view.height,
-        cx=view.cx * width / view.width,
-        cy=view.cy * height / view.height,
+        fx=view.fx * sx,
+        fy=view.fy * sy,
+        cx=(view.cx + 0.5) * sx - 0.5,
+        cy=(view.cy + 0.5) * sy - 0.5,
     )
 
 
