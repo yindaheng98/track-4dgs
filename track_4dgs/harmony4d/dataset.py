@@ -54,6 +54,7 @@ class Harmony4DDataset(AbstractLazyLoadDataset[Harmony4DSpec], AbstractGroupArgs
         parser.add_argument("--visible-cameras", default=0, type=int, help="Keep a surface point only when more cameras than this see it. Defaults to 0.")
         parser.add_argument("--inward-distance", default=0.0, type=float, help="How far surface points may move into the mesh along the face normal, in the COLMAP world.")
         parser.add_argument("--outward-distance", default=0.0, type=float, help="How far surface points may move out of the mesh along the face normal, in the COLMAP world.")
+        parser.add_argument("--occlusion-eps", default=1e-2, type=float, help="Occlusion tolerance in pose-world meters. Scaled into the COLMAP world. Defaults to 1e-2.")
         return parser
 
     @staticmethod
@@ -75,6 +76,7 @@ class Harmony4DDataset(AbstractLazyLoadDataset[Harmony4DSpec], AbstractGroupArgs
             visible_cameras=common_args.visible_cameras,
             inward_distance=common_args.inward_distance,
             outward_distance=common_args.outward_distance,
+            occlusion_eps=common_args.occlusion_eps,
         )
 
     @classmethod

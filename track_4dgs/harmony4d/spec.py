@@ -252,7 +252,9 @@ class Harmony4DSpec:
     ``smpl_faces`` is the local triangle file. When it cannot be loaded,
     ``smpl_faces_url`` is downloaded to that path.
     ``visible_cameras``, ``inward_distance``, and ``outward_distance`` are passed
-    to the surface sampler. Distances are in the COLMAP world.
+    to the surface sampler. Those distances are in the COLMAP world.
+    ``occlusion_eps`` is the occlusion tolerance in pose-world meters. It is
+    multiplied by the scale of the pose-to-COLMAP transform before the ray test.
     Ego cameras are omitted: their images use Aria's own distortion and a rotated frame.
     Frames are ``range(frame_start, frame_end + 1, frame_step)`` using 0-based
     frame indices. ``frame_end`` defaults to the last frame. ``frame_step``
@@ -270,6 +272,7 @@ class Harmony4DSpec:
     visible_cameras: int = 0
     inward_distance: float = 0.0
     outward_distance: float = 0.0
+    occlusion_eps: float = 1e-2
 
     def __post_init__(self):
         if self.frame_step == 0:
@@ -278,6 +281,8 @@ class Harmony4DSpec:
             raise ValueError("num_points must be non-negative")
         if self.inward_distance < 0 or self.outward_distance < 0:
             raise ValueError("inward_distance and outward_distance must be non-negative")
+        if self.occlusion_eps < 0:
+            raise ValueError("occlusion_eps must be non-negative")
         if self.init_dataset_index < 0:
             raise ValueError("--init-dataset-index must index one frame")
         if self.frame_end is not None and self.frame_step is not None:
@@ -337,6 +342,7 @@ class Harmony4DSpec:
                 self.visible_cameras,
                 self.inward_distance,
                 self.outward_distance,
+                self.occlusion_eps,
                 device,
             )
             points = torch.cat([points.to(surface_points.device), surface_points], dim=2)
