@@ -151,12 +151,21 @@ COCO_JOINT_COUNT = 17
 
 
 def load_colmap_from_aria_transforms(sequence: str) -> torch.Tensor:
-    """The ``aria01`` entry of ``colmap/workplace/colmap_from_aria_transforms.pkl``.
+    """Map the pose world, where the checked 3D joints are stored, into the COLMAP world.
 
-    It maps the pose world, where the checked 3D joints are stored, into the COLMAP world.
+    Ego sequences store that map as the ``aria01`` entry of
+    ``colmap/workplace/colmap_from_aria_transforms.pkl``.
+    Exo sequences store the opposite map in ``colmap/workplace/scale.npy``.
     """
 
-    path = os.path.join(sequence, "colmap", "workplace", "colmap_from_aria_transforms.pkl")
+    workplace = os.path.join(sequence, "colmap", "workplace")
+    scale_path = os.path.join(workplace, "scale.npy")
+    if os.path.isfile(scale_path):
+        loaded = np.asarray(np.load(scale_path), dtype=np.float64)
+        if loaded.shape != (4, 4):
+            raise ValueError(f"{scale_path} has shape {tuple(loaded.shape)}, expected (4, 4)")
+        return torch.tensor(np.linalg.inv(loaded), dtype=torch.float32)
+    path = os.path.join(workplace, "colmap_from_aria_transforms.pkl")
     with open(path, "rb") as handle:
         transforms = pickle.load(handle)
     transform = torch.tensor(transforms["aria01"], dtype=torch.float32)
