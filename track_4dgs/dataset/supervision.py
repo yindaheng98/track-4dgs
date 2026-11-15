@@ -74,6 +74,14 @@ class Supervision:
             camera_tracks=[track[frame_index] for track in self.tracks],
         )
 
+    def to(self, device) -> 'Supervision':
+        """Return this sample with the query, frames, and tracks on ``device``."""
+        return Supervision(
+            query=self.query.to(device),
+            frames=[frame.to(device) for frame in self.frames],
+            tracks=[track.to(device) for track in self.tracks],
+        )
+
     def save(self, folder: str) -> None:
         shutil.rmtree(folder, ignore_errors=True)
         os.makedirs(folder)
