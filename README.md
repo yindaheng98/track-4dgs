@@ -212,6 +212,33 @@ data/harmony4d/
     └── ...
 ```
 
+[CMU Panoptic Studio](http://domedb.perception.cs.cmu.edu/) is released for non-commercial research use. Each sequence is a directory of plain files under `http://domedb.perception.cs.cmu.edu/webdata/dataset/<sequence>/`. `171204_pose1_sample` is a short sequence: calibration, COCO-19 body keypoints, face and hand keypoints, and 31 HD videos (`hd_00_00.mp4` is about 10MB). Replace `seq` with any sequence name from the [dataset site](http://domedb.perception.cs.cmu.edu/). If that host does not answer, point `base` at `http://vcl.snu.ac.kr/panoptic/webdata/dataset/$seq`.
+
+```shell
+seq=171204_pose1_sample
+dst=data/panoptic/$seq
+base=http://domedb.perception.cs.cmu.edu/webdata/dataset/$seq
+mkdir -p "$dst/hdVideos"
+for f in "calibration_$seq.json" hdPose3d_stage1_coco19.tar hdFace3d.tar hdHand3d.tar; do
+  wget -c -P "$dst" "$base/$f"
+done
+for i in $(seq -w 0 30); do
+  wget -c -P "$dst/hdVideos" "$base/videos/hd_shared_crf20/hd_00_$i.mp4"
+done
+```
+
+VGA videos use `videos/vga_shared_crf10/vga_PP_NN.mp4`, with panel `01`–`20` and node `01`–`24` (480 views). The sample sequence has no VGA videos. A full sequence is much larger; download one view, or the whole set, with:
+
+```shell
+mkdir -p "$dst/vgaVideos"
+wget -c -P "$dst/vgaVideos" "$base/videos/vga_shared_crf10/vga_01_01.mp4"
+for p in $(seq -w 1 20); do
+  for n in $(seq -w 1 24); do
+    wget -c -P "$dst/vgaVideos" "$base/videos/vga_shared_crf10/vga_${p}_${n}.mp4"
+  done
+done
+```
+
 ## Command-Line Usage
 
 ### List Registered Point Trackers
