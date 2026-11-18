@@ -212,31 +212,118 @@ data/harmony4d/
     └── ...
 ```
 
-[CMU Panoptic Studio](http://domedb.perception.cs.cmu.edu/) is released for non-commercial research use. Each sequence is a directory of plain files under `http://domedb.perception.cs.cmu.edu/webdata/dataset/<sequence>/`. `171204_pose1_sample` is a short sequence: calibration, COCO-19 body keypoints, face and hand keypoints, and 31 HD videos (`hd_00_00.mp4` is about 10MB). Replace `seq` with any sequence name from the [dataset site](http://domedb.perception.cs.cmu.edu/). If that host does not answer, point `base` at `http://vcl.snu.ac.kr/panoptic/webdata/dataset/$seq`.
+[CMU Panoptic Studio](http://domedb.perception.cs.cmu.edu/) ([ver 1.2 sequence list](https://docs.google.com/spreadsheets/d/1eoe74dHRtoMVVFLKCTJkAtF8zqxAnoo2Nt15CYYvHEE/edit#gid=1333444170)) is released for non-commercial research use. The released set is 84 sequences under `http://domedb.perception.cs.cmu.edu/webdata/dataset/<sequence>/`: range of motion, haggling, musical instruments, ultimatum, mafia, dance, toddler, office, and pizza. `171204_pose1_sample` is a short clip of `171204_pose1` (31 HD videos, 271MB, no VGA). The [dataset browser](http://domedb.perception.cs.cmu.edu/dataset.html) also lists later sequences; add a name to the loop to fetch it from the same paths. If the CMU host does not answer, set `host` to `http://vcl.snu.ac.kr/panoptic`.
+
+Each sequence gets calibration, COCO-19 body keypoints, face keypoints, hand keypoints, and the face-mesh track when that file exists, plus up to 31 HD videos (`hd_00_00.mp4`–`hd_00_30.mp4`) and up to 480 VGA videos (`vga_PP_NN.mp4`, panel `01`–`20`, node `01`–`24`). A missing file makes `wget` fail; the command deletes that path and continues. Full HD plus VGA for every sequence is far larger than the 271MB sample clip.
 
 ```shell
-seq=171204_pose1_sample
-dst=data/panoptic/$seq
-base=http://domedb.perception.cs.cmu.edu/webdata/dataset/$seq
-mkdir -p "$dst/hdVideos"
-for f in "calibration_$seq.json" hdPose3d_stage1_coco19.tar hdFace3d.tar hdHand3d.tar; do
-  wget -c -P "$dst" "$base/$f"
-done
-for i in $(seq -w 0 30); do
-  wget -c -P "$dst/hdVideos" "$base/videos/hd_shared_crf20/hd_00_$i.mp4"
-done
-```
-
-VGA videos use `videos/vga_shared_crf10/vga_PP_NN.mp4`, with panel `01`–`20` and node `01`–`24` (480 views). The sample sequence has no VGA videos. A full sequence is much larger; download one view, or the whole set, with:
-
-```shell
-mkdir -p "$dst/vgaVideos"
-wget -c -P "$dst/vgaVideos" "$base/videos/vga_shared_crf10/vga_01_01.mp4"
-for p in $(seq -w 1 20); do
-  for n in $(seq -w 1 24); do
-    wget -c -P "$dst/vgaVideos" "$base/videos/vga_shared_crf10/vga_${p}_${n}.mp4"
+host=http://domedb.perception.cs.cmu.edu
+mkdir -p data/panoptic
+while read -r seq; do
+  [ -n "$seq" ] || continue
+  dst=data/panoptic/$seq
+  base=$host/webdata/dataset/$seq
+  mkdir -p "$dst/hdVideos" "$dst/vgaVideos"
+  for f in "calibration_$seq.json" hdPose3d_stage1_coco19.tar hdFace3d.tar hdHand3d.tar hdMeshTrack_face.tar; do
+    wget -c --tries=2 --timeout=60 -P "$dst" "$base/$f" || rm -f "$dst/$f"
   done
-done
+  for i in $(seq -w 0 30); do
+    wget -c --tries=2 --timeout=60 -P "$dst/hdVideos" "$base/videos/hd_shared_crf20/hd_00_$i.mp4" || rm -f "$dst/hdVideos/hd_00_$i.mp4"
+  done
+  for p in $(seq -w 1 20); do
+    for n in $(seq -w 1 24); do
+      wget -c --tries=2 --timeout=60 -P "$dst/vgaVideos" "$base/videos/vga_shared_crf10/vga_${p}_${n}.mp4" || rm -f "$dst/vgaVideos/vga_${p}_${n}.mp4"
+    done
+  done
+  for t in "$dst"/*.tar; do
+    [ -f "$t" ] && tar -C "$dst" -xf "$t"
+  done
+done <<'EOF'
+171204_pose1
+171204_pose2
+171204_pose3
+171204_pose4
+171204_pose5
+171204_pose6
+171026_pose1
+171026_pose2
+171026_pose3
+170221_haggling_b1
+170221_haggling_b2
+170221_haggling_b3
+170221_haggling_m1
+170221_haggling_m2
+170221_haggling_m3
+170224_haggling_a1
+170224_haggling_a2
+170224_haggling_a3
+170224_haggling_b1
+170224_haggling_b2
+170224_haggling_b3
+170228_haggling_a1
+170228_haggling_a2
+170228_haggling_a3
+170228_haggling_b1
+170228_haggling_b2
+170228_haggling_b3
+170404_haggling_a1
+170404_haggling_a2
+170404_haggling_a3
+170404_haggling_b1
+170404_haggling_b2
+170404_haggling_b3
+170407_haggling_a1
+170407_haggling_a2
+170407_haggling_a3
+170407_haggling_b1
+170407_haggling_b2
+170407_haggling_b3
+171026_cello1
+171026_cello2
+171026_cello3
+161029_flute1
+161029_piano1
+161029_piano2
+161029_piano3
+161029_piano4
+160906_band1
+160906_band2
+160906_band3
+160422_ultimatum1
+160226_ultimatum1
+160224_ultimatum1
+160224_ultimatum2
+160422_mafia2
+160226_mafia1
+160226_mafia2
+160224_mafia1
+160224_mafia2
+160422_haggling1
+160226_haggling1
+160224_haggling1
+170307_dance1
+170307_dance2
+170307_dance3
+170307_dance4
+170307_dance5
+170307_dance6
+160317_moonbaby1
+160317_moonbaby2
+160317_moonbaby3
+170915_toddler2
+170915_toddler3
+170915_toddler4
+160906_ian5
+160906_ian3
+160906_ian2
+160906_ian1
+160401_ian3
+160401_ian2
+160401_ian1
+170915_office1
+170407_office2
+160906_pizza1
+EOF
 ```
 
 ## Command-Line Usage
