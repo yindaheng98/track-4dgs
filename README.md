@@ -214,29 +214,27 @@ data/harmony4d/
 
 [CMU Panoptic Studio](http://domedb.perception.cs.cmu.edu/) ([ver 1.2 sequence list](https://docs.google.com/spreadsheets/d/1eoe74dHRtoMVVFLKCTJkAtF8zqxAnoo2Nt15CYYvHEE/edit#gid=1333444170)) is released for non-commercial research use. The released set is 84 sequences under `http://domedb.perception.cs.cmu.edu/webdata/dataset/<sequence>/`: range of motion, haggling, musical instruments, ultimatum, mafia, dance, toddler, office, and pizza. `171204_pose1_sample` is a short clip of `171204_pose1` (31 HD videos, 271MB, no VGA). The [dataset browser](http://domedb.perception.cs.cmu.edu/dataset.html) also lists later sequences; add a name to the loop to fetch it from the same paths. If the CMU host does not answer, set `host` to `http://vcl.snu.ac.kr/panoptic`.
 
-Each sequence gets calibration, COCO-19 body keypoints, face keypoints, hand keypoints, and the face-mesh track when that file exists, plus up to 31 HD videos (`hd_00_00.mp4`–`hd_00_30.mp4`) and up to 480 VGA videos (`vga_PP_NN.mp4`, panel `01`–`20`, node `01`–`24`). A missing file makes `wget` fail; the command deletes that path and continues. Full HD plus VGA for every sequence is far larger than the 271MB sample clip.
+Each sequence gets calibration, COCO-19 body keypoints, face keypoints, hand keypoints, and the face-mesh track when that file exists, plus up to 31 HD videos (`hd_00_00.mp4`–`hd_00_30.mp4`). The host publishes those videos, not frame images, and this loop does not fetch VGA. It needs `wget`, `tar`, and `ffmpeg`. Each archive is piped from `wget` into `tar`, and each video is piped from `wget` into `ffmpeg` and decoded to lossless PNG, so neither the tar nor the mp4 is written. Frame 0 is `hdImgs/00_00/00_00_00000000.png`. A missing file makes `wget` fail; the command deletes that partial JSON, extracted folder, or frame directory and continues. PNG frames are much larger than the videos. The 271MB figure is the sample's compressed HD video.
 
 ```shell
+set -o pipefail
 host=http://domedb.perception.cs.cmu.edu
 mkdir -p data/panoptic
 while read -r seq; do
   [ -n "$seq" ] || continue
   dst=data/panoptic/$seq
   base=$host/webdata/dataset/$seq
-  mkdir -p "$dst/hdVideos" "$dst/vgaVideos"
-  for f in "calibration_$seq.json" hdPose3d_stage1_coco19.tar hdFace3d.tar hdHand3d.tar hdMeshTrack_face.tar; do
-    wget -c --tries=2 --timeout=60 -P "$dst" "$base/$f" || rm -f "$dst/$f"
+  mkdir -p "$dst"
+  wget -c --tries=2 --timeout=60 -P "$dst" "$base/calibration_$seq.json" || rm -f "$dst/calibration_$seq.json"
+  for f in hdPose3d_stage1_coco19.tar hdFace3d.tar hdHand3d.tar hdMeshTrack_face.tar; do
+    wget --tries=2 --timeout=60 -O - "$base/$f" | tar -C "$dst" -xf - || rm -rf "$dst/${f%.tar}"
   done
   for i in $(seq -w 0 30); do
-    wget -c --tries=2 --timeout=60 -P "$dst/hdVideos" "$base/videos/hd_shared_crf20/hd_00_$i.mp4" || rm -f "$dst/hdVideos/hd_00_$i.mp4"
-  done
-  for p in $(seq -w 1 20); do
-    for n in $(seq -w 1 24); do
-      wget -c --tries=2 --timeout=60 -P "$dst/vgaVideos" "$base/videos/vga_shared_crf10/vga_${p}_${n}.mp4" || rm -f "$dst/vgaVideos/vga_${p}_${n}.mp4"
-    done
-  done
-  for t in "$dst"/*.tar; do
-    [ -f "$t" ] && tar -C "$dst" -xf "$t"
+    frames="$dst/hdImgs/00_$i"
+    mkdir -p "$frames"
+    wget --tries=2 --timeout=60 -O - "$base/videos/hd_shared_crf20/hd_00_$i.mp4" \
+      | ffmpeg -y -i pipe:0 -start_number 0 "$frames/00_$i_%08d.png" \
+      || rm -rf "$frames"
   done
 done <<'EOF'
 171204_pose1

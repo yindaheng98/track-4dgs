@@ -19,7 +19,7 @@ class PanopticDataset(AbstractLazyLoadDataset[PanopticSpec], AbstractGroupArgsDa
     and defaults to 0.
 
     Each sequence folder contains ``calibration_<name>.json``, body keypoints,
-    and HD frames or videos. Tracks are the 19 body joints in each selected
+    and HD PNG frames. Tracks are the 19 body joints in each selected
     camera. ``--max-image-size`` caps the long side of each image.
     Construction records one :class:`PanopticSpec` per sequence.
     :meth:`PanopticSpec.load` reads the cameras and joints.

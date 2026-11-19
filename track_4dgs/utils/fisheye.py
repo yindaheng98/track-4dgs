@@ -1,4 +1,4 @@
-"""Fisheye-to-pinhole remap tables."""
+"""Undistort remap tables for :func:`torch.nn.functional.grid_sample`."""
 
 import cv2
 import numpy as np
@@ -23,6 +23,27 @@ def fisheye_undistort_grid(
     coeffs = np.asarray(distortion, dtype=np.float64).reshape(4, 1)
     map_x, map_y = cv2.fisheye.initUndistortRectifyMap(
         matrix, coeffs, np.eye(3, dtype=np.float64), matrix, (width, height), cv2.CV_32FC1,
+    )
+    xs = torch.tensor(map_x).mul(2.0 / (width - 1)).sub(1.0)
+    ys = torch.tensor(map_y).mul(2.0 / (height - 1)).sub(1.0)
+    return torch.stack((xs, ys), dim=-1)
+
+
+def opencv_undistort_grid(
+        width: int, height: int, fx: float, fy: float, cx: float, cy: float,
+        distortion: tuple[float, ...],
+) -> torch.Tensor:
+    """``(H, W, 2)`` grid for the same ``grid_sample`` call as :func:`fisheye_undistort_grid`.
+
+    ``distortion`` is the ordinary OpenCV vector ``k1, k2, p1, p2, k3, ...``.
+    The pinhole matrix is ``fx, fy, cx, cy``, and each entry is the source pixel
+    of one output pixel, scaled to ``[-1, 1]`` with ``align_corners=True``.
+    """
+
+    matrix = np.array([[fx, 0.0, cx], [0.0, fy, cy], [0.0, 0.0, 1.0]], dtype=np.float64)
+    coeffs = np.asarray(distortion, dtype=np.float64)
+    map_x, map_y = cv2.initUndistortRectifyMap(
+        matrix, coeffs, None, matrix, (width, height), cv2.CV_32FC1,
     )
     xs = torch.tensor(map_x).mul(2.0 / (width - 1)).sub(1.0)
     ys = torch.tensor(map_y).mul(2.0 / (height - 1)).sub(1.0)
