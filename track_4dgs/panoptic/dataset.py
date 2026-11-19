@@ -1,0 +1,99 @@
+"""Read Panoptic sequences as supervision samples."""
+
+from argparse import ArgumentParser, Namespace
+
+from ..dataset import AbstractGroupArgsDataset
+from ..dataset.lazy_load import AbstractLazyLoadDataset
+from .spec import PanopticSpec
+
+
+class PanopticDataset(AbstractLazyLoadDataset[PanopticSpec], AbstractGroupArgsDataset):
+    """One sample is one Panoptic sequence.
+
+    Repeat ``--sequence`` for another sample. ``--frame_start``,
+    ``--frame_end``, ``--frame_step``, and ``--init-dataset-index`` attach to
+    the preceding ``--sequence``. Every HD camera in the calibration is used.
+    Frames are ``range(frame_start, frame_end + 1, frame_step)`` using HD frame indices.
+    ``frame_start`` defaults to 0. ``frame_end`` defaults to the last body json.
+    ``frame_step`` defaults to 1. ``--init-dataset-index`` indexes that range
+    and defaults to 0.
+
+    Each sequence folder contains ``calibration_<name>.json``, body keypoints,
+    and HD frames or videos. Tracks are the 19 body joints in each selected
+    camera. ``--max-image-size`` caps the long side of each image.
+    Construction records one :class:`PanopticSpec` per sequence.
+    :meth:`PanopticSpec.load` reads the cameras and joints.
+    """
+
+    arg_group_starters = ("--sequence",)
+
+    def __init__(self, *samples: PanopticSpec):
+        if not samples:
+            raise ValueError("at least one --sequence is required")
+        super().__init__(*samples)
+
+    @staticmethod
+    def add_group_argument(parser: ArgumentParser) -> ArgumentParser:
+        """Register one ``--sequence`` group's flags on ``parser`` and return ``parser``."""
+
+        parser.add_argument("--sequence", required=True, type=str, help="Sequence folder for one sample.")
+        parser.add_argument("--frame_start", type=int, default=0, help="First HD frame index for this sequence. Defaults to 0.")
+        parser.add_argument("--frame_end", type=int, default=None, help="Last HD frame index for this sequence. Defaults to the last body json.")
+        parser.add_argument("--frame_step", type=int, default=1, help="Frame step for this sequence. Defaults to 1.")
+        parser.add_argument("--init-dataset-index", type=int, default=0, help="Index into range(frame_start, frame_end + 1, frame_step) for the query frame. Defaults to 0.")
+        return parser
+
+    @staticmethod
+    def add_common_argument(parser: ArgumentParser) -> ArgumentParser:
+        """Register the image-size flag shared by every sequence and return ``parser``."""
+
+        parser.add_argument("--max-image-size", default=None, type=int, help="Longest side of a loaded image. A larger photo is scaled down with its intrinsics. Defaults to the calibration resolution.")
+        return parser
+
+    @staticmethod
+    def spec_from_args(common_args: Namespace, group_args: Namespace) -> PanopticSpec:
+        """One :class:`PanopticSpec` for this ``--sequence`` group.
+
+        Does not read cameras. :meth:`PanopticSpec.load` does that.
+        """
+
+        return PanopticSpec(
+            sequence=group_args.sequence,
+            frame_start=group_args.frame_start,
+            frame_end=group_args.frame_end,
+            frame_step=group_args.frame_step,
+            init_dataset_index=group_args.init_dataset_index,
+            max_image_size=common_args.max_image_size,
+        )
+
+    @classmethod
+    def parse_known_group_chunk(cls, argv: list[str] = []) -> tuple[Namespace, list[str]]:
+        """Parse one sequence folder and its frame range.
+
+        Frames are ``range(frame_start, frame_end + 1, frame_step)``.
+        ``frame_start`` defaults to 0. ``frame_end`` defaults to the last body json.
+        ``frame_step`` defaults to 1. ``--init-dataset-index`` defaults to 0.
+        """
+
+        parser = ArgumentParser(allow_abbrev=False)
+        cls.add_group_argument(parser)
+        return parser.parse_known_args(argv)
+
+    @classmethod
+    def parse_known_common_argv(cls, argv: list[str] = []) -> tuple[Namespace, list[str]]:
+        """Parse the shared image-size flag.
+
+        ``--max-image-size`` defaults to the calibration resolution.
+        """
+
+        parser = ArgumentParser(allow_abbrev=False)
+        cls.add_common_argument(parser)
+        return parser.parse_known_args(argv)
+
+    @classmethod
+    def from_args(cls, common_args: Namespace, *group_args: Namespace) -> "PanopticDataset":
+        """One deferred sequence per ``--sequence``. Cameras load in :meth:`__getitem__`."""
+
+        assert group_args, "at least one --sequence is required"
+        samples = tuple(cls.spec_from_args(common_args, group) for group in group_args)
+        return cls(*samples)
