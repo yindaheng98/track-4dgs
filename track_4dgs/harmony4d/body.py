@@ -2,9 +2,11 @@
 
 import os
 import urllib.request
+from collections.abc import Sequence
 
 import numpy as np
 import torch
+from gaussian_splatting.dataset import CameraDataset
 
 from ..blender.kernels import project_visibility, sample_near_surface, track_bind_points
 from ..tracker import Query
@@ -116,18 +118,54 @@ def load_body_surface(
     vertices = (vertices @ transform[:3, :3].T + transform[:3, 3]).to(mesh_device)
     verts = list(vertices.unbind(1))
     mesh_faces = [faces.to(mesh_device)] * len(names)
-    warp_device = str(mesh_device)
     eps = float(occlusion_eps * torch.linalg.svdvals(transform[:3, :3]).mean())
+    return sample_posed_surface(
+        verts,
+        mesh_faces,
+        frames,
+        init_dataset_index,
+        num_points,
+        visible_cameras,
+        inward_distance,
+        outward_distance,
+        eps,
+        face_mask,
+    )
+
+
+def sample_posed_surface(
+        verts: Sequence[torch.Tensor],
+        faces: Sequence[torch.Tensor],
+        frames: Sequence[CameraDataset],
+        init_dataset_index: int,
+        num_points: int,
+        visible_cameras: int,
+        inward_distance: float,
+        outward_distance: float,
+        occlusion_eps: float,
+        face_mask: torch.Tensor | None = None,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Draw ``num_points`` on the query frame and project them through every view.
+
+    ``verts`` lists per-person ``(F, V_i, 3)`` positions already in the camera world.
+    ``faces`` lists the matching ``(T_i, 3)`` triangles. ``face_mask`` is the optional
+    packed-triangle mask taken by :func:`~track_4dgs.blender.kernels.sample_near_surface`.
+    A point is kept when more cameras than ``visible_cameras`` see it, then carried
+    with that triangle. Occluded samples are invalid. Returns pixels ``(V, F, N, 2)``
+    and a bool mask ``(V, F, N)``.
+    """
+
+    warp_device = str(verts[0].device)
     with torch.no_grad():
         binding = sample_near_surface(
             [person[init_dataset_index] for person in verts],
-            mesh_faces,
+            faces,
             frames[init_dataset_index],
             num_points,
             visible_cameras,
             inward_distance,
             outward_distance,
-            eps,
+            occlusion_eps,
             warp_device,
             face_mask,
         )
@@ -135,8 +173,8 @@ def load_body_surface(
             (binding.xyz.shape[0],), init_dataset_index, dtype=torch.long, device=binding.xyz.device,
         )
         query = Query.from_projection(binding.xyz, frames, query_frames)
-        worlds, valid, world_verts, scene_faces, _owner = track_bind_points(verts, mesh_faces, frames, binding)
+        worlds, valid, world_verts, scene_faces, _owner = track_bind_points(verts, faces, frames, binding)
         points, visibility = project_visibility(
-            query, frames, worlds, world_verts, scene_faces, valid, eps, warp_device, binding.face,
+            query, frames, worlds, world_verts, scene_faces, valid, occlusion_eps, warp_device, binding.face,
         )
     return points, visibility > 0
