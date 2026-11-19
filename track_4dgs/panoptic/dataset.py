@@ -19,8 +19,9 @@ class PanopticDataset(AbstractLazyLoadDataset[PanopticSpec], AbstractGroupArgsDa
     and defaults to 0.
 
     Each sequence folder contains ``calibration_<name>.json``, body keypoints,
-    and HD PNG frames. Tracks are the 19 body joints in each selected
-    camera. ``--max-image-size`` caps the long side of each image.
+    and HD PNG frames. ``--num-points`` is the total number of tracks. The 19
+    body joints of each person come first, and the rest are samples on a ribbon
+    beside those bones. ``--max-image-size`` caps the long side of each image.
     Construction records one :class:`PanopticSpec` per sequence.
     :meth:`PanopticSpec.load` reads the cameras and joints.
     """
@@ -45,8 +46,13 @@ class PanopticDataset(AbstractLazyLoadDataset[PanopticSpec], AbstractGroupArgsDa
 
     @staticmethod
     def add_common_argument(parser: ArgumentParser) -> ArgumentParser:
-        """Register the image-size flag shared by every sequence and return ``parser``."""
+        """Register flags shared by every sequence and return ``parser``."""
 
+        parser.add_argument("--num-points", default=256, type=int, help="Total points, including the body joints. Further points are sampled beside the bones. Defaults to 256.")
+        parser.add_argument("--visible-cameras", default=2, type=int, help="Keep a surface point only when more cameras than this see it. Defaults to 2.")
+        parser.add_argument("--inward-distance", default=0.0, type=float, help="How far surface points may move into the ribbon along its normal, in meters.")
+        parser.add_argument("--outward-distance", default=0.0, type=float, help="How far surface points may move out of the ribbon along its normal, in meters.")
+        parser.add_argument("--occlusion-eps", default=1e-2, type=float, help="Occlusion tolerance in meters. Defaults to 1e-2.")
         parser.add_argument("--max-image-size", default=None, type=int, help="Longest side of a loaded image. A larger photo is scaled down with its intrinsics. Defaults to the calibration resolution.")
         return parser
 
@@ -63,6 +69,11 @@ class PanopticDataset(AbstractLazyLoadDataset[PanopticSpec], AbstractGroupArgsDa
             frame_end=group_args.frame_end,
             frame_step=group_args.frame_step,
             init_dataset_index=group_args.init_dataset_index,
+            num_points=common_args.num_points,
+            visible_cameras=common_args.visible_cameras,
+            inward_distance=common_args.inward_distance,
+            outward_distance=common_args.outward_distance,
+            occlusion_eps=common_args.occlusion_eps,
             max_image_size=common_args.max_image_size,
         )
 
@@ -81,9 +92,10 @@ class PanopticDataset(AbstractLazyLoadDataset[PanopticSpec], AbstractGroupArgsDa
 
     @classmethod
     def parse_known_common_argv(cls, argv: list[str] = []) -> tuple[Namespace, list[str]]:
-        """Parse the shared image-size flag.
+        """Parse flags shared by every sequence.
 
-        ``--max-image-size`` defaults to the calibration resolution.
+        ``--num-points`` defaults to 256. ``--max-image-size`` defaults to the
+        calibration resolution.
         """
 
         parser = ArgumentParser(allow_abbrev=False)

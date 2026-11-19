@@ -11,6 +11,7 @@ import torch
 from ..dexycb.trajectory import query_and_tracks_from_trajectories
 from ..tracker import Query, Track
 from ..utils import full_proj_transform, opencv_undistort_grid, project, selected_frame_indices
+from .body import sample_body_surface
 from .frame import PanopticCameraSpec, PanopticFrame
 
 BODY_JOINT_COUNT = 19
@@ -174,7 +175,7 @@ def load_body_tracks(
         cameras: list[PanopticCamera],
         num_frames: int,
         pose_dir: str,
-) -> tuple[torch.Tensor, torch.Tensor]:
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """Project the COCO-19 joints into every HD camera.
 
     People are concatenated in id order, so point ``person * 19 + joint`` is
@@ -182,6 +183,8 @@ def load_body_tracks(
     absent, its confidence is not positive, it is behind the camera, or the
     pixel leaves the image. Pixels follow :func:`~track_4dgs.utils.project`,
     which is the OpenCV pixel minus one half.
+    Returns pixels ``(V, F, N, 2)``, a bool mask ``(V, F, N)``, and the joint
+    positions ``(F, N, 3)`` in meters.
     """
 
     frames = [
@@ -214,7 +217,7 @@ def load_body_tracks(
             seen = present[frame_index]
             points[view_index, frame_index, seen] = uv[seen]
             valid[view_index, frame_index, seen] = in_frustum[seen]
-    return points, valid
+    return points, valid, xyz
 
 
 @dataclass(frozen=True)
@@ -225,6 +228,14 @@ class PanopticSpec:
     ``hdPose3d_stage1_coco19/body3DScene_XXXXXXXX.json``, and
     ``hdImgs/<camera>/<camera>_XXXXXXXX.png`` for every HD camera.
     Joints are stored in centimeters and converted to meters.
+    ``num_points`` is the total number of tracks and defaults to 256.
+    The 19 body joints of each person come first. The rest are samples on a
+    ribbon 4 cm beside each bone, drawn with the same surface sampler as
+    Harmony4D. A sample is kept when more cameras than ``visible_cameras`` see
+    it, then carried with that triangle. ``num_points`` must cover every body
+    joint. ``inward_distance`` and ``outward_distance`` move a sample along the
+    ribbon normal, in meters. ``occlusion_eps`` is the occlusion tolerance in
+    meters.
     Frames are ``range(frame_start, frame_end + 1, frame_step)`` using the HD
     frame index. ``frame_end`` defaults to the last body json. ``frame_step``
     defaults to 1. ``init_dataset_index`` indexes that range and is the query.
@@ -237,11 +248,22 @@ class PanopticSpec:
     frame_end: Optional[int] = None
     frame_step: int = 1
     init_dataset_index: int = 0
+    num_points: int = 256
+    visible_cameras: int = 2
+    inward_distance: float = 0.0
+    outward_distance: float = 0.0
+    occlusion_eps: float = 1e-2
     max_image_size: Optional[int] = None
 
     def __post_init__(self):
         if self.frame_step == 0:
             raise ValueError("frame_step must not be 0")
+        if self.num_points < 0:
+            raise ValueError("num_points must be non-negative")
+        if self.inward_distance < 0 or self.outward_distance < 0:
+            raise ValueError("inward_distance and outward_distance must be non-negative")
+        if self.occlusion_eps < 0:
+            raise ValueError("occlusion_eps must be non-negative")
         if self.init_dataset_index < 0:
             raise ValueError("--init-dataset-index must index one frame")
         if self.max_image_size is not None and self.max_image_size < 2:
@@ -288,10 +310,28 @@ class PanopticSpec:
                 ))
             camera_specs.append(specs)
         frames = [PanopticFrame(specs, device=device) for specs in camera_specs]
-        points, valid = load_body_tracks(cameras, num_frames, poses)
+        points, valid, xyz = load_body_tracks(cameras, num_frames, poses)
         points = points[:, indices]
         valid = valid[:, indices]
-        if device is not None:
+        joint_count = points.shape[2]
+        if self.num_points < joint_count:
+            raise ValueError(f"num_points is the total and must cover the {joint_count} body joints")
+        if self.num_points > joint_count:
+            people = joint_count // BODY_JOINT_COUNT
+            surface_points, surface_valid = sample_body_surface(
+                xyz[indices].view(len(indices), people, BODY_JOINT_COUNT, 3),
+                frames,
+                self.init_dataset_index,
+                self.num_points - joint_count,
+                self.visible_cameras,
+                self.inward_distance,
+                self.outward_distance,
+                self.occlusion_eps,
+                device,
+            )
+            points = torch.cat([points.to(surface_points.device), surface_points], dim=2)
+            valid = torch.cat([valid.to(surface_valid.device), surface_valid], dim=2)
+        elif device is not None:
             points = points.to(device)
             valid = valid.to(device)
         start_indices = torch.full(
