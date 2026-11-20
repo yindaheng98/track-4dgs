@@ -11,7 +11,14 @@ from ..tracker import Query, Track
 from ..utils import selected_frame_indices
 from .camera import load_extrinsics, load_intrinsics
 from .frame import IMAGE_HEIGHT, IMAGE_WIDTH, DexYCBCameraSpec, DexYCBFrame
-from .hand import load_joint_tracks
+from .hand import (
+    DEFAULT_MANO_LEFT,
+    DEFAULT_MANO_LEFT_URL,
+    DEFAULT_MANO_RIGHT,
+    DEFAULT_MANO_RIGHT_URL,
+    load_joint_tracks,
+    posed_mano_meshes,
+)
 from .object import posed_ycb_meshes
 from .trajectory import query_and_tracks_from_trajectories
 from .yaml import load_yaml
@@ -22,9 +29,11 @@ class DexYCBSpec:
     """One DexYCB capture. Cameras, joints, and posed meshes are read in :meth:`load`.
 
     ``sequence_dir`` contains ``meta.yml`` and one image folder per camera.
-    ``calibration_dir`` contains ``intrinsics/`` and ``extrinsics_*/``.
+    ``calibration_dir`` contains ``intrinsics/``, ``extrinsics_*/``, and ``mano_*/``.
     ``models_dir`` contains one folder per YCB object, each with ``textured_simple.obj``.
-    Tracks are the 21 MANO joints, then ``num_points`` samples on the posed meshes.
+    ``mano_right`` and ``mano_left`` are the local MANO pickles. When either cannot
+    be loaded, ``mano_right_url`` or ``mano_left_url`` is downloaded to that path.
+    Tracks are the 21 MANO joints, then ``num_points`` samples on the posed hand and YCB meshes.
     Points are drawn at ``init_dataset_index`` and carried with that triangle.
     ``visible_cameras`` keeps a sample only when more cameras than this see it.
     ``inward_distance`` and ``outward_distance`` move a sample along the face normal.
@@ -43,6 +52,10 @@ class DexYCBSpec:
     init_dataset_index: int = 0
     load_depth: bool = False
     num_points: int = 256
+    mano_right: str = DEFAULT_MANO_RIGHT
+    mano_right_url: str = DEFAULT_MANO_RIGHT_URL
+    mano_left: str = DEFAULT_MANO_LEFT
+    mano_left_url: str = DEFAULT_MANO_LEFT_URL
     visible_cameras: int = 2
     inward_distance: float = 0.0
     outward_distance: float = 0.0
@@ -125,9 +138,15 @@ class DexYCBSpec:
             [IMAGE_HEIGHT] * len(serials),
             hand_start_indices,
         )
-        verts, faces = posed_ycb_meshes(
+        hand_verts, hand_faces = posed_mano_meshes(
+            self.sequence_dir, self.calibration_dir, meta, indices,
+            self.mano_right, self.mano_right_url, self.mano_left, self.mano_left_url,
+        )
+        object_verts, object_faces = posed_ycb_meshes(
             self.sequence_dir, self.calibration_dir, self.models_dir, meta, indices,
         )
+        verts = hand_verts + object_verts
+        faces = hand_faces + object_faces
         object_device = torch.device("cpu" if device is None else device)
         verts = [obj.to(object_device) for obj in verts]
         faces = [obj.to(object_device) for obj in faces]
