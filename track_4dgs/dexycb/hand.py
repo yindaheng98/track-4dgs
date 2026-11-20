@@ -5,6 +5,19 @@ import os
 import numpy as np
 import torch
 
+from .object import load_c2w
+from .yaml import load_yaml
+
+MANO_VERTEX_COUNT = 778
+MANO_JOINT_COUNT = 16
+MANO_BETA_COUNT = 10
+MANO_PCA_COMPONENTS = 45
+DEFAULT_MANO_RIGHT = os.path.join(os.path.dirname(__file__), "MANO_RIGHT.pkl")
+DEFAULT_MANO_LEFT = os.path.join(os.path.dirname(__file__), "MANO_LEFT.pkl")
+# minimal-hand/mano/models from https://github.com/ut-vision/SiMHand
+DEFAULT_MANO_RIGHT_URL = "https://github.com/ut-vision/SiMHand/raw/main/minimal-hand/mano/models/MANO_RIGHT.pkl"
+DEFAULT_MANO_LEFT_URL = "https://github.com/ut-vision/SiMHand/raw/main/minimal-hand/mano/models/MANO_LEFT.pkl"
+
 
 def load_joint_tracks(sequence_dir: str, sequence_meta: dict) -> tuple[torch.Tensor, torch.Tensor]:
     """MANO ``joint_2d`` for every view.
