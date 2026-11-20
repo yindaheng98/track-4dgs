@@ -12,7 +12,8 @@ from ..tracker import Query, Track
 from ..utils import selected_frame_indices
 from .dataset import DexYCBDataset
 from .frame import DexYCBFrame
-from .spec import DexYCBSpec, load_extrinsics
+from .camera import load_extrinsics
+from .spec import DexYCBSpec
 
 YCB_MODEL_NAMES = {
     1: "002_master_chef_can",
@@ -90,7 +91,7 @@ def load_pose_y(sequence_dir: str, serials: list[str], indices: list[int]) -> to
 
 
 def load_c2w(calibration_dir: str, sequence_meta: dict) -> torch.Tensor:
-    """``(V, 4, 4)`` camera-to-world for each serial, in :func:`~track_4dgs.dexycb.spec.load_extrinsics` order."""
+    """``(V, 4, 4)`` camera-to-world for each serial, in :func:`~track_4dgs.dexycb.camera.load_extrinsics` order."""
 
     rotations, translations = load_extrinsics(calibration_dir, sequence_meta)
     poses = []
