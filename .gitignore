@@ -1,6 +1,8 @@
 data/
 output/
 checkpoints/
+/track_4dgs/dexycb/MANO_RIGHT.pkl
+/track_4dgs/dexycb/MANO_LEFT.pkl
 *.dist-info/
 /track_4dgs/matcha/dift/
 /track_4dgs/matcha/dinov2/

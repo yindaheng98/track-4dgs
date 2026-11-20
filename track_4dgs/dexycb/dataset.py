@@ -19,14 +19,14 @@ class DexYCBDataset(AbstractLazyLoadDataset[DexYCBSpec], AbstractGroupArgsDatase
     ``--init-dataset-index`` indexes that range and defaults to 0.
 
     Each sequence folder contains ``meta.yml``, color images, aligned depth,
-    and joint labels. ``calibration_dir`` holds ``intrinsics/``, ``extrinsics_*/``,
+    and pose labels. ``calibration_dir`` holds ``intrinsics/``, ``extrinsics_*/``,
     and ``mano_*/``. ``models_dir`` is the ``models/`` folder from ``models.tar.gz``.
     ``--mano-right`` and ``--mano-left`` are the local pickles. A file that cannot
     be loaded is replaced from ``--mano-right-url`` or ``--mano-left-url``.
-    Tracks are the 21 MANO joints, then samples on the posed hand and YCB meshes.
+    Tracks are samples on the posed hand and YCB meshes.
     ``load_depth`` reads the aligned depth with each color image and defaults to false.
     Construction records one :class:`DexYCBSpec` per capture.
-    :meth:`DexYCBSpec.load` reads the cameras, joints, and meshes.
+    :meth:`DexYCBSpec.load` reads the cameras and meshes.
     """
 
     arg_group_starters = ("--sequence",)
@@ -54,7 +54,7 @@ class DexYCBDataset(AbstractLazyLoadDataset[DexYCBSpec], AbstractGroupArgsDatase
         parser.add_argument("--calibration-dir", required=True, type=str)
         parser.add_argument("--models-dir", required=True, type=str, help="Folder of YCB meshes. Each object has textured_simple.obj.")
         parser.add_argument("--load-depth", action="store_true")
-        parser.add_argument("--num-points", default=256, type=int, help="Surface samples on the posed hand and YCB meshes, appended after the hand joints. Defaults to 256.")
+        parser.add_argument("--num-points", default=256, type=int, help="Surface samples on the posed hand and YCB meshes. Defaults to 256.")
         parser.add_argument("--mano-right", default=DEFAULT_MANO_RIGHT, type=str, help="Local right MANO pickle. A file that cannot be loaded is replaced from --mano-right-url.")
         parser.add_argument("--mano-right-url", default=DEFAULT_MANO_RIGHT_URL, type=str, help="Downloaded into --mano-right when that file cannot be loaded. Defaults to minimal-hand/mano/models/MANO_RIGHT.pkl from ut-vision/SiMHand.")
         parser.add_argument("--mano-left", default=DEFAULT_MANO_LEFT, type=str, help="Local left MANO pickle. A file that cannot be loaded is replaced from --mano-left-url.")

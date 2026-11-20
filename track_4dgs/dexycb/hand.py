@@ -1,4 +1,4 @@
-"""DexYCB MANO joints and posed hand meshes."""
+"""DexYCB posed MANO hand meshes."""
 
 import os
 import pickle
@@ -258,32 +258,3 @@ def posed_mano_meshes(
         verts.append(verts_world)
         mesh_faces.append(model["faces"])
     return verts, mesh_faces
-
-
-def load_joint_tracks(sequence_dir: str, sequence_meta: dict) -> tuple[torch.Tensor, torch.Tensor]:
-    """MANO ``joint_2d`` for every view.
-
-    DexYCB writes ``-1, -1`` when that joint has no annotation. A joint that
-    projects outside the image keeps its pixel coordinate. Bounds are applied
-    later by :func:`~track_4dgs.dexycb.trajectory.query_and_tracks_from_trajectories`.
-    """
-
-    serials = [str(serial) for serial in sequence_meta["serials"]]
-    num_frames = int(sequence_meta["num_frames"])
-    views = []
-    for serial in serials:
-        folder = os.path.join(sequence_dir, serial)
-        frames = []
-        for frame_index in range(num_frames):
-            with np.load(os.path.join(folder, f"labels_{frame_index:06d}.npz")) as label:
-                joints = np.asarray(label["joint_2d"], dtype=np.float32)
-            if joints.shape != (1, 21, 2):
-                raise ValueError(
-                    f"{folder} frame {frame_index} joint_2d has shape {joints.shape}, expected (1, 21, 2)"
-                )
-            frames.append(joints[0])
-        views.append(np.stack(frames))
-    points = torch.from_numpy(np.stack(views))
-    missing = (points == -1).all(dim=-1)
-    valid = torch.isfinite(points).all(dim=-1) & ~missing
-    return points, valid
