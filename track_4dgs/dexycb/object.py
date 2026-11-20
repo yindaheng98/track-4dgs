@@ -1,19 +1,11 @@
-"""DexYCB supervision from posed YCB meshes."""
+"""Posed YCB meshes for a DexYCB capture."""
 
 import os
-from argparse import Namespace
-from dataclasses import dataclass, field
 
 import numpy as np
 import torch
 
-from ..blender.kernels import project_visibility, sample_near_surface, track_bind_points
-from ..tracker import Query, Track
-from ..utils import selected_frame_indices
-from .dataset import DexYCBDataset
-from .frame import DexYCBFrame
 from .camera import load_extrinsics
-from .spec import DexYCBSpec
 
 YCB_MODEL_NAMES = {
     1: "002_master_chef_can",
@@ -151,121 +143,3 @@ def posed_ycb_meshes(
         verts.append(verts_world)
         mesh_faces.append(faces)
     return verts, mesh_faces
-
-
-@dataclass(frozen=True)
-class DexYCBObjectSpec(DexYCBSpec):
-    """One DexYCB capture whose tracks are samples on the posed YCB meshes.
-
-    Cameras come from :meth:`DexYCBSpec.load_frames`. ``pose_y`` poses
-    ``textured_simple.obj``. Points are drawn on the mesh at ``init_dataset_index``
-    and carried with that triangle for the other frames.
-    ``models_dir`` contains one folder per YCB object. It is keyword-only because
-    the frame fields inherited from :class:`DexYCBSpec` already have defaults.
-    """
-
-    models_dir: str = field(kw_only=True)
-    num_points: int = 256
-    visible_cameras: int = 2
-    inward_distance: float = 0.0
-    outward_distance: float = 0.0
-    occlusion_eps: float = 1e-2
-
-    def __post_init__(self):
-        super().__post_init__()
-        if self.num_points < 1:
-            raise ValueError("num_points must be positive")
-        if self.inward_distance < 0 or self.outward_distance < 0:
-            raise ValueError("inward_distance and outward_distance must be non-negative")
-        if self.occlusion_eps < 0:
-            raise ValueError("occlusion_eps must be non-negative")
-
-    def load(self, device) -> tuple[Query, list[DexYCBFrame], list[Track]]:
-        frames, meta = self.load_frames(device)
-        indices = selected_frame_indices(self.frame_start, self.frame_end, self.frame_step, int(meta["num_frames"]))
-        verts, faces = posed_ycb_meshes(
-            self.sequence_dir, self.calibration_dir, self.models_dir, meta, indices,
-        )
-        mesh_device = torch.device("cpu" if device is None else device)
-        verts = [obj.to(mesh_device) for obj in verts]
-        faces = [obj.to(mesh_device) for obj in faces]
-        warp_device = str(mesh_device)
-        with torch.no_grad():
-            binding = sample_near_surface(
-                [obj[self.init_dataset_index] for obj in verts],
-                faces,
-                frames[self.init_dataset_index],
-                self.num_points,
-                self.visible_cameras,
-                self.inward_distance,
-                self.outward_distance,
-                self.occlusion_eps,
-                warp_device,
-            )
-            frame_indices = torch.full(
-                (binding.xyz.shape[0],), self.init_dataset_index, dtype=torch.long, device=binding.xyz.device,
-            )
-            query = Query.from_projection(binding.xyz, frames, frame_indices)
-            worlds, valid, world_verts, scene_faces, _owner = track_bind_points(verts, faces, frames, binding)
-            points, visibility = project_visibility(
-                query, frames, worlds, world_verts, scene_faces, valid,
-                self.occlusion_eps, warp_device, binding.face,
-            )
-            n_views, n_frames, n_points, _ = points.shape
-            confidence = points.new_ones((n_views, n_frames, n_points))
-            mask = valid.to(dtype=torch.bool).expand(n_frames, n_points)
-            tracks = [
-                Track(
-                    points=points[view_index],
-                    visibility=visibility[view_index],
-                    confidence=confidence[view_index],
-                    mask=mask,
-                )
-                for view_index in range(n_views)
-            ]
-        return query, frames, tracks
-
-
-class DexYCBObjectDataset(DexYCBDataset):
-    """One sample is one DexYCB capture, tracked on its YCB meshes.
-
-    ``--sequence`` groups match :class:`~track_4dgs.dexycb.dataset.DexYCBDataset`.
-    ``--models-dir`` is the ``models/`` folder from ``models.tar.gz``.
-    ``--num-points`` samples are drawn on the posed meshes at ``--init-dataset-index``
-    and kept when more cameras than ``--visible-cameras`` see them.
-    ``--inward-distance`` and ``--outward-distance`` move a sample along the face normal.
-    ``--occlusion-eps`` is the occlusion tolerance in world units.
-    """
-
-    @staticmethod
-    def add_common_argument(parser):
-        """Register the calibration, mesh, and sampling flags and return ``parser``."""
-
-        DexYCBDataset.add_common_argument(parser)
-        parser.add_argument("--models-dir", required=True, type=str, help="Folder of YCB meshes. Each object has textured_simple.obj.")
-        parser.add_argument("--num-points", default=256, type=int, help="Surface samples on the posed meshes. Defaults to 256.")
-        parser.add_argument("--visible-cameras", default=2, type=int, help="Keep a point only when more cameras than this see it. Defaults to 2.")
-        parser.add_argument("--inward-distance", default=0.0, type=float, help="How far points may move into the mesh along the face normal, in world units.")
-        parser.add_argument("--outward-distance", default=0.0, type=float, help="How far points may move out of the mesh along the face normal, in world units.")
-        parser.add_argument("--occlusion-eps", default=1e-2, type=float, help="Occlusion depth tolerance in world units. Defaults to 1e-2.")
-        return parser
-
-    @staticmethod
-    def spec_from_args(common_args: Namespace, group_args: Namespace) -> DexYCBObjectSpec:
-        """One :class:`DexYCBObjectSpec` for this ``--sequence`` group."""
-
-        return DexYCBObjectSpec(
-            sequence_dir=group_args.sequence,
-            calibration_dir=common_args.calibration_dir,
-            models_dir=common_args.models_dir,
-            frame_start=group_args.frame_start,
-            frame_end=group_args.frame_end,
-            frame_step=group_args.frame_step,
-            init_dataset_index=group_args.init_dataset_index,
-            load_depth=common_args.load_depth,
-            num_points=common_args.num_points,
-            visible_cameras=common_args.visible_cameras,
-            inward_distance=common_args.inward_distance,
-            outward_distance=common_args.outward_distance,
-            occlusion_eps=common_args.occlusion_eps,
-        )

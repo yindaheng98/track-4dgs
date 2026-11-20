@@ -439,7 +439,7 @@ Repeat `-s/--sources` to add another sample. `--load_cameras` and `--init-datase
 Armature deformation, shape keys, and other modifiers are included when the mesh topology stays fixed.
 Use it together with the Blender tools in [NVS2COLMAP](https://github.com/yindaheng98/NVS2COLMAP).
 
-[NVS2COLMAP](https://github.com/yindaheng98/NVS2COLMAP) renders that blend file into a Neural 3D Video scene (`poses_bounds.npy` and one video per camera), then `nvs2colmap.n3dv` writes one COLMAP camera dataset per frame. This tracker reads the same `.blend` file and those frame datasets. Cameras stay in the blend world, look along +Z, and treat image +Y as downward, which is the OpenCV camera NVS2COLMAP stores in `poses_bounds.npy`. Dataset frame `i` in `--sources` is Blender frame `frame_start + i * frame_step`, and that frame is at most `frame_end`. Pass the same `--frame_start`, `--frame_end`, and `--frame_step` as `nvs2colmap.blender`. `frame_start` defaults to 1. `frame_end` and `frame_step` default to the blend scene. Install NVS2COLMAP and keep a Blender executable on `PATH` as `blender`, or pass another path with `-m blender="'path/to/blender'"`. `warp-lang` is already installed with this package.
+[NVS2COLMAP](https://github.com/yindaheng98/NVS2COLMAP) renders that blend file into a Neural 3D Video scene (`poses_bounds.npy` and one video per camera), then `nvs2colmap.n3dv` writes one COLMAP camera dataset per frame. This tracker reads the same `.blend` file and those frame datasets. Cameras stay in the blend world, look along +Z, and treat image +Y as downward, which is the OpenCV camera NVS2COLMAP stores in `poses_bounds.npy`. Dataset frame `i` in `--sources` is the `i`-th frame selected from the blend. Index 0 is the scene's first frame, which Blender often numbers 1, so on that scene index `i` is Blender frame `1 + i`. `--frames` is a Python expression of `n`, the number of frames from the scene's first through its last, and returns a `tuple[int]` of those indices. The default `tuple(range(n))` keeps every frame. Pass another expression with `-m frames="'tuple(range(0, n, 2))'"`. Install NVS2COLMAP and keep a Blender executable on `PATH` as `blender`, or pass another path with `-m blender="'path/to/blender'"`. `warp-lang` is already installed with this package.
 
 `nvs2colmap-sample-cameras` can place the cameras and write `poses_bounds.npy`. Render the blend file from those cameras:
 
@@ -471,7 +471,7 @@ python -m track_4dgs.build_dataset \
     --vis-folder output/scene/track-blender-vis
 ```
 
-Copy `--frame_start`, `--frame_end`, and `--frame_step` from the render command onto the tracker. `nvs2colmap.blender --frame_step` already drops frames inside each camera video, and `nvs2colmap.n3dv` still writes consecutive `frame*` folders. Leave `nvs2colmap.n3dv --start-number` at its default of 1: that flag counts frames inside the rendered video, so `frame1` is the first frame the Blender render wrote. `--sources` then lists `frame1`, `frame2`, ... in order.
+`nvs2colmap.blender` still takes absolute Blender frames. On a scene whose first frame is Blender frame 1, `--frame_start 10 --frame_end 14 --frame_step 2` is indices 9, 11, and 13: `tuple(range(9, 14, 2))`. `nvs2colmap.blender --frame_step` already drops frames inside each camera video, and `nvs2colmap.n3dv` still writes consecutive `frame*` folders. Leave `nvs2colmap.n3dv --start-number` at its default of 1: that flag counts frames inside the rendered video, so `frame1` is the first frame the Blender render wrote. `--sources` then lists `frame1`, `frame2`, ... in the expression's order.
 
 ```shell
 python -m nvs2colmap.blender \
@@ -488,13 +488,11 @@ python -m track_4dgs.build_dataset \
     -d output/scene \
     -i 30000 \
     -m blend="'data/scene.blend'" \
-    -m frame_start=10 \
-    -m frame_end=14 \
-    -m frame_step=2 \
+    -m frames="'tuple(range(9, 14, 2))'" \
     --vis-folder output/scene/track-blender-vis
 ```
 
-`build_dataset --dataset blender` can skip the COLMAP export and render supervision directly. It samples OpenCV cameras on a spherical cap, samples the query near the mesh at `--init-dataset-index`, renders every view, and binds the tracks to the evaluated meshes. `--frame_start`, `--frame_end`, `--frame_step`, and `--init-dataset-index` attach to the preceding `--blend`. Repeat `--blend` for another sample.
+`build_dataset --dataset blender` can skip the COLMAP export and render supervision directly. It samples OpenCV cameras on a spherical cap, samples the query near the mesh at `--init-dataset-index`, renders every view, and binds the tracks to the evaluated meshes. `--frames` and `--init-dataset-index` attach to the preceding `--blend`. Index 0 is the scene's first frame. `--frames` defaults to `tuple(range(n))`. Repeat `--blend` for another sample.
 
 ```shell
 python -m track_4dgs.build_dataset \

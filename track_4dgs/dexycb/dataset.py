@@ -19,10 +19,11 @@ class DexYCBDataset(AbstractLazyLoadDataset[DexYCBSpec], AbstractGroupArgsDatase
 
     Each sequence folder contains ``meta.yml``, color images, aligned depth,
     and joint labels. ``calibration_dir`` holds ``intrinsics/`` and
-    ``extrinsics_*/``. Tracks are the 21 MANO joints in each color camera.
+    ``extrinsics_*/``. ``models_dir`` is the ``models/`` folder from ``models.tar.gz``.
+    Tracks are the 21 MANO joints, then samples on the posed YCB meshes.
     ``load_depth`` reads the aligned depth with each color image and defaults to false.
     Construction records one :class:`DexYCBSpec` per capture.
-    :meth:`DexYCBSpec.load` reads the cameras and joints.
+    :meth:`DexYCBSpec.load` reads the cameras, joints, and meshes.
     """
 
     arg_group_starters = ("--sequence",)
@@ -45,10 +46,16 @@ class DexYCBDataset(AbstractLazyLoadDataset[DexYCBSpec], AbstractGroupArgsDatase
 
     @staticmethod
     def add_common_argument(parser: ArgumentParser) -> ArgumentParser:
-        """Register the calibration and depth flags shared by every capture and return ``parser``."""
+        """Register the calibration, mesh, and sampling flags shared by every capture and return ``parser``."""
 
         parser.add_argument("--calibration-dir", required=True, type=str)
+        parser.add_argument("--models-dir", required=True, type=str, help="Folder of YCB meshes. Each object has textured_simple.obj.")
         parser.add_argument("--load-depth", action="store_true")
+        parser.add_argument("--num-points", default=256, type=int, help="Surface samples on the posed meshes, appended after the hand joints. Defaults to 256.")
+        parser.add_argument("--visible-cameras", default=2, type=int, help="Keep a point only when more cameras than this see it. Defaults to 2.")
+        parser.add_argument("--inward-distance", default=0.0, type=float, help="How far points may move into the mesh along the face normal, in world units.")
+        parser.add_argument("--outward-distance", default=0.0, type=float, help="How far points may move out of the mesh along the face normal, in world units.")
+        parser.add_argument("--occlusion-eps", default=1e-2, type=float, help="Occlusion depth tolerance in world units. Defaults to 1e-2.")
         return parser
 
     @staticmethod
@@ -61,11 +68,17 @@ class DexYCBDataset(AbstractLazyLoadDataset[DexYCBSpec], AbstractGroupArgsDatase
         return DexYCBSpec(
             sequence_dir=group_args.sequence,
             calibration_dir=common_args.calibration_dir,
+            models_dir=common_args.models_dir,
             frame_start=group_args.frame_start,
             frame_end=group_args.frame_end,
             frame_step=group_args.frame_step,
             init_dataset_index=group_args.init_dataset_index,
             load_depth=common_args.load_depth,
+            num_points=common_args.num_points,
+            visible_cameras=common_args.visible_cameras,
+            inward_distance=common_args.inward_distance,
+            outward_distance=common_args.outward_distance,
+            occlusion_eps=common_args.occlusion_eps,
         )
 
     @classmethod
@@ -83,7 +96,7 @@ class DexYCBDataset(AbstractLazyLoadDataset[DexYCBSpec], AbstractGroupArgsDatase
 
     @classmethod
     def parse_known_common_argv(cls, argv: list[str] = []) -> tuple[Namespace, list[str]]:
-        """Parse the calibration directory and whether to read depth."""
+        """Parse the calibration directory, YCB meshes, sampling flags, and whether to read depth."""
 
         parser = ArgumentParser(allow_abbrev=False)
         cls.add_common_argument(parser)
