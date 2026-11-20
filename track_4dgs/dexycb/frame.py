@@ -47,7 +47,7 @@ class DexYCBCameraSpec:
         )
 
 
-class DexYCBFrame(LazyCameraDataset):
+class DexYCBFrame(LazyCameraDataset[DexYCBCameraSpec]):
     """The DexYCB views at one timestep.
 
     ``camera_specs`` is one :class:`DexYCBCameraSpec` per color camera.

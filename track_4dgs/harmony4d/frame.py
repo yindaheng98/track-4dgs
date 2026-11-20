@@ -65,7 +65,7 @@ class HarmonyCameraSpec:
         return camera._replace(ground_truth_image=image)
 
 
-class Harmony4DFrame(LazyCameraDataset):
+class Harmony4DFrame(LazyCameraDataset[HarmonyCameraSpec]):
     """The Harmony4D cameras at one timestep.
 
     ``camera_specs`` is one :class:`HarmonyCameraSpec` per RGB camera.

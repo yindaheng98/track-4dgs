@@ -69,7 +69,7 @@ class PanopticCameraSpec:
         return camera._replace(ground_truth_image=image)
 
 
-class PanopticFrame(LazyCameraDataset):
+class PanopticFrame(LazyCameraDataset[PanopticCameraSpec]):
     """The Panoptic HD cameras at one timestep.
 
     ``camera_specs`` is one :class:`PanopticCameraSpec` per HD camera.
