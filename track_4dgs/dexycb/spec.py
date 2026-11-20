@@ -106,32 +106,32 @@ class DexYCBSpec:
         serials = [str(serial) for serial in meta["serials"]]
         num_frames = int(meta["num_frames"])
         indices = selected_frame_indices(self.frame_start, self.frame_end, self.frame_step, num_frames)
-        points, valid = load_joint_tracks(self.sequence_dir, meta)
-        points = points[:, indices]
-        valid = valid[:, indices]
+        hand_points, hand_valid = load_joint_tracks(self.sequence_dir, meta)
+        hand_points = hand_points[:, indices]
+        hand_valid = hand_valid[:, indices]
         if device is not None:
-            points = points.to(device)
-            valid = valid.to(device)
-        start_indices = torch.full(
-            (points.shape[0], points.shape[2]),
+            hand_points = hand_points.to(device)
+            hand_valid = hand_valid.to(device)
+        hand_start_indices = torch.full(
+            (hand_points.shape[0], hand_points.shape[2]),
             self.init_dataset_index,
             dtype=torch.int64,
-            device=points.device,
+            device=hand_points.device,
         )
-        query, tracks = query_and_tracks_from_trajectories(
-            points,
-            valid,
+        hand_query, hand_tracks = query_and_tracks_from_trajectories(
+            hand_points,
+            hand_valid,
             [IMAGE_WIDTH] * len(serials),
             [IMAGE_HEIGHT] * len(serials),
-            start_indices,
+            hand_start_indices,
         )
         verts, faces = posed_ycb_meshes(
             self.sequence_dir, self.calibration_dir, self.models_dir, meta, indices,
         )
-        mesh_device = torch.device("cpu" if device is None else device)
-        verts = [obj.to(mesh_device) for obj in verts]
-        faces = [obj.to(mesh_device) for obj in faces]
-        warp_device = str(mesh_device)
+        object_device = torch.device("cpu" if device is None else device)
+        verts = [obj.to(object_device) for obj in verts]
+        faces = [obj.to(object_device) for obj in faces]
+        warp_device = str(object_device)
         with torch.no_grad():
             binding = sample_near_surface(
                 [obj[self.init_dataset_index] for obj in verts],
@@ -147,18 +147,18 @@ class DexYCBSpec:
             frame_indices = torch.full(
                 (binding.xyz.shape[0],), self.init_dataset_index, dtype=torch.long, device=binding.xyz.device,
             )
-            mesh_query = Query.from_projection(binding.xyz, frames, frame_indices)
-            worlds, mesh_valid, world_verts, scene_faces, _owner = track_bind_points(verts, faces, frames, binding)
-            mesh_points, visibility = project_visibility(
-                mesh_query, frames, worlds, world_verts, scene_faces, mesh_valid,
+            object_query = Query.from_projection(binding.xyz, frames, frame_indices)
+            worlds, object_valid, world_verts, scene_faces, _owner = track_bind_points(verts, faces, frames, binding)
+            object_points, visibility = project_visibility(
+                object_query, frames, worlds, world_verts, scene_faces, object_valid,
                 self.occlusion_eps, warp_device, binding.face,
             )
-            n_views, n_frames, n_mesh_points, _ = mesh_points.shape
-            confidence = mesh_points.new_ones((n_views, n_frames, n_mesh_points))
-            mask = mesh_valid.to(dtype=torch.bool).expand(n_frames, n_mesh_points)
-            mesh_tracks = [
+            n_views, n_frames, n_object_points, _ = object_points.shape
+            confidence = object_points.new_ones((n_views, n_frames, n_object_points))
+            mask = object_valid.to(dtype=torch.bool).expand(n_frames, n_object_points)
+            object_tracks = [
                 Track(
-                    points=mesh_points[view_index],
+                    points=object_points[view_index],
                     visibility=visibility[view_index],
                     confidence=confidence[view_index],
                     mask=mask,
@@ -166,17 +166,17 @@ class DexYCBSpec:
                 for view_index in range(n_views)
             ]
         query = Query(
-            points=torch.cat([query.points, mesh_query.points], dim=1),
-            frame_indices=torch.cat([query.frame_indices, mesh_query.frame_indices], dim=1),
-            in_image=torch.cat([query.in_image, mesh_query.in_image], dim=1),
+            points=torch.cat([hand_query.points, object_query.points], dim=1),
+            frame_indices=torch.cat([hand_query.frame_indices, object_query.frame_indices], dim=1),
+            in_image=torch.cat([hand_query.in_image, object_query.in_image], dim=1),
         )
         tracks = [
             Track(
-                points=torch.cat([hand.points, mesh.points], dim=1),
-                visibility=torch.cat([hand.visibility, mesh.visibility], dim=1),
-                confidence=torch.cat([hand.confidence, mesh.confidence], dim=1),
-                mask=torch.cat([hand.mask, mesh.mask], dim=1),
+                points=torch.cat([hand.points, object.points], dim=1),
+                visibility=torch.cat([hand.visibility, object.visibility], dim=1),
+                confidence=torch.cat([hand.confidence, object.confidence], dim=1),
+                mask=torch.cat([hand.mask, object.mask], dim=1),
             )
-            for hand, mesh in zip(tracks, mesh_tracks, strict=True)
+            for hand, object in zip(hand_tracks, object_tracks, strict=True)
         ]
         return query, frames, tracks
