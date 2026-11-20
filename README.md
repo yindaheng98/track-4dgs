@@ -214,30 +214,29 @@ data/harmony4d/
 
 [CMU Panoptic Studio](http://domedb.perception.cs.cmu.edu/) ([ver 1.2 sequence list](https://docs.google.com/spreadsheets/d/1eoe74dHRtoMVVFLKCTJkAtF8zqxAnoo2Nt15CYYvHEE/edit#gid=1333444170)) is released for non-commercial research use. The released set is 84 sequences under `http://domedb.perception.cs.cmu.edu/webdata/dataset/<sequence>/`: range of motion, haggling, musical instruments, ultimatum, mafia, dance, toddler, office, and pizza. `171204_pose1_sample` is a short clip of `171204_pose1` (31 HD videos, 271MB, no VGA). The [dataset browser](http://domedb.perception.cs.cmu.edu/dataset.html) also lists later sequences; add a name to the loop to fetch it from the same paths. If the CMU host does not answer, replace `http://domedb.perception.cs.cmu.edu` with `http://vcl.snu.ac.kr/panoptic`.
 
-Each sequence gets calibration, COCO-19 body keypoints, face keypoints, hand keypoints, and the face-mesh track when that file exists, plus up to 31 HD videos (`hd_00_00.mp4`–`hd_00_30.mp4`). The host publishes those videos, not frame images, and this loop does not fetch VGA. It needs `wget`, `tar`, and `ffmpeg`. Each archive is piped from `wget` into `tar`, and each video is piped from `wget` into `ffmpeg` and decoded to lossless PNG, so neither the tar nor the mp4 is written. Frame 0 is `hdImgs/00_00/00_00_00000000.png`. A missing file makes `wget` fail; the command deletes that partial JSON, extracted folder, or frame directory and continues. PNG frames are much larger than the videos. The 271MB figure is the sample's compressed HD video.
+Each sequence is saved under `data/panoptic/<sequence>/` with the same relative paths the host uses under `webdata/dataset/<sequence>/`: `calibration_<sequence>.json`, `hdPose3d_stage1_coco19.tar`, `hdFace3d.tar`, `hdHand3d.tar`, `hdMeshTrack_face.tar`, and `videos/hd_shared_crf20/hd_00_00.mp4` through `hd_00_30.mp4`. The host publishes those files, not frame images, and this loop does not fetch VGA. It needs `wget`. Archives stay tar files and videos stay mp4; nothing is extracted or decoded. A missing file makes `wget` fail; the command deletes that partial file and continues. The 271MB figure above is the sample's compressed HD video.
 
 ```shell
-set -o pipefail
 mkdir -p data/panoptic
+host=http://domedb.perception.cs.cmu.edu
 while read -r seq; do
   [ -n "$seq" ] || continue
-  mkdir -p "data/panoptic/$seq"
-  wget -c --tries=2 --timeout=60 -P "data/panoptic/$seq" \
-    "http://domedb.perception.cs.cmu.edu/webdata/dataset/$seq/calibration_$seq.json" \
-    || rm -f "data/panoptic/$seq/calibration_$seq.json"
-  for f in hdPose3d_stage1_coco19.tar hdFace3d.tar hdHand3d.tar hdMeshTrack_face.tar; do
-    wget --tries=2 --timeout=60 -O - \
-      "http://domedb.perception.cs.cmu.edu/webdata/dataset/$seq/$f" \
-      | tar -C "data/panoptic/$seq" -xf - \
-      || rm -rf "data/panoptic/$seq/${f%.tar}"
-  done
+  rels=(
+    "calibration_$seq.json"
+    hdPose3d_stage1_coco19.tar
+    hdFace3d.tar
+    hdHand3d.tar
+    hdMeshTrack_face.tar
+  )
   for i in $(seq -w 0 30); do
-    mkdir -p "data/panoptic/$seq/hdImgs/00_$i"
-    wget --tries=2 --timeout=60 -O - \
-      "http://domedb.perception.cs.cmu.edu/webdata/dataset/$seq/videos/hd_shared_crf20/hd_00_$i.mp4" \
-      | ffmpeg -y -i pipe:0 -start_number 0 \
-        "data/panoptic/$seq/hdImgs/00_$i/00_$i_%08d.png" \
-      || rm -rf "data/panoptic/$seq/hdImgs/00_$i"
+    rels+=("videos/hd_shared_crf20/hd_00_$i.mp4")
+  done
+  for rel in "${rels[@]}"; do
+    dest="data/panoptic/$seq/$rel"
+    mkdir -p "$(dirname "$dest")"
+    wget -c --tries=2 --timeout=60 -O "$dest" \
+      "$host/webdata/dataset/$seq/$rel" \
+      || rm -f "$dest"
   done
 done <<'EOF'
 171204_pose1
