@@ -225,8 +225,9 @@ class PanopticSpec:
     """One Panoptic sequence. HD cameras and body joints are read in :meth:`load`.
 
     ``sequence`` contains ``calibration_<name>.json``,
-    ``hdPose3d_stage1_coco19/body3DScene_XXXXXXXX.json``, and
-    ``hdImgs/<camera>/<camera>_XXXXXXXX.png`` for every HD camera.
+    ``hdPose3d_stage1_coco19/body3DScene_XXXXXXXX.json``, and one HD video per
+    camera at ``videos/hd_shared_crf20/hd_<camera>.mp4``.
+    Frame 0 is the first frame of that video.
     Joints are stored in centimeters and converted to meters.
     ``num_points`` is the total number of tracks and defaults to 256.
     The 19 body joints of each person come first. The rest are samples on a
@@ -303,8 +304,8 @@ class PanopticSpec:
                     rotation=camera.rotation,
                     translation=camera.translation,
                     grid=grid,
-                    image_path=os.path.join(
-                        self.sequence, "hdImgs", camera.name, f"{camera.name}_{frame_index:08d}.png",
+                    video_path=os.path.join(
+                        self.sequence, "videos", "hd_shared_crf20", f"hd_{camera.name}.mp4",
                     ),
                     frame_index=frame_index,
                 ))
