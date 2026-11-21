@@ -7,12 +7,11 @@ from typing import Optional
 
 import numpy as np
 import torch
-
 from ..dexycb.trajectory import query_and_tracks_from_trajectories
 from ..tracker import Query, Track
 from ..utils import full_proj_transform, opencv_undistort_grid, project, selected_frame_indices
 from .body import sample_body_surface
-from .frame import PanopticCameraSpec, PanopticFrame
+from .frame import PanopticCameraSpec, PanopticFrame, PanopticFrames
 
 BODY_JOINT_COUNT = 19
 BODY_JOINT_NAMES = (
@@ -274,7 +273,7 @@ class PanopticSpec:
             if self.init_dataset_index >= n_frames:
                 raise ValueError("--init-dataset-index must index one frame")
 
-    def load(self, device) -> tuple[Query, list[PanopticFrame], list[Track]]:
+    def load(self, device) -> tuple[Query, PanopticFrames, list[Track]]:
         cameras = [scale_camera(camera, self.max_image_size) for camera in load_hd_cameras(self.sequence)]
         poses = os.path.join(self.sequence, "hdPose3d_stage1_coco19")
         num_frames = pose_frame_count(poses)
@@ -289,7 +288,7 @@ class PanopticSpec:
             )
             for camera in cameras
         ]
-        camera_specs = []
+        panoptic_frames = []
         for frame_index in indices:
             specs = []
             for camera, grid in zip(cameras, grids, strict=True):
@@ -309,8 +308,8 @@ class PanopticSpec:
                     ),
                     frame_index=frame_index,
                 ))
-            camera_specs.append(specs)
-        frames = [PanopticFrame(specs, device=device) for specs in camera_specs]
+            panoptic_frames.append(PanopticFrame(specs, device=device))
+        frames = PanopticFrames(panoptic_frames)
         points, valid, xyz = load_body_tracks(cameras, num_frames, poses)
         points = points[:, indices]
         valid = valid[:, indices]

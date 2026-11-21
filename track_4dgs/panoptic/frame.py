@@ -1,7 +1,9 @@
-"""The Panoptic HD views at one timestep.
+"""Panoptic HD views decoded from each camera video.
 
-Each frame is a :class:`~gaussian_splatting.dataset.LazyCameraDataset`.
-``len`` counts cameras. An image is read when that camera is indexed.
+:class:`PanopticFrame` is a :class:`~gaussian_splatting.dataset.LazyCameraDataset`
+of :class:`PanopticCameraSpec`. :class:`PanopticFrames` is used as
+``list[PanopticFrame]``. A frame with :attr:`PanopticFrame.frames` set asks that
+group, on a cache miss, to decode the view once and fill every frame.
 """
 
 from dataclasses import dataclass
@@ -109,12 +111,119 @@ class PanopticCameraSpec:
         return self.load_with_image(image)
 
 
+class PanopticFrames:
+    """The selected timesteps, and the link between their :class:`PanopticFrame` objects.
+
+    ``frames`` is a list of :class:`PanopticFrame`. Each one is unlinked:
+    ``PanopticFrame.frames`` is ``None``. This constructor stores that list and
+    then sets ``frame.frames`` to this group. ``len`` and iteration follow the
+    list. :meth:`load_view` is what a frame calls when its cache has no camera
+    for a view: one sequential read of that video, then each frame's cache
+    receives its camera.
+    """
+
+    def __init__(self, frames: list["PanopticFrame"]):
+        if not frames:
+            raise ValueError("no frames")
+        if any(frame.frames is not None for frame in frames):
+            raise ValueError("PanopticFrame.frames must be None")
+        n_views = len(frames[0])
+        if n_views == 0 or any(len(frame) != n_views for frame in frames):
+            raise ValueError("every frame must list the same cameras")
+        self.device = frames[0].device
+        self.frames = list(frames)
+        for frame in self.frames:
+            frame.frames = self
+
+    def __len__(self) -> int:
+        return len(self.frames)
+
+    def __getitem__(self, index: int) -> "PanopticFrame":
+        return self.frames[index]
+
+    def __iter__(self):
+        return iter(self.frames)
+
+    def load_view(self, view_index: int) -> None:
+        """Decode one view and store each selected frame on that frame's cache.
+
+        Every frame in this view shares one video. Decoding starts at frame 0
+        and stops at the last selected index. Each selected frame becomes
+        ``(3, H, W)`` float32 RGB in ``[0, 1]`` on :attr:`device`.
+        """
+
+        specs = [frame.camera_specs[view_index] for frame in self.frames]
+        video_path = specs[0].video_path
+        if any(spec.video_path != video_path for spec in specs):
+            raise ValueError(f"{specs[0].name} frames do not share {video_path}")
+        position_at_frame: dict[int, int] = {}
+        for position, spec in enumerate(specs):
+            if spec.frame_index in position_at_frame:
+                raise ValueError(f"{video_path} lists frame {spec.frame_index} twice")
+            position_at_frame[spec.frame_index] = position
+        last_frame = max(position_at_frame)
+        capture = cv2.VideoCapture(video_path)
+        if not capture.isOpened():
+            raise FileNotFoundError(video_path)
+        try:
+            for index in range(last_frame + 1):
+                ok, bgr = capture.read()
+                if not ok or bgr is None:
+                    raise ValueError(f"{video_path} ended at frame {index} before frame {last_frame}")
+                position = position_at_frame.get(index)
+                if position is None:
+                    continue
+                rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
+                image = torch.from_numpy(rgb).permute(2, 0, 1).to(dtype=torch.float32).div(255.0)
+                if self.device is not None:
+                    image = image.to(self.device)
+                self.frames[position]._cache[view_index] = specs[position].load_with_image(image)
+        finally:
+            capture.release()
+
+    def to(self, device) -> None:
+        """Read later cameras on ``device``. A change drops every frame's ``_cache``."""
+
+        if self.device == device:
+            return
+        self.device = device
+        for frame in self.frames:
+            frame.device = device
+            frame._cache.clear()
+            frame._cache_state = (frame.load_mask, frame.load_depth, device)
+
 
 class PanopticFrame(LazyCameraDataset[PanopticCameraSpec]):
-    """The Panoptic HD cameras at one timestep.
+    """The HD cameras at one timestep.
 
     ``camera_specs`` is one :class:`PanopticCameraSpec` per HD camera.
+    ``len`` counts cameras. Cameras already read stay in
+    :attr:`~gaussian_splatting.dataset.LazyCameraDataset._cache`.
+    ``frames`` is ``None`` until a :class:`PanopticFrames` links this frame.
+    Without it, indexing calls :meth:`PanopticCameraSpec.load`. With it, a cache
+    miss calls :meth:`PanopticFrames.load_view`, which stores that view on every
+    connected frame, and the camera is then read from ``_cache``.
     """
+
+    frames: "PanopticFrames | None" = None
 
     def __init__(self, camera_specs: list[PanopticCameraSpec], device: str = "cpu"):
         super().__init__(camera_specs, load_mask=False, load_depth=False, device=device)
+        self.frames = None
+
+    def __getitem__(self, idx: int) -> Camera:
+        if self.frames is not None:
+            state = (self.load_mask, self.load_depth, self.device)
+            if state != self._cache_state:
+                self._cache.clear()
+                self._cache_state = state
+            if idx not in self._cache:
+                self.frames.load_view(idx)
+        return super().__getitem__(idx)
+
+    def to(self, device) -> "PanopticFrame":
+        """Read later cameras on ``device``. A linked group drops every frame's ``_cache``."""
+
+        if self.frames is not None:
+            self.frames.to(device)
+        return super().to(device)
