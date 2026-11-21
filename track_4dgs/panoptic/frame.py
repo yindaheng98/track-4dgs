@@ -115,11 +115,12 @@ class PanopticFrames:
     """The selected timesteps, and the link between their :class:`PanopticFrame` objects.
 
     ``frames`` is a list of :class:`PanopticFrame`. Each one is unlinked:
-    ``PanopticFrame.frames`` is ``None``. This constructor stores that list and
-    then sets ``frame.frames`` to this group. ``len`` and iteration follow the
-    list. :meth:`load_view` is what a frame calls when its cache has no camera
-    for a view: one sequential read of that video, then each frame's cache
-    receives its camera.
+    ``PanopticFrame.frames`` is ``None``. Every frame lists the same number
+    of cameras and uses the same device. This constructor stores that list
+    and then sets ``frame.frames`` to this group. ``len`` and iteration
+    follow the list. :meth:`load_view` is what a frame calls when its cache
+    has no camera for a view: one sequential read of that video, then each
+    frame's cache receives its camera.
     """
 
     def __init__(self, frames: list["PanopticFrame"]):
@@ -130,6 +131,8 @@ class PanopticFrames:
         n_views = len(frames[0])
         if n_views == 0 or any(len(frame) != n_views for frame in frames):
             raise ValueError("every frame must list the same cameras")
+        if any(frame.device != frames[0].device for frame in frames):
+            raise ValueError("every frame must use the same device")
         self.device = frames[0].device
         self.frames = list(frames)
         for frame in self.frames:
