@@ -214,7 +214,13 @@ data/harmony4d/
 
 [CMU Panoptic Studio](http://domedb.perception.cs.cmu.edu/) ([ver 1.2 sequence list](https://docs.google.com/spreadsheets/d/1eoe74dHRtoMVVFLKCTJkAtF8zqxAnoo2Nt15CYYvHEE/edit#gid=1333444170)) is released for non-commercial research use. The released set is 84 sequences under `http://domedb.perception.cs.cmu.edu/webdata/dataset/<sequence>/`: range of motion, haggling, musical instruments, ultimatum, mafia, dance, toddler, office, and pizza. `171204_pose1_sample` is a short clip of `171204_pose1` (31 HD videos, 271MB, no VGA). The [dataset browser](http://domedb.perception.cs.cmu.edu/dataset.html) also lists later sequences; add a name to the loop to fetch it from the same paths. If the CMU host does not answer, replace `http://domedb.perception.cs.cmu.edu` with `http://vcl.snu.ac.kr/panoptic`.
 
-Each sequence is saved under `data/panoptic/<sequence>/`. `calibration_<sequence>.json` and `videos/hd_shared_crf20/hd_00_00.mp4` through `hd_00_30.mp4` (31 HD cameras) are written as files. `hdPose3d_stage1_coco19.tar`, `hdFace3d.tar`, `hdHand3d.tar`, and `hdMeshTrack_face.tar` are piped to `tar` and extracted in that directory. The body archive's members are `hdPose3d_stage1_coco19/body3DScene_XXXXXXXX.json`, the folder `PanopticSpec.load` reads. The host publishes calibration, those four archives, and the HD videos. This loop skips VGA. It needs `wget` and `tar`. Videos stay mp4. A missing file makes `wget` fail; a partial saved file is deleted, and the loop continues. The 271MB figure above is the sample's compressed HD video.
+`PanopticSpec.load` reads `calibration_<sequence>.json`, `hdPose3d_stage1_coco19/body3DScene_XXXXXXXX.json`, and `videos/hd_shared_crf20/hd_00_00.mp4` through `hd_00_30.mp4`. The loop keeps the 53 sequences where that coco19 archive contains the body jsons and all 31 HD videos are on the host.
+
+`170224_haggling_a1` is left out because `hdPose3d_stage1_coco19.tar` is a 10KB archive of an empty directory. `171204_pose3`, `171204_pose4`, and `171204_pose5` have no `hd_00_20.mp4`. `171204_pose6` and `160224_haggling1` have no `hd_00_21.mp4`. `160422_haggling1` has no `hd_00_20.mp4` or `hd_00_21.mp4`. Calibration for those six still names the missing cameras.
+
+These sequences have no `hdPose3d_stage1_coco19.tar`: `171026_cello1`, `171026_cello2`, `160226_ultimatum1`, `160224_ultimatum1`, `160224_ultimatum2`, `160422_mafia2`, `160226_mafia1`, `160226_mafia2`, `160224_mafia1`, `160224_mafia2`, `170307_dance1`, `170307_dance2`, `170307_dance3`, `170307_dance4`, `170307_dance6`, `170915_toddler2`, `170915_toddler3`, `170915_toddler4`, `160401_ian1`, `160401_ian2`, `160401_ian3`, `160317_moonbaby1`, `160317_moonbaby2`, and `160317_moonbaby3`. `160226_ultimatum1`, `160224_ultimatum1`, `160224_ultimatum2`, the five mafia sequences, `170307_dance1`, and `160401_ian1` through `160401_ian3` publish `hdPose3d_stage1.tar` and `vgaPose3d_stage1.tar` instead. `160317_moonbaby1` publishes `vgaPose3d_stage1.tar`. The three moonbaby sequences have no HD videos.
+
+Each sequence is saved under `data/panoptic/<sequence>/`. `calibration_<sequence>.json` and `videos/hd_shared_crf20/hd_00_00.mp4` through `hd_00_30.mp4` are written as files. `hdPose3d_stage1_coco19.tar`, `hdFace3d.tar`, `hdHand3d.tar`, and `hdMeshTrack_face.tar` are piped to `tar` and extracted in that directory. `161029_piano2`, `161029_piano3`, `160906_band1`, `160906_band2`, `160906_band3`, `160906_ian2`, `160906_ian3`, and `160906_ian5` have no face or hand archive. This loop skips VGA. It needs `wget` and `tar`. Videos stay mp4. A missing file makes `wget` fail; a partial saved file is deleted, and the loop continues. The 271MB figure above is the sample's compressed HD video.
 
 ```shell
 mkdir -p data/panoptic
@@ -251,10 +257,6 @@ while read -r seq; do
 done <<'EOF'
 171204_pose1
 171204_pose2
-171204_pose3
-171204_pose4
-171204_pose5
-171204_pose6
 171026_pose1
 171026_pose2
 171026_pose3
@@ -264,7 +266,6 @@ done <<'EOF'
 170221_haggling_m1
 170221_haggling_m2
 170221_haggling_m3
-170224_haggling_a1
 170224_haggling_a2
 170224_haggling_a3
 170224_haggling_b1
@@ -288,8 +289,6 @@ done <<'EOF'
 170407_haggling_b1
 170407_haggling_b2
 170407_haggling_b3
-171026_cello1
-171026_cello2
 171026_cello3
 161029_flute1
 161029_piano1
@@ -300,36 +299,12 @@ done <<'EOF'
 160906_band2
 160906_band3
 160422_ultimatum1
-160226_ultimatum1
-160224_ultimatum1
-160224_ultimatum2
-160422_mafia2
-160226_mafia1
-160226_mafia2
-160224_mafia1
-160224_mafia2
-160422_haggling1
 160226_haggling1
-160224_haggling1
-170307_dance1
-170307_dance2
-170307_dance3
-170307_dance4
 170307_dance5
-170307_dance6
-160317_moonbaby1
-160317_moonbaby2
-160317_moonbaby3
-170915_toddler2
-170915_toddler3
-170915_toddler4
 160906_ian5
 160906_ian3
 160906_ian2
 160906_ian1
-160401_ian3
-160401_ian2
-160401_ian1
 170915_office1
 170407_office2
 160906_pizza1
