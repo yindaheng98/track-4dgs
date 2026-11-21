@@ -214,29 +214,39 @@ data/harmony4d/
 
 [CMU Panoptic Studio](http://domedb.perception.cs.cmu.edu/) ([ver 1.2 sequence list](https://docs.google.com/spreadsheets/d/1eoe74dHRtoMVVFLKCTJkAtF8zqxAnoo2Nt15CYYvHEE/edit#gid=1333444170)) is released for non-commercial research use. The released set is 84 sequences under `http://domedb.perception.cs.cmu.edu/webdata/dataset/<sequence>/`: range of motion, haggling, musical instruments, ultimatum, mafia, dance, toddler, office, and pizza. `171204_pose1_sample` is a short clip of `171204_pose1` (31 HD videos, 271MB, no VGA). The [dataset browser](http://domedb.perception.cs.cmu.edu/dataset.html) also lists later sequences; add a name to the loop to fetch it from the same paths. If the CMU host does not answer, replace `http://domedb.perception.cs.cmu.edu` with `http://vcl.snu.ac.kr/panoptic`.
 
-Each sequence is saved under `data/panoptic/<sequence>/` with the same relative paths the host uses under `webdata/dataset/<sequence>/`: `calibration_<sequence>.json`, `hdPose3d_stage1_coco19.tar`, `hdFace3d.tar`, `hdHand3d.tar`, `hdMeshTrack_face.tar`, and `videos/hd_shared_crf20/hd_00_00.mp4` through `hd_00_30.mp4` (31 HD cameras). The host publishes those files, not frame images, and this loop does not fetch VGA. It needs `wget`. Archives stay tar files and videos stay mp4; nothing is extracted or decoded. A missing file makes `wget` fail; the command deletes that partial file and continues. The 271MB figure above is the sample's compressed HD video.
+Each sequence is saved under `data/panoptic/<sequence>/`. `calibration_<sequence>.json` and `videos/hd_shared_crf20/hd_00_00.mp4` through `hd_00_30.mp4` (31 HD cameras) are written as files. `hdPose3d_stage1_coco19.tar`, `hdFace3d.tar`, `hdHand3d.tar`, and `hdMeshTrack_face.tar` are piped to `tar` and extracted in that directory. The body archive's members are `hdPose3d_stage1_coco19/body3DScene_XXXXXXXX.json`, the folder `PanopticSpec.load` reads. The host publishes calibration, those four archives, and the HD videos. This loop skips VGA. It needs `wget` and `tar`. Videos stay mp4. A missing file makes `wget` fail; a partial saved file is deleted, and the loop continues. The 271MB figure above is the sample's compressed HD video.
 
 ```shell
 mkdir -p data/panoptic
-host=http://domedb.perception.cs.cmu.edu
+set -o pipefail
 while read -r seq; do
   [ -n "$seq" ] || continue
-  rels=(
-    "calibration_$seq.json"
-    hdPose3d_stage1_coco19.tar
-    hdFace3d.tar
-    hdHand3d.tar
-    hdMeshTrack_face.tar
-  )
+  mkdir -p "data/panoptic/$seq/videos/hd_shared_crf20"
+  wget --tries=2 --timeout=60 -O - \
+    "http://domedb.perception.cs.cmu.edu/webdata/dataset/$seq/hdPose3d_stage1_coco19.tar" \
+    | tar -C "data/panoptic/$seq" -xf - \
+    || true
+  wget --tries=2 --timeout=60 -O - \
+    "http://domedb.perception.cs.cmu.edu/webdata/dataset/$seq/hdFace3d.tar" \
+    | tar -C "data/panoptic/$seq" -xf - \
+    || true
+  wget --tries=2 --timeout=60 -O - \
+    "http://domedb.perception.cs.cmu.edu/webdata/dataset/$seq/hdHand3d.tar" \
+    | tar -C "data/panoptic/$seq" -xf - \
+    || true
+  wget --tries=2 --timeout=60 -O - \
+    "http://domedb.perception.cs.cmu.edu/webdata/dataset/$seq/hdMeshTrack_face.tar" \
+    | tar -C "data/panoptic/$seq" -xf - \
+    || true
+  wget -c --tries=2 --timeout=60 \
+    -O "data/panoptic/$seq/calibration_$seq.json" \
+    "http://domedb.perception.cs.cmu.edu/webdata/dataset/$seq/calibration_$seq.json" \
+    || rm -f "data/panoptic/$seq/calibration_$seq.json"
   for i in $(seq -w 0 30); do
-    rels+=("videos/hd_shared_crf20/hd_00_$i.mp4")
-  done
-  for rel in "${rels[@]}"; do
-    dest="data/panoptic/$seq/$rel"
-    mkdir -p "$(dirname "$dest")"
-    wget -c --tries=2 --timeout=60 -O "$dest" \
-      "$host/webdata/dataset/$seq/$rel" \
-      || rm -f "$dest"
+    wget -c --tries=2 --timeout=60 \
+      -O "data/panoptic/$seq/videos/hd_shared_crf20/hd_00_$i.mp4" \
+      "http://domedb.perception.cs.cmu.edu/webdata/dataset/$seq/videos/hd_shared_crf20/hd_00_$i.mp4" \
+      || rm -f "data/panoptic/$seq/videos/hd_shared_crf20/hd_00_$i.mp4"
   done
 done <<'EOF'
 171204_pose1
@@ -336,18 +346,18 @@ Verify that `track_4dgs` can import and register trackers:
 python -c "import track_4dgs; print(track_4dgs.get_available_point_trackers())"
 ```
 
-| Name | Class | Kind | `track1v` |
-| --- | --- | --- | --- |
-| `cotracker3` | `Cotracker3PointTracker` | single-view | yes |
-| `vggt` | `VGGTPointTracker` | single-view | yes |
-| `vggsfm` | `VGGSfMPointTracker` | single-view | yes |
-| `d4rt` | `D4RTPointTracker` | single-view | yes |
-| `mvroma` | `MVRoMaPointTracker` | single-view | yes |
-| `uniflowmatch` | `UniFlowMatchPointTracker` | single-view | yes |
-| `raft` | `RAFTPointTracker` | single-view | yes |
-| `dot` | `DOTPointTracker` | single-view | yes |
-| `mvtap` | `MVTAPPointTracker` | joint multi-view | no |
-| `blender` | `BlenderPointTracker` | joint mesh | no |
+| Name           | Class                      | Kind             | `track1v` |
+| -------------- | -------------------------- | ---------------- | --------- |
+| `cotracker3`   | `Cotracker3PointTracker`   | single-view      | yes       |
+| `vggt`         | `VGGTPointTracker`         | single-view      | yes       |
+| `vggsfm`       | `VGGSfMPointTracker`       | single-view      | yes       |
+| `d4rt`         | `D4RTPointTracker`         | single-view      | yes       |
+| `mvroma`       | `MVRoMaPointTracker`       | single-view      | yes       |
+| `uniflowmatch` | `UniFlowMatchPointTracker` | single-view      | yes       |
+| `raft`         | `RAFTPointTracker`         | single-view      | yes       |
+| `dot`          | `DOTPointTracker`          | single-view      | yes       |
+| `mvtap`        | `MVTAPPointTracker`        | joint multi-view | no        |
+| `blender`      | `BlenderPointTracker`      | joint mesh       | no        |
 
 `track1v` accepts an `AbstractViewPointTracker`. Joint trackers run through `build_dataset`. `blender` is documented in [Blender mesh tracking](#blender-mesh-tracking).
 
