@@ -299,6 +299,8 @@ class Harmony4DSpec:
     down with its intrinsics, and the tracks use that smaller image. ``None``
     keeps the original size.
     Ego cameras are omitted: their images use Aria's own distortion and a rotated frame.
+    ``view_indices`` selects exo cameras after they are sorted by folder name.
+    ``None`` keeps every exo camera. The listed order is the view order.
     Frames are ``range(frame_start, frame_end + 1, frame_step)`` using 0-based
     frame indices. ``frame_end`` defaults to the last frame. ``frame_step``
     defaults to 1. ``init_dataset_index`` indexes that range and is the query.
@@ -309,6 +311,7 @@ class Harmony4DSpec:
     frame_end: Optional[int] = None
     frame_step: int = 1
     init_dataset_index: int = 0
+    view_indices: Optional[tuple[int, ...]] = None
     num_points: int = 256
     smpl_faces: str = DEFAULT_SMPL_FACES
     smpl_faces_url: str = DEFAULT_SMPL_FACES_URL
@@ -331,6 +334,13 @@ class Harmony4DSpec:
             raise ValueError("max_image_size must be at least 2")
         if self.init_dataset_index < 0:
             raise ValueError("--init-dataset-index must index one frame")
+        if self.view_indices is not None:
+            if not self.view_indices:
+                raise ValueError("view_indices must list at least one view")
+            if any(index < 0 for index in self.view_indices):
+                raise ValueError("view_indices must be non-negative")
+            if len(set(self.view_indices)) != len(self.view_indices):
+                raise ValueError("view_indices must not repeat a view")
         if self.frame_end is not None and self.frame_step is not None:
             n_frames = len(range(self.frame_start, self.frame_end + 1, self.frame_step))
             if self.init_dataset_index >= n_frames:
@@ -338,6 +348,10 @@ class Harmony4DSpec:
 
     def load(self, device) -> tuple[Query, list[Harmony4DFrame], list[Track]]:
         views, num_frames = load_views(self.sequence)
+        if self.view_indices is not None:
+            if any(index >= len(views) for index in self.view_indices):
+                raise ValueError(f"view_indices is outside 0..{len(views) - 1}")
+            views = [views[index] for index in self.view_indices]
         views = [scale_view(view, self.max_image_size) for view in views]
         if num_frames <= 0:
             raise ValueError("Harmony4D sequence has no frames")

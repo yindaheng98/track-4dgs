@@ -236,6 +236,8 @@ class PanopticSpec:
     joint. ``inward_distance`` and ``outward_distance`` move a sample along the
     ribbon normal, in meters. ``occlusion_eps`` is the occlusion tolerance in
     meters.
+    ``view_indices`` selects HD cameras after they are sorted by name.
+    ``None`` keeps every HD camera. The listed order is the view order.
     Frames are ``range(frame_start, frame_end + 1, frame_step)`` using the HD
     frame index. ``frame_end`` defaults to the last body json. ``frame_step``
     defaults to 1. ``init_dataset_index`` indexes that range and is the query.
@@ -248,6 +250,7 @@ class PanopticSpec:
     frame_end: Optional[int] = None
     frame_step: int = 1
     init_dataset_index: int = 0
+    view_indices: Optional[tuple[int, ...]] = None
     num_points: int = 256
     visible_cameras: int = 2
     inward_distance: float = 0.0
@@ -266,6 +269,13 @@ class PanopticSpec:
             raise ValueError("occlusion_eps must be non-negative")
         if self.init_dataset_index < 0:
             raise ValueError("--init-dataset-index must index one frame")
+        if self.view_indices is not None:
+            if not self.view_indices:
+                raise ValueError("view_indices must list at least one view")
+            if any(index < 0 for index in self.view_indices):
+                raise ValueError("view_indices must be non-negative")
+            if len(set(self.view_indices)) != len(self.view_indices):
+                raise ValueError("view_indices must not repeat a view")
         if self.max_image_size is not None and self.max_image_size < 2:
             raise ValueError("max_image_size must be at least 2")
         if self.frame_end is not None:
@@ -274,7 +284,12 @@ class PanopticSpec:
                 raise ValueError("--init-dataset-index must index one frame")
 
     def load(self, device) -> tuple[Query, PanopticFrames, list[Track]]:
-        cameras = [scale_camera(camera, self.max_image_size) for camera in load_hd_cameras(self.sequence)]
+        cameras = load_hd_cameras(self.sequence)
+        if self.view_indices is not None:
+            if any(index >= len(cameras) for index in self.view_indices):
+                raise ValueError(f"view_indices is outside 0..{len(cameras) - 1}")
+            cameras = [cameras[index] for index in self.view_indices]
+        cameras = [scale_camera(camera, self.max_image_size) for camera in cameras]
         poses = os.path.join(self.sequence, "hdPose3d_stage1_coco19")
         num_frames = pose_frame_count(poses)
         if num_frames <= 0:

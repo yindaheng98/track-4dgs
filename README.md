@@ -179,7 +179,7 @@ models.tar.gz 1cAzlQBpcTatI5ykYQ8ziQiHLUG_a_UpM
 EOF
 ```
 
-[Harmony4D](https://huggingface.co/datasets/Jyun-Ting/Harmony4D) ([project page](https://jyuntins.github.io/harmony4d/), [download notes](https://github.com/jyuntins/harmony4d/blob/main/assets/DOWNLOAD.md)). The repo is about 352G of zip archives under `train/` and `test/`, licensed under MIT. `hf download` writes them to `data/harmony4d`. Install the [Hugging Face CLI](https://huggingface.co/docs/huggingface_hub/guides/cli) if `hf` is not on `PATH`.
+[Harmony4D](https://huggingface.co/datasets/Jyun-Ting/Harmony4D) ([project page](https://jyuntins.github.io/harmony4d/), [download notes](https://github.com/jyuntins/harmony4d/blob/main/assets/DOWNLOAD.md)). Each sequence has about 20 synchronized exo GoPro cameras. The repo is about 352G of zip archives under `train/` and `test/`, licensed under MIT. `hf download` writes them to `data/harmony4d`. Install the [Hugging Face CLI](https://huggingface.co/docs/huggingface_hub/guides/cli) if `hf` is not on `PATH`.
 
 ```shell
 mkdir -p data/harmony4d
@@ -214,7 +214,7 @@ data/harmony4d/
 
 [CMU Panoptic Studio](http://domedb.perception.cs.cmu.edu/) ([ver 1.2 sequence list](https://docs.google.com/spreadsheets/d/1eoe74dHRtoMVVFLKCTJkAtF8zqxAnoo2Nt15CYYvHEE/edit#gid=1333444170)) is released for non-commercial research use. The released set is 84 sequences under `http://domedb.perception.cs.cmu.edu/webdata/dataset/<sequence>/`: range of motion, haggling, musical instruments, ultimatum, mafia, dance, toddler, office, and pizza. `171204_pose1_sample` is a short clip of `171204_pose1` (31 HD videos, 271MB, no VGA). The [dataset browser](http://domedb.perception.cs.cmu.edu/dataset.html) also lists later sequences; add a name to the loop to fetch it from the same paths. If the CMU host does not answer, replace `http://domedb.perception.cs.cmu.edu` with `http://vcl.snu.ac.kr/panoptic`.
 
-Each sequence is saved under `data/panoptic/<sequence>/` with the same relative paths the host uses under `webdata/dataset/<sequence>/`: `calibration_<sequence>.json`, `hdPose3d_stage1_coco19.tar`, `hdFace3d.tar`, `hdHand3d.tar`, `hdMeshTrack_face.tar`, and `videos/hd_shared_crf20/hd_00_00.mp4` through `hd_00_30.mp4`. The host publishes those files, not frame images, and this loop does not fetch VGA. It needs `wget`. Archives stay tar files and videos stay mp4; nothing is extracted or decoded. A missing file makes `wget` fail; the command deletes that partial file and continues. The 271MB figure above is the sample's compressed HD video.
+Each sequence is saved under `data/panoptic/<sequence>/` with the same relative paths the host uses under `webdata/dataset/<sequence>/`: `calibration_<sequence>.json`, `hdPose3d_stage1_coco19.tar`, `hdFace3d.tar`, `hdHand3d.tar`, `hdMeshTrack_face.tar`, and `videos/hd_shared_crf20/hd_00_00.mp4` through `hd_00_30.mp4` (31 HD cameras). The host publishes those files, not frame images, and this loop does not fetch VGA. It needs `wget`. Archives stay tar files and videos stay mp4; nothing is extracted or decoded. A missing file makes `wget` fail; the command deletes that partial file and continues. The 271MB figure above is the sample's compressed HD video.
 
 ```shell
 mkdir -p data/panoptic
@@ -397,6 +397,26 @@ python -c "import track_4dgs; print(track_4dgs.get_available_supervision_dataset
 - `tracker`: sample points uniformly inside the scene cube, keep those seen by more cameras than `--visible-cameras` (default 2), project them, and track
 - `gstracker`: sample a random subset of a trained 3DGS point cloud, then track those points
 - `blender`: render a `.blend` file from sampled cameras and track the query on its evaluated meshes. See [Blender mesh tracking](#blender-mesh-tracking)
+- `harmony4d`: project the checked COCO joints, then sample the rest on the posed SMPL meshes. About 20 exo cameras per sequence
+- `panoptic`: project the 19 body joints of each person, then sample the rest on a ribbon beside those bones. 31 HD cameras per sequence
+
+Harmony4D and Panoptic both record many more cameras than a typical capture, so a sample that keeps every view is large. Both take `--view-indices` on the preceding `--sequence`. The integers index the cameras after sorting — Harmony4D by exo folder name, Panoptic by HD camera name — and that order is the view order. Leave the flag unset to keep every camera. Indices are unique and lie in `0 .. V - 1`.
+
+```shell
+python -m track_4dgs.build_dataset \
+    --dataset harmony4d \
+    --sequence data/harmony4d/train/01_hugging \
+    --view-indices 0 3 1 \
+    --num-points 256 \
+    --save-folder output/harmony4d/01_hugging
+
+python -m track_4dgs.build_dataset \
+    --dataset panoptic \
+    --sequence data/panoptic/171204_pose1 \
+    --view-indices 0 5 10 \
+    --num-points 256 \
+    --save-folder output/panoptic/171204_pose1
+```
 
 Uniform scene points:
 

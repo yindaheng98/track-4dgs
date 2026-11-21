@@ -12,11 +12,13 @@ class Harmony4DDataset(AbstractLazyLoadDataset[Harmony4DSpec], AbstractGroupArgs
     """One sample is one Harmony4D sequence.
 
     Repeat ``--sequence`` for another sample. ``--frame_start``, ``--frame_end``,
-    ``--frame_step``, and ``--init-dataset-index`` attach to the preceding
-    ``--sequence``. Frames are ``range(frame_start, frame_end + 1, frame_step)``
+    ``--frame_step``, ``--init-dataset-index``, and ``--view-indices`` attach to
+    the preceding ``--sequence``. Frames are ``range(frame_start, frame_end + 1, frame_step)``
     using 0-based frame indices. ``frame_start`` defaults to 0. ``frame_end``
     defaults to the last frame. ``frame_step`` defaults to 1.
     ``--init-dataset-index`` indexes that range and defaults to 0.
+    ``--view-indices`` indexes the exo cameras after they are sorted by folder
+    name. Unset, it keeps every exo camera.
 
     Each sequence folder contains ``exo/``, ``ego/``, ``processed_data/``, and
     ``colmap/``. Views are the exo cameras. ``--num-points`` is the total
@@ -43,6 +45,7 @@ class Harmony4DDataset(AbstractLazyLoadDataset[Harmony4DSpec], AbstractGroupArgs
         parser.add_argument("--frame_end", type=int, default=None, help="Last frame index for this sequence. Defaults to the last frame.")
         parser.add_argument("--frame_step", type=int, default=1, help="Frame step for this sequence. Defaults to 1.")
         parser.add_argument("--init-dataset-index", type=int, default=0, help="Index into range(frame_start, frame_end + 1, frame_step) for the query frame. Defaults to 0.")
+        parser.add_argument("--view-indices", type=int, nargs="+", default=None, help="Indices into the exo cameras sorted by folder name. Defaults to every exo camera.")
         return parser
 
     @staticmethod
@@ -72,6 +75,7 @@ class Harmony4DDataset(AbstractLazyLoadDataset[Harmony4DSpec], AbstractGroupArgs
             frame_end=group_args.frame_end,
             frame_step=group_args.frame_step,
             init_dataset_index=group_args.init_dataset_index,
+            view_indices=None if group_args.view_indices is None else tuple(group_args.view_indices),
             num_points=common_args.num_points,
             smpl_faces=common_args.smpl_faces,
             smpl_faces_url=common_args.smpl_faces_url,
@@ -89,6 +93,7 @@ class Harmony4DDataset(AbstractLazyLoadDataset[Harmony4DSpec], AbstractGroupArgs
         Frames are ``range(frame_start, frame_end + 1, frame_step)``.
         ``frame_start`` defaults to 0. ``frame_end`` defaults to the last frame.
         ``frame_step`` defaults to 1. ``--init-dataset-index`` defaults to 0.
+        ``--view-indices`` defaults to every exo camera.
         """
 
         parser = ArgumentParser(allow_abbrev=False)

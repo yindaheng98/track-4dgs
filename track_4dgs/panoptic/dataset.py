@@ -11,12 +11,13 @@ class PanopticDataset(AbstractLazyLoadDataset[PanopticSpec], AbstractGroupArgsDa
     """One sample is one Panoptic sequence.
 
     Repeat ``--sequence`` for another sample. ``--frame_start``,
-    ``--frame_end``, ``--frame_step``, and ``--init-dataset-index`` attach to
-    the preceding ``--sequence``. Every HD camera in the calibration is used.
+    ``--frame_end``, ``--frame_step``, ``--init-dataset-index``, and
+    ``--view-indices`` attach to the preceding ``--sequence``.
     Frames are ``range(frame_start, frame_end + 1, frame_step)`` using HD frame indices.
     ``frame_start`` defaults to 0. ``frame_end`` defaults to the last body json.
     ``frame_step`` defaults to 1. ``--init-dataset-index`` indexes that range
-    and defaults to 0.
+    and defaults to 0. ``--view-indices`` indexes the HD cameras after they are
+    sorted by name. Unset, it keeps every HD camera.
 
     Each sequence folder contains ``calibration_<name>.json``, body keypoints,
     and one HD video per camera. ``--num-points`` is the total number of tracks. The 19
@@ -42,6 +43,7 @@ class PanopticDataset(AbstractLazyLoadDataset[PanopticSpec], AbstractGroupArgsDa
         parser.add_argument("--frame_end", type=int, default=None, help="Last HD frame index for this sequence. Defaults to the last body json.")
         parser.add_argument("--frame_step", type=int, default=1, help="Frame step for this sequence. Defaults to 1.")
         parser.add_argument("--init-dataset-index", type=int, default=0, help="Index into range(frame_start, frame_end + 1, frame_step) for the query frame. Defaults to 0.")
+        parser.add_argument("--view-indices", type=int, nargs="+", default=None, help="Indices into the HD cameras sorted by name. Defaults to every HD camera.")
         return parser
 
     @staticmethod
@@ -69,6 +71,7 @@ class PanopticDataset(AbstractLazyLoadDataset[PanopticSpec], AbstractGroupArgsDa
             frame_end=group_args.frame_end,
             frame_step=group_args.frame_step,
             init_dataset_index=group_args.init_dataset_index,
+            view_indices=None if group_args.view_indices is None else tuple(group_args.view_indices),
             num_points=common_args.num_points,
             visible_cameras=common_args.visible_cameras,
             inward_distance=common_args.inward_distance,
@@ -84,6 +87,7 @@ class PanopticDataset(AbstractLazyLoadDataset[PanopticSpec], AbstractGroupArgsDa
         Frames are ``range(frame_start, frame_end + 1, frame_step)``.
         ``frame_start`` defaults to 0. ``frame_end`` defaults to the last body json.
         ``frame_step`` defaults to 1. ``--init-dataset-index`` defaults to 0.
+        ``--view-indices`` defaults to every HD camera.
         """
 
         parser = ArgumentParser(allow_abbrev=False)
