@@ -127,8 +127,12 @@ def load_hd_cameras(sequence: str) -> list[PanopticCamera]:
     return cameras
 
 
-def pose_frame_count(folder: str) -> int:
-    """Frames ``0 .. N-1`` from ``body3DScene_XXXXXXXX.json``."""
+def pose_frame_count(folder: str) -> list[int]:
+    """HD frame indices of the ``body3DScene_XXXXXXXX.json`` files.
+
+    The earliest file may be later than ``00000000.json``. The returned
+    indices are sorted. Each value is the frame inside the HD video.
+    """
 
     indices = []
     prefix = "body3DScene_"
@@ -138,12 +142,10 @@ def pose_frame_count(folder: str) -> int:
         stem = name[len(prefix):-len(".json")]
         if stem.isdigit():
             indices.append(int(stem))
-    indices.sort()
-    if indices != list(range(len(indices))):
-        raise ValueError(f"{folder} body jsons are not 00000000.json onward without gaps")
     if not indices:
         raise ValueError(f"{folder} has no body json")
-    return len(indices)
+    indices.sort()
+    return indices
 
 
 def read_bodies(path: str) -> dict[int, torch.Tensor]:
@@ -172,7 +174,7 @@ def read_bodies(path: str) -> dict[int, torch.Tensor]:
 
 def load_body_tracks(
         cameras: list[PanopticCamera],
-        num_frames: int,
+        frame_indices: list[int],
         pose_dir: str,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """Project the COCO-19 joints into every HD camera.
@@ -182,14 +184,17 @@ def load_body_tracks(
     absent, its confidence is not positive, it is behind the camera, or the
     pixel leaves the image. Pixels follow :func:`~track_4dgs.utils.project`,
     which is the OpenCV pixel minus one half.
+    Result frame ``i`` is HD frame ``frame_indices[i]``, read from
+    ``body3DScene_{frame_indices[i]:08d}.json``.
     Returns pixels ``(V, F, N, 2)``, a bool mask ``(V, F, N)``, and the joint
     positions ``(F, N, 3)`` in meters.
     """
 
     frames = [
         read_bodies(os.path.join(pose_dir, f"body3DScene_{frame_index:08d}.json"))
-        for frame_index in range(num_frames)
+        for frame_index in frame_indices
     ]
+    num_frames = len(frame_indices)
     person_ids = sorted({person_id for frame in frames for person_id in frame})
     if not person_ids:
         raise FileNotFoundError(f"{pose_dir} has no bodies")
@@ -226,7 +231,8 @@ class PanopticSpec:
     ``sequence`` contains ``calibration_<name>.json``,
     ``hdPose3d_stage1_coco19/body3DScene_XXXXXXXX.json``, and one HD video per
     camera at ``videos/hd_shared_crf20/hd_<camera>.mp4``.
-    Frame 0 is the first frame of that video.
+    The number in ``body3DScene_XXXXXXXX.json`` is the HD video frame. The
+    earliest file may be later than video frame 0.
     Joints are stored in centimeters and converted to meters.
     ``num_points`` is the total number of tracks and defaults to 256.
     The 19 body joints of each person come first. The rest are samples on a
@@ -238,9 +244,10 @@ class PanopticSpec:
     meters.
     ``view_indices`` selects HD cameras after they are sorted by name.
     ``None`` keeps every HD camera. The listed order is the view order.
-    Frames are ``range(frame_start, frame_end + 1, frame_step)`` using the HD
-    frame index. ``frame_end`` defaults to the last body json. ``frame_step``
-    defaults to 1. ``init_dataset_index`` indexes that range and is the query.
+    Frames are ``range(frame_start, frame_end + 1, frame_step)`` into the body
+    json frame list. ``frame_start`` defaults to 0. ``frame_end`` defaults to
+    the last body json. ``frame_step`` defaults to 1.
+    ``init_dataset_index`` indexes that range and is the query.
     ``max_image_size`` caps the long side of each image. A larger photo is
     scaled down with its intrinsics. ``None`` keeps the calibration resolution.
     """
@@ -291,11 +298,9 @@ class PanopticSpec:
             cameras = [cameras[index] for index in self.view_indices]
         cameras = [scale_camera(camera, self.max_image_size) for camera in cameras]
         poses = os.path.join(self.sequence, "hdPose3d_stage1_coco19")
-        num_frames = pose_frame_count(poses)
-        if num_frames <= 0:
-            raise ValueError(f"{self.sequence} has no frames")
-        indices = selected_frame_indices(self.frame_start, self.frame_end, self.frame_step, num_frames)
-        if self.init_dataset_index >= len(indices):
+        frame_indices = pose_frame_count(poses)
+        slots = selected_frame_indices(self.frame_start, self.frame_end, self.frame_step, len(frame_indices))
+        if self.init_dataset_index >= len(slots):
             raise ValueError("--init-dataset-index must index one frame")
         grids = [
             opencv_undistort_grid(
@@ -304,7 +309,7 @@ class PanopticSpec:
             for camera in cameras
         ]
         panoptic_frames = []
-        for frame_index in indices:
+        for slot in slots:
             specs = []
             for camera, grid in zip(cameras, grids, strict=True):
                 specs.append(PanopticCameraSpec(
@@ -321,20 +326,20 @@ class PanopticSpec:
                     video_path=os.path.join(
                         self.sequence, "videos", "hd_shared_crf20", f"hd_{camera.name}.mp4",
                     ),
-                    frame_index=frame_index,
+                    frame_index=frame_indices[slot],
                 ))
             panoptic_frames.append(PanopticFrame(specs, device=device))
         frames = PanopticFrames(panoptic_frames)
-        points, valid, xyz = load_body_tracks(cameras, num_frames, poses)
-        points = points[:, indices]
-        valid = valid[:, indices]
+        points, valid, xyz = load_body_tracks(cameras, frame_indices, poses)
+        points = points[:, slots]
+        valid = valid[:, slots]
         joint_count = points.shape[2]
         if self.num_points < joint_count:
             raise ValueError(f"num_points is the total and must cover the {joint_count} body joints")
         if self.num_points > joint_count:
             people = joint_count // BODY_JOINT_COUNT
             surface_points, surface_valid = sample_body_surface(
-                xyz[indices].view(len(indices), people, BODY_JOINT_COUNT, 3),
+                xyz[slots].view(len(slots), people, BODY_JOINT_COUNT, 3),
                 frames,
                 self.init_dataset_index,
                 self.num_points - joint_count,
