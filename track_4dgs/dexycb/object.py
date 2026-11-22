@@ -110,6 +110,7 @@ def posed_ycb_meshes(
     A frame uses the first camera whose pose is not all zeros.
     Meshes are ``models_dir/<name>/textured_simple.obj``.
     Returns one ``(F, V_i, 3)`` tensor and one ``(T_i, 3)`` face tensor per object.
+    No such object returns two empty lists.
     """
 
     if "ycb_ids" not in meta:
@@ -123,8 +124,6 @@ def posed_ycb_meshes(
     missing = poses.reshape(*poses.shape[:-2], -1).abs().sum(dim=-1) == 0
     available = ~missing
     keep = available.any(dim=0).all(dim=0)
-    if not bool(keep.any()):
-        raise ValueError("no YCB object has a pose on every selected frame")
     view_index = available.long().argmax(dim=0)
     frame_index = torch.arange(poses.shape[1])
     verts = []

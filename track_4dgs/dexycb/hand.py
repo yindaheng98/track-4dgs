@@ -211,6 +211,7 @@ def posed_mano_meshes(
     camera's extrinsics map the vertices into the capture world. The mapping
     is the one used by :func:`~track_4dgs.dexycb.object.posed_ycb_meshes`.
     Returns one ``(F, 778, 3)`` tensor and one ``(1538, 3)`` face tensor per hand.
+    No such hand returns two empty lists.
     """
 
     files = {"right": (mano_right, mano_right_url), "left": (mano_left, mano_left_url)}
@@ -228,8 +229,6 @@ def posed_mano_meshes(
     missing = poses.abs().sum(dim=-1) == 0
     available = ~missing
     keep = available.any(dim=0).all(dim=0)
-    if not bool(keep.any()):
-        raise ValueError("no hand has a pose on every selected frame")
     view_index = available.long().argmax(dim=0)
     frame_index = torch.arange(poses.shape[1])
     models = {}

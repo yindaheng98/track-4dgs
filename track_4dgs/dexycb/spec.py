@@ -32,6 +32,9 @@ class DexYCBSpec:
     ``mano_right`` and ``mano_left`` are the local MANO pickles. When either cannot
     be loaded, ``mano_right_url`` or ``mano_left_url`` is downloaded to that path.
     Tracks are ``num_points`` samples on the posed hand and YCB meshes.
+    A hand or object missing from any selected frame is omitted. The load
+    raises ``ValueError`` when every hand and every object is missing from
+    at least one selected frame.
     Points are drawn at ``init_dataset_index`` and carried with that triangle.
     ``visible_cameras`` keeps a sample only when more cameras than this see it.
     ``inward_distance`` and ``outward_distance`` move a sample along the face normal.
@@ -124,6 +127,8 @@ class DexYCBSpec:
         )
         verts = hand_verts + object_verts
         faces = hand_faces + object_faces
+        if not verts:
+            raise ValueError("no hand or YCB object has a pose on every selected frame")
         mesh_device = torch.device("cpu" if device is None else device)
         verts = [mesh.to(mesh_device) for mesh in verts]
         faces = [mesh.to(mesh_device) for mesh in faces]
