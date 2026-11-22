@@ -6,7 +6,13 @@ from track_4dgs.dataset import AbstractDataset, SavedDataset, get_available_supe
 from track_4dgs.track1v import draw_rainbow_tracks
 
 
-def rendering(dataset: AbstractDataset, save: str, line_width: int = 1, point_size: int = 2) -> None:
+def rendering(
+    dataset: AbstractDataset,
+    save: str,
+    line_width: int = 1,
+    point_size: int = 2,
+    visible_only: bool = False,
+) -> None:
     start = getattr(dataset, "start", 0)
     for index in range(len(dataset)):
         sample = dataset[index]
@@ -20,6 +26,7 @@ def rendering(dataset: AbstractDataset, save: str, line_width: int = 1, point_si
                     frame_idx=frame_idx - 1,
                     line_width=line_width,
                     point_size=point_size,
+                    visible_only=visible_only,
                 )
                 path = os.path.join(sample_dir, f"frame{frame_idx}", f"{view_idx}.png")
                 os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -36,6 +43,7 @@ if __name__ == "__main__":
     parser.add_argument("--vis-folder", default=None, type=str)
     parser.add_argument("--line-width", default=1, type=int)
     parser.add_argument("--point-size", default=2, type=int)
+    parser.add_argument("--visible-only", action="store_true")
     parser.add_argument("--device", default="cuda", type=str)
     args, rest = parser.parse_known_args()
     assert args.save_folder is not None or args.vis_folder is not None, "--save-folder and --vis-folder cannot both be None"
@@ -54,6 +62,10 @@ if __name__ == "__main__":
                     args.vis_folder,
                     line_width=args.line_width,
                     point_size=args.point_size,
+                    visible_only=args.visible_only,
                 )
         else:
-            rendering(dataset, args.vis_folder, line_width=args.line_width, point_size=args.point_size)
+            rendering(
+                dataset, args.vis_folder,
+                line_width=args.line_width, point_size=args.point_size, visible_only=args.visible_only,
+            )

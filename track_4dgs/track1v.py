@@ -44,6 +44,7 @@ def draw_rainbow_tracks(
     frame_idx: int,
     line_width: int = 1,
     point_size: int = 2,
+    visible_only: bool = False,
 ) -> Image.Image:
     canvas = image_tensor_to_pil(image)
     draw = ImageDraw.Draw(canvas)
@@ -53,7 +54,7 @@ def draw_rainbow_tracks(
     colors = rainbow_colors(points.shape[1], track.confidence[frame_idx].detach().cpu().clamp(0, 1))
 
     for point_idx, color in enumerate(colors):
-        if not bool(mask[frame_idx, point_idx]):
+        if visible_only and not bool(mask[frame_idx, point_idx]):
             continue
         history_points = points[:frame_idx + 1, point_idx]
         line = [(float(x), float(y)) for x, y in history_points.tolist()]
@@ -83,12 +84,16 @@ def rendering(
     save: str,
     line_width: int = 1,
     point_size: int = 2,
+    visible_only: bool = False,
 ) -> None:
     os.makedirs(save, exist_ok=True)
     print(f"Saving {track.points.shape[1]} tracked points to {save}")
 
     for frame_idx, frame in enumerate(frames):
-        canvas = draw_rainbow_tracks(frame, track, frame_idx, line_width=line_width, point_size=point_size)
+        canvas = draw_rainbow_tracks(
+            frame, track, frame_idx,
+            line_width=line_width, point_size=point_size, visible_only=visible_only,
+        )
         canvas.save(os.path.join(save, f"{frame_idx + 1:05d}.png"))
 
 
@@ -104,6 +109,7 @@ if __name__ == "__main__":
     parser.add_argument("--num-points", default=256, type=int)
     parser.add_argument("--line-width", default=1, type=int)
     parser.add_argument("--point-size", default=2, type=int)
+    parser.add_argument("--visible-only", action="store_true")
     args = parser.parse_args()
     tracker_configs = {o.split("=", 1)[0]: eval(o.split("=", 1)[1]) for o in args.option_tracker}
 
@@ -114,4 +120,7 @@ if __name__ == "__main__":
         if not isinstance(tracker, AbstractViewPointTracker):
             raise TypeError("track1v requires an AbstractViewPointTracker")
         track = tracker.track_view(points, frame_indices, frames)
-        rendering(frames, track, args.destination, line_width=args.line_width, point_size=args.point_size)
+        rendering(
+            frames, track, args.destination,
+            line_width=args.line_width, point_size=args.point_size, visible_only=args.visible_only,
+        )
