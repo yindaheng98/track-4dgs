@@ -20,9 +20,9 @@ class PanopticDataset(AbstractLazyLoadDataset[PanopticSpec], AbstractGroupArgsDa
     sorted by name. Unset, it keeps every HD camera.
 
     Each sequence folder contains ``calibration_<name>.json``, body keypoints,
-    and one HD video per camera. ``--num-points`` is the total number of tracks. The 19
-    body joints of each person come first, and the rest are samples on a ribbon
-    beside those bones. ``--max-image-size`` caps the long side of each image.
+    and one HD video per camera. ``--num-points`` is the number of tracks, all
+    sampled on a ribbon beside the bones. The body joints place those ribbons
+    and are not tracks. ``--max-image-size`` caps the long side of each image.
     Construction records one :class:`PanopticSpec` per sequence.
     :meth:`PanopticSpec.load` reads the cameras and joints.
     """
@@ -50,7 +50,7 @@ class PanopticDataset(AbstractLazyLoadDataset[PanopticSpec], AbstractGroupArgsDa
     def add_common_argument(parser: ArgumentParser) -> ArgumentParser:
         """Register flags shared by every sequence and return ``parser``."""
 
-        parser.add_argument("--num-points", default=256, type=int, help="Total points, including the body joints. Further points are sampled beside the bones. Defaults to 256.")
+        parser.add_argument("--num-points", default=256, type=int, help="Points sampled on a ribbon beside the body bones. The joints are not included. Defaults to 256.")
         parser.add_argument("--visible-cameras", default=2, type=int, help="Keep a surface point only when more cameras than this see it. Defaults to 2.")
         parser.add_argument("--inward-distance", default=0.0, type=float, help="How far surface points may move into the ribbon along its normal, in meters.")
         parser.add_argument("--outward-distance", default=0.0, type=float, help="How far surface points may move out of the ribbon along its normal, in meters.")

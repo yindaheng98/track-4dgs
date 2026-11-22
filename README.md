@@ -335,7 +335,7 @@ python -c "import track_4dgs; print(track_4dgs.get_available_supervision_dataset
 - `gstracker`: sample a random subset of a trained 3DGS point cloud, then track those points
 - `blender`: render a `.blend` file from sampled cameras and track the query on its evaluated meshes. See [Blender mesh tracking](#blender-mesh-tracking)
 - `harmony4d`: project the checked COCO joints, then sample the rest on the posed SMPL meshes. About 20 exo cameras per sequence
-- `panoptic`: project the 19 body joints of each person, then sample the rest on a ribbon beside those bones. 31 HD cameras per sequence
+- `panoptic`: sample points on a ribbon beside each person's bones. The 19 body joints place the ribbons and are not tracks. 31 HD cameras per sequence
 
 Harmony4D and Panoptic both record many more cameras than a typical capture, so a sample that keeps every view is large. Both take `--view-indices` on the preceding `--sequence`. The integers index the cameras after sorting — Harmony4D by exo folder name, Panoptic by HD camera name — and that order is the view order. Leave the flag unset to keep every camera. Indices are unique and lie in `0 .. V - 1`.
 

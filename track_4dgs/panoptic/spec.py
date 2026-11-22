@@ -234,12 +234,12 @@ class PanopticSpec:
     The number in ``body3DScene_XXXXXXXX.json`` is the HD video frame. The
     earliest file may be later than video frame 0.
     Joints are stored in centimeters and converted to meters.
-    ``num_points`` is the total number of tracks and defaults to 256.
-    The 19 body joints of each person come first. The rest are samples on a
-    ribbon 4 cm beside each bone, drawn with the same surface sampler as
-    Harmony4D. A sample is kept when more cameras than ``visible_cameras`` see
-    it, then carried with that triangle. ``num_points`` must cover every body
-    joint. ``inward_distance`` and ``outward_distance`` move a sample along the
+    ``num_points`` is the number of tracks and defaults to 256.
+    Every track is a sample on a ribbon 4 cm beside a bone, drawn with the
+    same surface sampler as Harmony4D. The 19 body joints place those ribbons
+    and are not tracks. A sample is kept when more cameras than
+    ``visible_cameras`` see it, then carried with that triangle.
+    ``inward_distance`` and ``outward_distance`` move a sample along the
     ribbon normal, in meters. ``occlusion_eps`` is the occlusion tolerance in
     meters.
     ``view_indices`` selects HD cameras after they are sorted by name.
@@ -268,8 +268,8 @@ class PanopticSpec:
     def __post_init__(self):
         if self.frame_step == 0:
             raise ValueError("frame_step must not be 0")
-        if self.num_points < 0:
-            raise ValueError("num_points must be non-negative")
+        if self.num_points < 1:
+            raise ValueError("num_points must be positive")
         if self.inward_distance < 0 or self.outward_distance < 0:
             raise ValueError("inward_distance and outward_distance must be non-negative")
         if self.occlusion_eps < 0:
@@ -330,30 +330,19 @@ class PanopticSpec:
                 ))
             panoptic_frames.append(PanopticFrame(specs, device=device))
         frames = PanopticFrames(panoptic_frames)
-        points, valid, xyz = load_body_tracks(cameras, frame_indices, poses)
-        points = points[:, slots]
-        valid = valid[:, slots]
-        joint_count = points.shape[2]
-        if self.num_points < joint_count:
-            raise ValueError(f"num_points is the total and must cover the {joint_count} body joints")
-        if self.num_points > joint_count:
-            people = joint_count // BODY_JOINT_COUNT
-            surface_points, surface_valid = sample_body_surface(
-                xyz[slots].view(len(slots), people, BODY_JOINT_COUNT, 3),
-                frames,
-                self.init_dataset_index,
-                self.num_points - joint_count,
-                self.visible_cameras,
-                self.inward_distance,
-                self.outward_distance,
-                self.occlusion_eps,
-                device,
-            )
-            points = torch.cat([points.to(surface_points.device), surface_points], dim=2)
-            valid = torch.cat([valid.to(surface_valid.device), surface_valid], dim=2)
-        elif device is not None:
-            points = points.to(device)
-            valid = valid.to(device)
+        _, _, xyz = load_body_tracks(cameras, frame_indices, poses)
+        people = xyz.shape[1] // BODY_JOINT_COUNT
+        points, valid = sample_body_surface(
+            xyz[slots].view(len(slots), people, BODY_JOINT_COUNT, 3),
+            frames,
+            self.init_dataset_index,
+            self.num_points,
+            self.visible_cameras,
+            self.inward_distance,
+            self.outward_distance,
+            self.occlusion_eps,
+            device,
+        )
         start_indices = torch.full(
             (points.shape[0], points.shape[2]),
             self.init_dataset_index,
