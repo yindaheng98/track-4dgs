@@ -36,7 +36,7 @@ class DexYCBSpec:
     raises ``ValueError`` when every hand and every object is missing from
     at least one selected frame.
     Points are drawn at ``init_dataset_index`` and carried with that triangle.
-    ``visible_cameras`` keeps a sample only when more cameras than this see it.
+    ``visible_cameras`` keeps a sample only when at least this many cameras see it.
     ``inward_distance`` and ``outward_distance`` move a sample along the face normal.
     ``occlusion_eps`` is the occlusion tolerance in world units.
     Frames are ``range(frame_start, frame_end + 1, frame_step)`` using 0-based

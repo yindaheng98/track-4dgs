@@ -150,7 +150,7 @@ def sample_posed_surface(
     ``verts`` lists per-person ``(F, V_i, 3)`` positions already in the camera world.
     ``faces`` lists the matching ``(T_i, 3)`` triangles. ``face_mask`` is the optional
     packed-triangle mask taken by :func:`~track_4dgs.blender.kernels.sample_near_surface`.
-    A point is kept when more cameras than ``visible_cameras`` see it, then carried
+    A point is kept when at least ``visible_cameras`` cameras see it, then carried
     with that triangle. Occluded samples are invalid. Returns pixels ``(V, F, N, 2)``
     and a bool mask ``(V, F, N)``.
     """

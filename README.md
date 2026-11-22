@@ -331,7 +331,7 @@ List the dataset names:
 python -c "import track_4dgs; print(track_4dgs.get_available_supervision_datasets())"
 ```
 
-- `tracker`: sample points uniformly inside the scene cube, keep those seen by more cameras than `--visible-cameras` (default 2), project them, and track
+- `tracker`: sample points uniformly inside the scene cube, keep those seen by at least `--visible-cameras` cameras (default 2), project them, and track
 - `gstracker`: sample a random subset of a trained 3DGS point cloud, then track those points
 - `blender`: render a `.blend` file from sampled cameras and track the query on its evaluated meshes. See [Blender mesh tracking](#blender-mesh-tracking)
 - `harmony4d`: project the checked COCO joints, then sample the rest on the posed SMPL meshes. About 20 exo cameras per sequence

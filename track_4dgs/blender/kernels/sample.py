@@ -52,13 +52,13 @@ def sample_near_surface(
     A point on the chosen triangle uses barycentric weights ``(1 - r1, r1 * (1 - r2), r1 * r2)`` with ``r1 = sqrt(u)``.
     It is then moved along the outward face normal by a uniform offset in ``[-inward_distance, outward_distance]``.
     A negative offset goes inward.
-    A point is kept only when more cameras than ``visible_cameras`` see it.
+    A point is kept only when at least ``visible_cameras`` cameras see it.
     A camera sees it when the point projects into the image and the closest hit on the camera-to-point segment is not occlusion.
     That hit is not occlusion when it is the bound triangle or lies within ``occlusion_eps`` of the point.
     Triangles behind that hit are not tested.
     Candidates are drawn again until ``num_points`` survive.
     ``max_reject_draws`` draws in a row that keep nothing raise ``ValueError``. It defaults to 16.
-    That happens when the faces seen by more than ``visible_cameras`` cameras cannot supply the sample.
+    That happens when the faces seen by at least ``visible_cameras`` cameras cannot supply the sample.
     ``occlusion_eps`` is that occlusion depth tolerance in world units, and ``device`` is a Warp device name.
     The returned binding stores the packed complete-scene face, the barycentric weights, and that signed offset.
     Visibility rays test every packed face. The chosen face is ignored as an occluder.
@@ -84,8 +84,8 @@ def sample_near_surface(
         selected_area = area.masked_fill(~selected, 0)
         probabilities = selected_area / selected_area.sum()
     n_views = len(cameras)
-    if visible_cameras >= n_views:
-        raise ValueError("--visible-cameras must be smaller than the number of cameras")
+    if visible_cameras > n_views:
+        raise ValueError("--visible-cameras must not exceed the number of cameras")
     if inward_distance < 0 or outward_distance < 0:
         raise ValueError("inward_distance and outward_distance must be non-negative")
     if max_reject_draws < 1:
@@ -115,12 +115,12 @@ def sample_near_surface(
             _, in_frustum = project_points(xyz, cameras[view])
             seen = ray_visible[view] * in_frustum.to(dtype=ray_visible.dtype)
             count += seen.to(dtype=torch.long)
-        keep = count > visible_cameras
+        keep = count >= visible_cameras
         if not bool(keep.any()):
             draws_without_keep += 1
             if draws_without_keep >= max_reject_draws:
                 raise ValueError(
-                    f"kept {picked_xyz.shape[0]} points seen by more than {visible_cameras} cameras "
+                    f"kept {picked_xyz.shape[0]} points seen by at least {visible_cameras} cameras "
                     f"after {max_reject_draws} draws kept nothing; {num_points} were requested")
             continue
         draws_without_keep = 0

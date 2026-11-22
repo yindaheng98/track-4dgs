@@ -70,7 +70,7 @@ class SamplePointTrackerDataset(AbstractPointTrackerDataset[SamplePointSpec], Ab
         parser.add_argument("--tracker", type=str, default="cotracker3", choices=get_available_point_trackers())
         parser.add_argument("-m", "--option_tracker", default=[], action="append", type=str)
         parser.add_argument("--num-points", default=256, type=int)
-        parser.add_argument("--visible-cameras", default=2, type=int, help="Keep a point only when more cameras than this see it.")
+        parser.add_argument("--visible-cameras", default=2, type=int, help="Keep a point only when at least this many cameras see it.")
         parser.add_argument("--cache-size", default=2 ** 16, type=int, help="Number of loaded cameras kept in each source dataset. Defaults to 65536.")
         return parser
 

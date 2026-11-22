@@ -59,7 +59,7 @@ class DexYCBDataset(AbstractLazyLoadDataset[DexYCBSpec], AbstractGroupArgsDatase
         parser.add_argument("--mano-right-url", default=DEFAULT_MANO_RIGHT_URL, type=str, help="Downloaded into --mano-right when that file cannot be loaded. Defaults to minimal-hand/mano/models/MANO_RIGHT.pkl from ut-vision/SiMHand.")
         parser.add_argument("--mano-left", default=DEFAULT_MANO_LEFT, type=str, help="Local left MANO pickle. A file that cannot be loaded is replaced from --mano-left-url.")
         parser.add_argument("--mano-left-url", default=DEFAULT_MANO_LEFT_URL, type=str, help="Downloaded into --mano-left when that file cannot be loaded. Defaults to minimal-hand/mano/models/MANO_LEFT.pkl from ut-vision/SiMHand.")
-        parser.add_argument("--visible-cameras", default=2, type=int, help="Keep a point only when more cameras than this see it. Defaults to 2.")
+        parser.add_argument("--visible-cameras", default=2, type=int, help="Keep a point only when at least this many cameras see it. Defaults to 2.")
         parser.add_argument("--inward-distance", default=0.0, type=float, help="How far points may move into the mesh along the face normal, in world units.")
         parser.add_argument("--outward-distance", default=0.0, type=float, help="How far points may move out of the mesh along the face normal, in world units.")
         parser.add_argument("--occlusion-eps", default=1e-2, type=float, help="Occlusion depth tolerance in world units. Defaults to 1e-2.")

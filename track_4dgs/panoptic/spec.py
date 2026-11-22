@@ -237,8 +237,8 @@ class PanopticSpec:
     ``num_points`` is the number of tracks and defaults to 256.
     Every track is a sample on a ribbon 4 cm beside a bone, drawn with the
     same surface sampler as Harmony4D. The 19 body joints place those ribbons
-    and are not tracks. A sample is kept when more cameras than
-    ``visible_cameras`` see it, then carried with that triangle.
+    and are not tracks. A sample is kept when at least ``visible_cameras``
+    cameras see it, then carried with that triangle.
     ``inward_distance`` and ``outward_distance`` move a sample along the
     ribbon normal, in meters. ``occlusion_eps`` is the occlusion tolerance in
     meters.

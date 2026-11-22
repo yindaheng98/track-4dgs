@@ -213,7 +213,7 @@ class BlenderDataset(AbstractLazyLoadDataset[BlenderScene], AbstractGroupArgsDat
         parser.add_argument("--cap-angle", type=float, nargs=2, default=(0.0, 90.0), metavar=("MIN", "MAX"), help="Band edges in degrees from the cap axis. 0 90 is the upper hemisphere when elevation is 90.")
         parser.add_argument("--spacing", type=float, nargs=2, default=(10.0, 45.0), metavar=("MIN", "MAX"), help="Angle in degrees between a camera and its nearest neighbor.")
         parser.add_argument("--num-points", default=256, type=int)
-        parser.add_argument("--visible-cameras", default=0, type=int, help="Keep a point only when more cameras than this see it.")
+        parser.add_argument("--visible-cameras", default=2, type=int, help="Keep a point only when at least this many cameras see it.")
         parser.add_argument("--inward-distance", default=0.0, type=float, help="How far points may move into the mesh along the face normal, in world units.")
         parser.add_argument("--outward-distance", default=0.0, type=float, help="How far points may move out of the mesh along the face normal, in world units.")
         parser.add_argument("--blender", default="blender", type=str)

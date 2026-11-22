@@ -51,7 +51,7 @@ class PanopticDataset(AbstractLazyLoadDataset[PanopticSpec], AbstractGroupArgsDa
         """Register flags shared by every sequence and return ``parser``."""
 
         parser.add_argument("--num-points", default=256, type=int, help="Points sampled on a ribbon beside the body bones. The joints are not included. Defaults to 256.")
-        parser.add_argument("--visible-cameras", default=2, type=int, help="Keep a surface point only when more cameras than this see it. Defaults to 2.")
+        parser.add_argument("--visible-cameras", default=2, type=int, help="Keep a surface point only when at least this many cameras see it. Defaults to 2.")
         parser.add_argument("--inward-distance", default=0.0, type=float, help="How far surface points may move into the ribbon along its normal, in meters.")
         parser.add_argument("--outward-distance", default=0.0, type=float, help="How far surface points may move out of the ribbon along its normal, in meters.")
         parser.add_argument("--occlusion-eps", default=1e-2, type=float, help="Occlusion tolerance in meters. Defaults to 1e-2.")
