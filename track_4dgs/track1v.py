@@ -56,16 +56,7 @@ def draw_rainbow_tracks(
         if not bool(mask[frame_idx, point_idx]):
             continue
         history_points = points[:frame_idx + 1, point_idx]
-        history_mask = mask[:frame_idx + 1, point_idx]
-        line = []
-        for point, valid in zip(history_points, history_mask):
-            if bool(valid):
-                line.append((float(point[0]), float(point[1])))
-            elif len(line) > 1:
-                draw.line(line, fill=color, width=line_width)
-                line = []
-            else:
-                line = []
+        line = [(float(x), float(y)) for x, y in history_points.tolist()]
         if len(line) > 1:
             draw.line(line, fill=color, width=line_width)
 
