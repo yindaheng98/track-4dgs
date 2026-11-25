@@ -1,6 +1,6 @@
 from .fisheye import fisheye_undistort_grid, opencv_undistort_grid
 from .frames import selected_frame_indices
-from .project import full_proj_transform, project, project_points
+from .project import full_proj_transform, project, project_frames, project_points
 from .sample import sample_c2ws, sample_uniform_xyz
 
 __all__ = [
@@ -8,6 +8,7 @@ __all__ = [
     "opencv_undistort_grid",
     "full_proj_transform",
     "project",
+    "project_frames",
     "project_points",
     "sample_c2ws",
     "sample_uniform_xyz",

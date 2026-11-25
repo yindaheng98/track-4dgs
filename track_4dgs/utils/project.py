@@ -1,9 +1,11 @@
 """3D-to-2D projection utilities."""
 
+from collections.abc import Sequence
 from typing import Tuple
 
 import torch
 from gaussian_splatting import Camera
+from gaussian_splatting.dataset import CameraDataset
 
 
 def project(
@@ -80,3 +82,27 @@ def project_points(
     """
 
     return project(xyz, camera.full_proj_transform, camera.image_width, camera.image_height)
+
+
+def project_frames(
+    worlds: torch.Tensor,
+    frames: Sequence[CameraDataset],
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    """Project posed world points into every camera of ``frames``.
+
+    ``worlds`` is ``(F, N, 3)`` and ``frames`` is one camera dataset per frame.
+    Every dataset has the same cameras in the same order.
+    Returns ``points`` ``(V, F, N, 2)`` pixels and ``in_frustum`` ``(V, F, N)`` bool.
+    ``in_frustum`` is whether each point is in front of that camera and inside the image.
+    """
+
+    n_frames, n_points = len(frames), worlds.shape[1]
+    n_views = len(frames[0])
+    points = worlds.new_zeros((n_views, n_frames, n_points, 2))
+    in_frustum = torch.zeros((n_views, n_frames, n_points), dtype=torch.bool, device=worlds.device)
+    for frame_index, dataset in enumerate(frames):
+        for view_index in range(n_views):
+            uv, view_in_frustum = project_points(worlds[frame_index], dataset[view_index])
+            points[view_index, frame_index] = uv
+            in_frustum[view_index, frame_index] = view_in_frustum
+    return points, in_frustum
