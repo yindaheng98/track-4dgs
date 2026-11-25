@@ -53,11 +53,12 @@ def sample_c2ws(
         axis: tuple[float, float],
         cap_angle: tuple[float, float],
         spacing: tuple[float, float],
-        device: str) -> torch.Tensor:
+        device: str,
+        seed: int = 42) -> torch.Tensor:
     """Sample OpenCV camera-to-world poses on a spherical cap.
 
     Returns ``[V, 4, 4]``. Stops after 100 proposals, so ``V`` may be smaller than ``n_cameras``.
-    The draw is fixed by seed 42.
+    The draw uses ``seed``. It defaults to 42.
     """
 
     azimuth, elevation = np.deg2rad(axis)
@@ -70,7 +71,7 @@ def sample_c2ws(
     min_angle, max_angle = np.deg2rad(spacing)
     radius_min, radius_max = radius
     center = np.array(center)
-    rng = np.random.default_rng(42)
+    rng = np.random.default_rng(seed)
 
     directions = []
     radii = []
