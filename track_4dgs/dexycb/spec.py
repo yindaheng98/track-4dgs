@@ -8,7 +8,7 @@ import torch
 
 from ..blender.kernels import project_visibility, sample_near_surface, track_bind_points
 from ..tracker import Query, Track
-from ..utils import selected_frame_indices
+from ..utils import project_frames, selected_frame_indices
 from .camera import load_extrinsics, load_intrinsics
 from .frame import DexYCBCameraSpec, DexYCBFrame
 from .hand import (
@@ -150,10 +150,12 @@ class DexYCBSpec:
             )
             query = Query.from_projection(binding.xyz, frames, frame_indices)
             worlds, valid, world_verts, scene_faces, _owner = track_bind_points(verts, faces, frames, binding)
-            points, visibility = project_visibility(
-                query, frames, worlds, world_verts, scene_faces, valid,
+            visibility = project_visibility(
+                frames, worlds, world_verts, scene_faces, valid,
                 self.occlusion_eps, warp_device, binding.face,
             )
+            points, in_frustum = project_frames(worlds, frames)
+            visibility = visibility * in_frustum.to(dtype=visibility.dtype)
             n_views, n_frames, n_points, _ = points.shape
             confidence = points.new_ones((n_views, n_frames, n_points))
             mask = valid.to(dtype=torch.bool).expand(n_frames, n_points)

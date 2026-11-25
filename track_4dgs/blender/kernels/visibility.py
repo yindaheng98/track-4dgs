@@ -6,9 +6,6 @@ import torch
 import warp as wp
 from gaussian_splatting.dataset import CameraDataset
 
-from ...tracker import Query
-from ...utils import project_points
-
 
 @wp.kernel
 def ray_visibility_kernel(
@@ -99,7 +96,6 @@ def ray_visibility(
 
 
 def project_visibility(
-        query: Query,
         frames: Sequence[CameraDataset],
         worlds: torch.Tensor,
         world_verts: torch.Tensor,
@@ -107,8 +103,8 @@ def project_visibility(
         valid: torch.Tensor,
         occlusion_eps: float,
         device: str,
-        ignore_face: torch.Tensor | None = None) -> tuple[torch.Tensor, torch.Tensor]:
-    """Project posed points and combine occlusion with the camera frustum.
+        ignore_face: torch.Tensor | None = None) -> torch.Tensor:
+    """Report occlusion of posed points from each camera.
 
     ``worlds`` is ``(F, N, 3)`` in blend world coordinates.
     ``world_verts`` is ``(F, P, 3)`` and ``scene_faces`` is ``(T, 3)`` into those vertices.
@@ -117,26 +113,17 @@ def project_visibility(
     ``occlusion_eps`` is the occlusion depth tolerance in world units.
     ``ignore_face`` is an optional ``(N,)`` int passed to :func:`ray_visibility`.
     The default counts every triangle as an occluder.
-    Returns ``points`` ``(V, F, N, 2)`` pixels and ``visibility`` ``(V, F, N)``.
-    A point is visible when the camera-to-point segment is unoccluded and :func:`project_points` places it in the image.
+    Returns ``visibility`` ``(V, F, N)``, the unoccluded camera-to-point test from :func:`ray_visibility`.
     """
-    n_views = query.points.shape[0]
-    n_frames = len(frames)
-    n_points = worlds.shape[1]
-    points = query.points.new_zeros((n_views, n_frames, n_points, 2))
-    visibility = query.points.new_zeros((n_views, n_frames, n_points))
+    n_views = len(frames[0])
+    n_frames, n_points = len(frames), worlds.shape[1]
+    visibility = worlds.new_zeros((n_views, n_frames, n_points))
     for frame_index, dataset in enumerate(frames):
         centers = torch.stack([
             dataset[view_index].camera_center.detach()
             for view_index in range(n_views)
         ])
-        ray_visible = ray_visibility(
+        visibility[:, frame_index] = ray_visibility(
             centers, worlds[frame_index], world_verts[frame_index], scene_faces, device, occlusion_eps, valid, ignore_face,
         )
-        for view_index in range(n_views):
-            camera = dataset[view_index]
-            uv, in_frustum = project_points(worlds[frame_index], camera)
-            hit = ray_visible[view_index]
-            points[view_index, frame_index] = uv
-            visibility[view_index, frame_index] = hit * in_frustum.to(dtype=hit.dtype)
-    return points, visibility
+    return visibility

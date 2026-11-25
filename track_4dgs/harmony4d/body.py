@@ -10,6 +10,7 @@ from gaussian_splatting.dataset import CameraDataset
 
 from ..blender.kernels import project_visibility, sample_near_surface, track_bind_points
 from ..tracker import Query
+from ..utils import project_frames
 
 SMPL_VERTEX_COUNT = 6890
 SMPL_WRISTS = (20, 21)
@@ -82,8 +83,8 @@ def load_body_surface(
     Vertices come from ``processed_data/smpl`` and are already posed. They are
     moved into the COLMAP world before sampling, so the cameras can be used as
     stored. The hand is removed with :func:`body_face_mask` on the query frame.
-    Occluded samples are marked invalid. Returns pixels ``(V, D, N, 2)`` and a
-    bool mask ``(V, D, N)``.
+    Occluded samples and projections outside the image are marked invalid.
+    Returns pixels ``(V, D, N, 2)`` and a bool mask ``(V, D, N)``.
     """
 
     faces = load_smpl_faces(faces_path, faces_url)
@@ -151,8 +152,8 @@ def sample_posed_surface(
     ``faces`` lists the matching ``(T_i, 3)`` triangles. ``face_mask`` is the optional
     packed-triangle mask taken by :func:`~track_4dgs.blender.kernels.sample_near_surface`.
     A point is kept when at least ``visible_cameras`` cameras see it, then carried
-    with that triangle. Occluded samples are invalid. Returns pixels ``(V, F, N, 2)``
-    and a bool mask ``(V, F, N)``.
+    with that triangle. Occluded samples and projections outside the image are invalid.
+    Returns pixels ``(V, F, N, 2)`` and a bool mask ``(V, F, N)``.
     """
 
     warp_device = str(verts[0].device)
@@ -169,12 +170,9 @@ def sample_posed_surface(
             warp_device,
             face_mask,
         )
-        query_frames = torch.full(
-            (binding.xyz.shape[0],), init_dataset_index, dtype=torch.long, device=binding.xyz.device,
-        )
-        query = Query.from_projection(binding.xyz, frames, query_frames)
         worlds, valid, world_verts, scene_faces, _owner = track_bind_points(verts, faces, frames, binding)
-        points, visibility = project_visibility(
-            query, frames, worlds, world_verts, scene_faces, valid, occlusion_eps, warp_device, binding.face,
+        visibility = project_visibility(
+            frames, worlds, world_verts, scene_faces, valid, occlusion_eps, warp_device, binding.face,
         )
-    return points, visibility > 0
+        points, in_frustum = project_frames(worlds, frames)
+    return points, (visibility > 0) & in_frustum
