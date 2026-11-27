@@ -6,7 +6,7 @@ from uniflowmatch.models.ufm import UniFlowMatchClassificationRefinement, UniFlo
 from track_4dgs.tracker import AbstractPairDensePointTracker
 
 # submodules/UFM/example_inference.py#L110-L117
-MODEL_REPOS = {
+VARIANTS = {
     "base": "infinity1096/UFM-Base",
     "refine": "infinity1096/UFM-Refine",
     "base-980": "infinity1096/UFM-Base-980",
@@ -22,15 +22,15 @@ def load_uniflowmatch(model: str = "base"):
     ``model`` uses the same names as ``example_inference.py``.
     """
     # submodules/UFM/example_inference.py#L119-L126
-    if model not in MODEL_REPOS:
+    if model not in VARIANTS:
         raise ValueError(
             "Please choose from [base, refine, base-980, refine-980, "
             "base-dinov2l-init, base-dinov2g-init]"
         )
     if "base" in model:
-        loaded = UniFlowMatchConfidence.from_pretrained(MODEL_REPOS[model])
+        loaded = UniFlowMatchConfidence.from_pretrained(VARIANTS[model])
     elif "refine" in model:
-        loaded = UniFlowMatchClassificationRefinement.from_pretrained(MODEL_REPOS[model])
+        loaded = UniFlowMatchClassificationRefinement.from_pretrained(VARIANTS[model])
     else:
         raise ValueError(
             "Please choose from [base, refine, base-980, refine-980, "

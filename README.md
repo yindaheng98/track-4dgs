@@ -11,7 +11,7 @@ The package provides three common workflows:
 ## Features
 
 - [x] Organised as a standard Python package with `pip install` support
-- [x] Shared point tracker registry with `cotracker3`, `vggt`, `vggsfm`, `mvtap`, `d4rt`, `mvroma`, `uniflowmatch`, `raft`, `dot`, and `blender`
+- [x] Shared point tracker registry with `cotracker3`, `vggt`, `vggsfm`, `mvtap`, `d4rt`, `mvroma`, `ufm-base`, `ufm-refine`, `ufm-base-980`, `ufm-refine-980`, `ufm-base-dinov2l`, `ufm-base-dinov2g`, `raft`, `dot`, and `blender`
 - [x] Single-view image sequence tracking and rendering
 - [x] Multi-timestep Gaussian Splatting camera dataset tracking
 - [x] Point batching inside trackers that take a constructor `batch_size`
@@ -131,7 +131,7 @@ mkdir -p checkpoints
 # save the downloaded file as checkpoints/outdoor_final.pth
 ```
 
-UniFlowMatch (`uniflowmatch`) downloads a Hugging Face repo on first use. `-m model="'base'"` selects `infinity1096/UFM-Base`. Other names are `refine`, `base-980`, `refine-980`, `base-dinov2l-init`, and `base-dinov2g-init`.
+UniFlowMatch downloads a Hugging Face repo on first use. Each checkpoint is its own tracker: `ufm-base` (`infinity1096/UFM-Base`), `ufm-refine` (`infinity1096/UFM-Refine`), `ufm-base-980` (`infinity1096/UFM-Base-980`), `ufm-refine-980` (`infinity1096/UFM-Refine-980`), `ufm-base-dinov2l` (`infinity1096/UFM-Base-DINOv2L-init`), and `ufm-base-dinov2g` (`infinity1096/UFM-Base-DINOv2G-init`).
 
 RAFT (`raft`) uses torchvision `raft_large` ([optical flow tutorial](https://docs.pytorch.org/vision/0.12/auto_examples/plot_optical_flow.html)). Weights download on first use. `-m model="'small'"` selects `raft_small`. `-m num_flow_updates=12` is the iteration count; the last flow is the track. `-m max_resolution=512` shrinks a frame only when its long side is above 512. Smaller frames keep their own size. The model has no input resize of its own, and its correlation volume is quadratic in the resolution it receives.
 
@@ -273,18 +273,23 @@ Verify that `track_4dgs` can import and register trackers:
 python -c "import track_4dgs; print(track_4dgs.get_available_point_trackers())"
 ```
 
-| Name           | Class                      | Kind             | `track1v` |
-| -------------- | -------------------------- | ---------------- | --------- |
-| `cotracker3`   | `Cotracker3PointTracker`   | single-view      | yes       |
-| `vggt`         | `VGGTPointTracker`         | single-view      | yes       |
-| `vggsfm`       | `VGGSfMPointTracker`       | single-view      | yes       |
-| `d4rt`         | `D4RTPointTracker`         | single-view      | yes       |
-| `mvroma`       | `MVRoMaPointTracker`       | single-view      | yes       |
-| `uniflowmatch` | `UniFlowMatchPointTracker` | single-view      | yes       |
-| `raft`         | `RAFTPointTracker`         | single-view      | yes       |
-| `dot`          | `DOTPointTracker`          | single-view      | yes       |
-| `mvtap`        | `MVTAPPointTracker`        | joint multi-view | no        |
-| `blender`      | `BlenderPointTracker`      | joint mesh       | no        |
+| Name               | Class                        | Kind             | `track1v` |
+| ------------------ | ---------------------------- | ---------------- | --------- |
+| `cotracker3`       | `Cotracker3PointTracker`     | single-view      | yes       |
+| `vggt`             | `VGGTPointTracker`           | single-view      | yes       |
+| `vggsfm`           | `VGGSfMPointTracker`         | single-view      | yes       |
+| `d4rt`             | `D4RTPointTracker`           | single-view      | yes       |
+| `mvroma`           | `MVRoMaPointTracker`         | single-view      | yes       |
+| `ufm-base`         | `UFMBasePointTracker`        | single-view      | yes       |
+| `ufm-refine`       | `UFMRefinePointTracker`      | single-view      | yes       |
+| `ufm-base-980`     | `UFMBase980PointTracker`     | single-view      | yes       |
+| `ufm-refine-980`   | `UFMRefine980PointTracker`   | single-view      | yes       |
+| `ufm-base-dinov2l` | `UFMBaseDinov2LPointTracker` | single-view      | yes       |
+| `ufm-base-dinov2g` | `UFMBaseDinov2GPointTracker` | single-view      | yes       |
+| `raft`             | `RAFTPointTracker`           | single-view      | yes       |
+| `dot`              | `DOTPointTracker`            | single-view      | yes       |
+| `mvtap`            | `MVTAPPointTracker`          | joint multi-view | no        |
+| `blender`          | `BlenderPointTracker`        | joint mesh       | no        |
 
 `track1v` accepts an `AbstractViewPointTracker`. Joint trackers run through `build_dataset`. `blender` is documented in [Blender mesh tracking](#blender-mesh-tracking).
 

@@ -4,7 +4,15 @@ from .vggsfm import VGGSfMPointTracker
 from .mvtap import MVTAPPointTracker
 from .d4rt import D4RTPointTracker
 from .mvroma import MVRoMaPointTracker
-from .ufm import UniFlowMatchPointTracker
+from .ufm import (
+    UniFlowMatchPointTracker,
+    UFMBasePointTracker,
+    UFMRefinePointTracker,
+    UFMBase980PointTracker,
+    UFMRefine980PointTracker,
+    UFMBaseDinov2LPointTracker,
+    UFMBaseDinov2GPointTracker,
+)
 from .raft import RAFTPointTracker
 from .dot import DOTPointTracker, DOTDensePointTracker
 from .blender import BlenderPointTracker, BlenderScene, BlenderDataset
@@ -31,7 +39,11 @@ __all__ = [
     "build_camera_dataset_tracker", "prepare_datasets",
     "Cotracker3PointTracker", "VGGTPointTracker", "VGGSfMPointTracker",
     "MVTAPPointTracker", "D4RTPointTracker",
-    "MVRoMaPointTracker", "UniFlowMatchPointTracker", "RAFTPointTracker", "DOTPointTracker", "DOTDensePointTracker", "BlenderPointTracker",
+    "MVRoMaPointTracker", "UniFlowMatchPointTracker",
+    "UFMBasePointTracker", "UFMRefinePointTracker",
+    "UFMBase980PointTracker", "UFMRefine980PointTracker",
+    "UFMBaseDinov2LPointTracker", "UFMBaseDinov2GPointTracker",
+    "RAFTPointTracker", "DOTPointTracker", "DOTDensePointTracker", "BlenderPointTracker",
     "AbstractDataset", "AbstractGroupArgsDataset", "SavedDataset", "Supervision",
     "DexYCBDataset", "DexYCBSpec", "Harmony4DDataset", "Harmony4DSpec",
     "PanopticDataset", "PanopticSpec",
