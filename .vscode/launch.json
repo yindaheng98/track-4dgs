@@ -20,7 +20,7 @@
                 "data/taekwondo/frame41/input/0.png",
                 "data/taekwondo/frame51/input/0.png",
                 "-d",
-                "output/taekwondo/track1v-vggt-view0-time",
+                "output/taekwondo/track1v-cotracker3-view0-time",
                 "--num-points",
                 "4096",
             ]
@@ -57,7 +57,7 @@
             "cwd": "${workspaceFolder}",
             "args": [
                 "--dataset",
-                "tracker_gs",
+                "gstracker",
                 "--tracker",
                 "cotracker3",
                 "-s",
@@ -73,7 +73,7 @@
                 "--num-points",
                 "4096",
                 "--vis-folder",
-                "output/taekwondo/frame1/ours_10000/track2d-uniflowmatch",
+                "output/taekwondo/frame1/ours_10000/track2d-cotracker3",
             ]
         },
         {
@@ -86,7 +86,7 @@
             "cwd": "${workspaceFolder}",
             "args": [
                 "--dataset",
-                "tracker_gs",
+                "gstracker",
                 "--tracker",
                 "mvtap",
                 "-s",
@@ -117,7 +117,7 @@
             "cwd": "${workspaceFolder}",
             "args": [
                 "--dataset",
-                "tracker_gs",
+                "gstracker",
                 "--tracker",
                 "blender",
                 "-s",
@@ -142,7 +142,7 @@
                 "data/point_odyssey/robot/frame361",
                 "data/point_odyssey/robot/frame381",
                 "-m",
-                "frame_step=60",
+                "frames='tuple(range(0, n, 60))'",
                 "-d",
                 "output/point_odyssey_robot",
                 "-i",
@@ -167,7 +167,7 @@
             "cwd": "${workspaceFolder}",
             "args": [
                 "--dataset",
-                "tracker_gs",
+                "gstracker",
                 "--tracker",
                 "mvtap",
                 "-s",
@@ -200,7 +200,7 @@
             "cwd": "${workspaceFolder}",
             "args": [
                 "--dataset",
-                "tracker_gs",
+                "gstracker",
                 "--tracker",
                 "blender",
                 "-s",
@@ -225,7 +225,7 @@
                 "data/point_odyssey/robot/frame361",
                 "data/point_odyssey/robot/frame381",
                 "-m",
-                "frame_step=60",
+                "frames='tuple(range(0, n, 60))'",
                 "-d",
                 "output/point_odyssey_robot",
                 "-i",
