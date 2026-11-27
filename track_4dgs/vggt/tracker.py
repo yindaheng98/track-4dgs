@@ -133,7 +133,7 @@ class VGGTPointTracker(AbstractViewPointTracker):
             and torch.cuda.get_device_capability(device)[0] >= 8
             else torch.float16
         )
-        with torch.cuda.amp.autocast(dtype=dtype):
+        with torch.amp.autocast("cuda", dtype=dtype):
             aggregated_tokens_list, ps_idx = self.model.aggregator(batch)
 
         # 3. DPT features once, then track query points in batches.
@@ -141,7 +141,7 @@ class VGGTPointTracker(AbstractViewPointTracker):
         query_points = points_to_square(points, H, W).unsqueeze(0)
         head = self.model.track_head
         tracks, visibilities, confidences = [], [], []
-        with torch.cuda.amp.autocast(enabled=False):
+        with torch.amp.autocast("cuda", enabled=False):
             feature_maps = head.feature_extractor(aggregated_tokens_list, batch, ps_idx)
             point_count = query_points.shape[1]
             step = point_count if self.batch_size is None else self.batch_size
