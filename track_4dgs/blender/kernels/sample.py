@@ -98,7 +98,6 @@ def sample_near_surface(
         cameras[view].camera_center.detach().to(device=world.device, dtype=world.dtype)
         for view in range(n_views)
     ])
-    valid = torch.ones(num_points, dtype=torch.int32, device=world.device)
     generator = torch.Generator(device=world.device).manual_seed(42)
     draws_without_keep = 0
     while picked_xyz.shape[0] < num_points:
@@ -109,7 +108,7 @@ def sample_near_surface(
         point = (barycentric[:, :, None] * triangles[choice]).sum(dim=1)
         offset = torch.rand(num_points, device=world.device, generator=generator) * (inward_distance + outward_distance) - inward_distance
         xyz = point + normal[choice] * offset[:, None]
-        ray_visible = ray_visibility(centers, xyz, world, scene_faces, device, occlusion_eps, valid, choice)
+        ray_visible = ray_visibility(centers, xyz, world, scene_faces, device, occlusion_eps, choice)
         count = torch.zeros(num_points, dtype=torch.long, device=world.device)
         for view in range(n_views):
             _, in_frustum = project_points(xyz, cameras[view])

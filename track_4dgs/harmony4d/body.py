@@ -172,7 +172,7 @@ def sample_posed_surface(
         )
         worlds, valid, world_verts, scene_faces, _owner = track_bind_points(verts, faces, frames, binding)
         visibility = project_visibility(
-            frames, worlds, world_verts, scene_faces, valid, occlusion_eps, warp_device, binding.face,
+            frames, worlds, world_verts, scene_faces, occlusion_eps, warp_device, ignore_face=binding.face,
         )
         points, in_frustum = project_frames(worlds, frames)
     return points, (visibility > 0) & in_frustum

@@ -37,7 +37,6 @@ def ray_visibility(
         faces: torch.Tensor,
         device: str,
         occlusion_eps: float,
-        valid: torch.Tensor,
         ignore_face: torch.Tensor | None = None) -> torch.Tensor:
     """Return ``(V, N)`` visibility in ``{0, 1}``.
 
@@ -46,22 +45,19 @@ def ray_visibility(
     ``world_verts`` is ``(P, 3)`` posed vertices, and ``faces`` is ``(T, 3)`` int32 triangles into those vertices.
     ``device`` is a Warp device name such as ``cpu`` or ``cuda``.
     ``occlusion_eps`` is the occlusion depth tolerance in world units.
-    ``valid`` is ``(N,)`` int, and nonzero entries are the points to test.
     ``ignore_face`` is ``(N,)`` int. Negative entries exempt nothing. The default exempts nothing.
     The closest hit does not occlude when its face is ``ignore_face`` or it lies within ``occlusion_eps`` of the point.
     Triangles behind that hit are not tested.
-    ``valid == 0`` points are invisible.
-    No faces, or a frame with no posed vertices, reports every nonzero ``valid`` point as visible.
+    No faces, or a frame with no posed vertices, reports every point as visible.
     The result stays on the device of the inputs.
     """
     n_views, n_points = camera_centers.shape[0], points.shape[0]
     if faces.numel() == 0 or world_verts.shape[0] == 0 or n_points == 0:
-        return valid.to(dtype=torch.float32).reshape(1, -1).expand(n_views, n_points).clone()
+        return points.new_ones((n_views, n_points))
     world_verts = world_verts.contiguous()
     faces = faces.reshape(-1).contiguous()
     camera_centers = camera_centers.contiguous()
     points = points.contiguous()
-    valid = valid.contiguous()
     if ignore_face is None:
         ignore_face = torch.full((n_points,), -1, dtype=torch.int32, device=points.device)
     else:
@@ -91,7 +87,6 @@ def ray_visibility(
     near_point = point_distance - distance <= occlusion_eps
     ignored = face == ignore_face.view(1, -1)
     visible = (face < 0) | ignored | near_point
-    visible = visible & valid.to(dtype=torch.bool).view(1, -1)
     return visible.to(dtype=points.dtype)
 
 
@@ -100,7 +95,6 @@ def project_visibility(
         worlds: torch.Tensor,
         world_verts: torch.Tensor,
         scene_faces: torch.Tensor,
-        valid: torch.Tensor,
         occlusion_eps: float,
         device: str,
         ignore_face: torch.Tensor | None = None) -> torch.Tensor:
@@ -108,7 +102,6 @@ def project_visibility(
 
     ``worlds`` is ``(F, N, 3)`` in blend world coordinates.
     ``world_verts`` is ``(F, P, 3)`` and ``scene_faces`` is ``(T, 3)`` into those vertices.
-    ``valid`` is ``(N,)`` and is nonzero for points that were sent to binding.
     ``device`` is a Warp device name.
     ``occlusion_eps`` is the occlusion depth tolerance in world units.
     ``ignore_face`` is an optional ``(N,)`` int passed to :func:`ray_visibility`.
@@ -124,6 +117,6 @@ def project_visibility(
             for view_index in range(n_views)
         ])
         visibility[:, frame_index] = ray_visibility(
-            centers, worlds[frame_index], world_verts[frame_index], scene_faces, device, occlusion_eps, valid, ignore_face,
+            centers, worlds[frame_index], world_verts[frame_index], scene_faces, device, occlusion_eps, ignore_face,
         )
     return visibility

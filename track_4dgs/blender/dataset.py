@@ -158,8 +158,8 @@ class BlenderScene:
                 tracker.verts, tracker.faces, frames, binding,
             )
             visibility = project_visibility(
-                frames, worlds, world_verts, scene_faces, valid, tracker.occlusion_eps, str(tracker.device),
-                binding.face,
+                frames, worlds, world_verts, scene_faces, tracker.occlusion_eps, str(tracker.device),
+                ignore_face=binding.face,
             )
             points, in_frustum = project_frames(worlds, frames)
             visibility = visibility * in_frustum.to(dtype=visibility.dtype)

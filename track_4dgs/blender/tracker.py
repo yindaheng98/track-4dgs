@@ -195,7 +195,7 @@ class BlenderPointTracker(AbstractPointTracker):
             self.verts, self.faces, query, frames, str(self.device),
         )
         visibility = project_visibility(
-            frames, worlds, world_verts, scene_faces, valid, self.occlusion_eps, str(self.device),
+            frames, worlds, world_verts, scene_faces, self.occlusion_eps, str(self.device),
         )
         points, in_frustum = project_frames(worlds, frames)
         return worlds, valid, points, visibility, in_frustum

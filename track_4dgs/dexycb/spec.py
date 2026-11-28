@@ -151,8 +151,8 @@ class DexYCBSpec:
             query = Query.from_projection(binding.xyz, frames, frame_indices)
             worlds, valid, world_verts, scene_faces, _owner = track_bind_points(verts, faces, frames, binding)
             visibility = project_visibility(
-                frames, worlds, world_verts, scene_faces, valid,
-                self.occlusion_eps, warp_device, binding.face,
+                frames, worlds, world_verts, scene_faces,
+                self.occlusion_eps, warp_device, ignore_face=binding.face,
             )
             points, in_frustum = project_frames(worlds, frames)
             visibility = visibility * in_frustum.to(dtype=visibility.dtype)
