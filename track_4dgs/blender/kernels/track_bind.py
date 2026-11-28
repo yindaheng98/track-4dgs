@@ -34,7 +34,7 @@ def track_bind_points(
         verts: Sequence[torch.Tensor],
         faces: Sequence[torch.Tensor],
         frames: Sequence[CameraDataset],
-        binding: SurfaceBinding) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        binding: SurfaceBinding) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     """Replay a surface sample on the evaluated scene.
 
     ``verts`` lists per-object ``(F, V_i, 3)`` world positions in export order.
@@ -42,9 +42,8 @@ def track_bind_points(
     Vertex count and triangle indices stay fixed across ``F``.
     ``binding`` is a :class:`~track_4dgs.blender.kernels.sample.SurfaceBinding` from the sampled frame.
     Each point keeps that packed face, barycentric weights, and normal offset on every frame.
-    Every point is valid.
-    Returns ``worlds`` ``(F, N, 3)``, ``valid`` ``(N,)`` int, ``world_verts`` ``(F, P, 3)``,
-    ``scene_faces`` ``(T, 3)``, and ``face_owner`` ``(T,)`` long.
+    Returns ``worlds`` ``(F, N, 3)``, ``world_verts`` ``(F, P, 3)``, ``scene_faces`` ``(T, 3)``,
+    and ``face_owner`` ``(T,)`` long.
     ``worlds`` is the bound point in blend world coordinates.
     ``world_verts`` and ``scene_faces`` are the posed scene those points were bound to.
     ``face_owner`` is the object index of each triangle in ``scene_faces``.
@@ -56,5 +55,4 @@ def track_bind_points(
         for frame_index in range(n_frames)
     ])
     worlds = replay_binding(world_verts, scene_faces, binding)
-    valid = torch.ones((worlds.shape[1],), dtype=torch.int32, device=worlds.device)
-    return worlds, valid, world_verts, scene_faces, face_owner
+    return worlds, world_verts, scene_faces, face_owner

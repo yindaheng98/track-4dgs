@@ -154,7 +154,7 @@ class BlenderScene:
         with torch.no_grad():
             frames = self.sample_cameras(tracker, device)
             query, binding = self.sample_points(tracker, frames)
-            worlds, valid, world_verts, scene_faces, _face_owner = track_bind_points(
+            worlds, world_verts, scene_faces, _face_owner = track_bind_points(
                 tracker.verts, tracker.faces, frames, binding,
             )
             visibility = project_visibility(

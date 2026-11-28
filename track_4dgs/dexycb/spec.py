@@ -149,7 +149,7 @@ class DexYCBSpec:
                 (binding.xyz.shape[0],), self.init_dataset_index, dtype=torch.long, device=binding.xyz.device,
             )
             query = Query.from_projection(binding.xyz, frames, frame_indices)
-            worlds, valid, world_verts, scene_faces, _owner = track_bind_points(verts, faces, frames, binding)
+            worlds, world_verts, scene_faces, _owner = track_bind_points(verts, faces, frames, binding)
             visibility = project_visibility(
                 frames, worlds, world_verts, scene_faces,
                 self.occlusion_eps, warp_device, ignore_face=binding.face,
