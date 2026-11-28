@@ -21,9 +21,9 @@ class Harmony4DDataset(AbstractLazyLoadDataset[Harmony4DSpec], AbstractGroupArgs
     name. Unset, it keeps every exo camera.
 
     Each sequence folder contains ``exo/``, ``ego/``, ``processed_data/``, and
-    ``colmap/``. Views are the exo cameras. ``--num-points`` is the total
-    number of tracks. The checked COCO joints come first, and the rest are
-    samples on the posed SMPL meshes. ``--max-image-size`` caps the long side
+    ``colmap/``. Views are the exo cameras. ``--num-points`` is the number of
+    tracks, all sampled on the posed SMPL meshes. The checked COCO joints are
+    not tracks. ``--max-image-size`` caps the long side
     of each image. A larger photo is scaled down with its intrinsics.
     Construction records one :class:`Harmony4DSpec` per sequence.
     :meth:`Harmony4DSpec.load` reads the cameras, poses, and meshes.
@@ -52,7 +52,7 @@ class Harmony4DDataset(AbstractLazyLoadDataset[Harmony4DSpec], AbstractGroupArgs
     def add_common_argument(parser: ArgumentParser) -> ArgumentParser:
         """Register flags shared by every sequence and return ``parser``."""
 
-        parser.add_argument("--num-points", default=256, type=int, help="Total points, including the checked joints. Further points are sampled on the body. Defaults to 256.")
+        parser.add_argument("--num-points", default=256, type=int, help="Points sampled on the posed SMPL meshes. The checked joints are not included. Defaults to 256.")
         parser.add_argument("--smpl-faces", default=DEFAULT_SMPL_FACES, type=str, help="Local SMPL triangle file. A file that cannot be loaded is replaced from --smpl-faces-url.")
         parser.add_argument("--smpl-faces-url", default=DEFAULT_SMPL_FACES_URL, type=str, help="Downloaded into --smpl-faces when that file cannot be loaded. Defaults to src/tf_smpl/smpl_faces.npy from akanazawa/hmr.")
         parser.add_argument("--visible-cameras", default=2, type=int, help="Keep a surface point only when at least this many cameras see it. Defaults to 2.")
