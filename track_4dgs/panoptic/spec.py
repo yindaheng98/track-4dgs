@@ -239,6 +239,7 @@ class PanopticSpec:
     same surface sampler as Harmony4D. The 19 body joints place those ribbons
     and are not tracks. A sample is kept when at least ``visible_cameras``
     cameras see it, then carried with that triangle.
+    Track visibility is occlusion. The mask is the frustum test.
     ``inward_distance`` and ``outward_distance`` move a sample along the
     ribbon normal, in meters. ``occlusion_eps`` is the occlusion tolerance in
     meters.
@@ -332,7 +333,7 @@ class PanopticSpec:
         frames = PanopticFrames(panoptic_frames)
         _, _, xyz = load_body_tracks(cameras, frame_indices, poses)
         people = xyz.shape[1] // BODY_JOINT_COUNT
-        points, valid = sample_body_surface(
+        points, visibility, in_frustum = sample_body_surface(
             xyz[slots].view(len(slots), people, BODY_JOINT_COUNT, 3),
             frames,
             self.init_dataset_index,
@@ -351,7 +352,8 @@ class PanopticSpec:
         )
         query, tracks = query_and_tracks_from_trajectories(
             points,
-            valid,
+            visibility,
+            in_frustum,
             [camera.width for camera in cameras],
             [camera.height for camera in cameras],
             start_indices,

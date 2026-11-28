@@ -155,16 +155,14 @@ class DexYCBSpec:
                 self.occlusion_eps, warp_device, ignore_face=binding.face,
             )
             points, in_frustum = project_frames(worlds, frames)
-            visibility = visibility * in_frustum.to(dtype=visibility.dtype)
             n_views, n_frames, n_points, _ = points.shape
             confidence = points.new_ones((n_views, n_frames, n_points))
-            mask = valid.to(dtype=torch.bool).expand(n_frames, n_points)
             tracks = [
                 Track(
                     points=points[view_index],
                     visibility=visibility[view_index],
                     confidence=confidence[view_index],
-                    mask=mask,
+                    mask=in_frustum[view_index],
                 )
                 for view_index in range(n_views)
             ]

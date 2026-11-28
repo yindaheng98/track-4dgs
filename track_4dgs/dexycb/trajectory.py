@@ -9,6 +9,7 @@ from ..tracker.tracker import Query, Track
 
 def query_and_tracks_from_trajectories(
         points: torch.Tensor,
+        visibility: torch.Tensor,
         valid: torch.Tensor,
         widths: Sequence[int],
         heights: Sequence[int],
@@ -16,17 +17,22 @@ def query_and_tracks_from_trajectories(
 ):
     """Build a query and one track per view from ``[V, D, N, 2]`` pixels.
 
+    ``visibility`` is ``[V, D, N]`` occlusion and ``confidence`` is one.
     ``start_indices`` is ``[V, N]`` and selects the query frame of each point
-    in each view. ``valid`` marks annotated points. ``in_image`` requires the
-    query pixel to be annotated and inside the view.
+    in each view. ``valid`` marks annotated points and is stored as ``mask``.
+    ``in_image`` requires the query pixel to be annotated and inside the view.
     """
 
     if points.ndim != 4 or points.shape[-1] != 2:
         raise ValueError("points must have shape [V, D, N, 2]")
+    if visibility.shape != points.shape[:3]:
+        raise ValueError("visibility must have shape [V, D, N]")
     if valid.shape != points.shape[:3]:
         raise ValueError("valid must have shape [V, D, N]")
     if not torch.is_floating_point(points):
         raise TypeError("points must be floating point")
+    if not torch.is_floating_point(visibility):
+        raise TypeError("visibility must be floating point")
     if valid.dtype != torch.bool:
         raise TypeError("valid must be bool")
     n_views, n_frames, n_points, _ = points.shape
@@ -57,11 +63,11 @@ def query_and_tracks_from_trajectories(
             & (xy[:, 1] <= height - 1)
         )
     query = Query(points=query_points, frame_indices=start_indices, in_image=in_image)
-    confidence = valid.to(dtype=points.dtype)
+    confidence = points.new_ones(points.shape[:3])
     tracks = [
         Track(
             points=points[view_idx],
-            visibility=confidence[view_idx],
+            visibility=visibility[view_idx],
             confidence=confidence[view_idx],
             mask=valid[view_idx],
         )

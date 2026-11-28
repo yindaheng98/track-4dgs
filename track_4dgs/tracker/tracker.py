@@ -182,6 +182,7 @@ class Track:
     threshold interpretation.
 
     ``mask`` is implementation-defined boolean validity for each point.
+    Mesh supervision stores the frustum test here: in front of the camera and inside the image.
     """
 
     points: torch.Tensor

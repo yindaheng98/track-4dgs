@@ -210,7 +210,8 @@ class Harmony4DSpec:
     ``num_points`` is the number of tracks and defaults to 256.
     Every track is a sample on the posed meshes in ``processed_data/smpl``.
     The checked COCO joints are not tracks.
-    Vertices within 8 cm of either wrist are left out, and occluded samples are masked off.
+    Vertices within 8 cm of either wrist are left out.
+    Track visibility is occlusion. The mask is the frustum test.
     ``smpl_faces`` is the local triangle file. When it cannot be loaded,
     ``smpl_faces_url`` is downloaded to that path.
     ``visible_cameras``, ``inward_distance``, and ``outward_distance`` are passed
@@ -306,7 +307,7 @@ class Harmony4DSpec:
                     pose_frame=pose_frame,
                 ))
         frames = [Harmony4DFrame(specs, device=device) for specs in camera_specs]
-        points, valid = load_body_surface(
+        points, visibility, in_frustum = load_body_surface(
             self.sequence,
             indices,
             frames,
@@ -329,7 +330,8 @@ class Harmony4DSpec:
         )
         query, tracks = query_and_tracks_from_trajectories(
             points,
-            valid,
+            visibility,
+            in_frustum,
             [view.width for view in views],
             [view.height for view in views],
             start_indices,

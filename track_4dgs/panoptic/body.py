@@ -76,13 +76,13 @@ def sample_body_surface(
         outward_distance: float,
         occlusion_eps: float,
         device,
-) -> tuple[torch.Tensor, torch.Tensor]:
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """Project ``num_points`` bone-ribbon samples into every view.
 
     ``joints`` is ``(F, people, 19, 3)`` meters in the camera world, one row
     per selected frame. The ribbons are sampled and projected by
     :func:`~track_4dgs.harmony4d.body.sample_posed_surface`.
-    Returns pixels ``(V, F, N, 2)`` and a bool mask ``(V, F, N)``.
+    Returns pixels ``(V, F, N, 2)``, occlusion ``(V, F, N)``, and a frustum mask ``(V, F, N)``.
     """
 
     if joints.ndim != 4 or joints.shape[2:] != (19, 3):

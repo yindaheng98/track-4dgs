@@ -77,14 +77,14 @@ def load_body_surface(
         outward_distance: float,
         occlusion_eps: float,
         device,
-) -> tuple[torch.Tensor, torch.Tensor]:
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """Project ``num_points`` body-surface samples into every view.
 
     Vertices come from ``processed_data/smpl`` and are already posed. They are
     moved into the COLMAP world before sampling, so the cameras can be used as
     stored. The hand is removed with :func:`body_face_mask` on the query frame.
-    Occluded samples and projections outside the image are marked invalid.
-    Returns pixels ``(V, D, N, 2)`` and a bool mask ``(V, D, N)``.
+    Returns pixels ``(V, D, N, 2)``, occlusion ``(V, D, N)``, and a frustum mask ``(V, D, N)``.
+    The mask is true when the projection is in front of the camera and inside the image.
     """
 
     faces = load_smpl_faces(faces_path, faces_url)
@@ -145,15 +145,16 @@ def sample_posed_surface(
         outward_distance: float,
         occlusion_eps: float,
         face_mask: torch.Tensor | None = None,
-) -> tuple[torch.Tensor, torch.Tensor]:
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """Draw ``num_points`` on the query frame and project them through every view.
 
     ``verts`` lists per-person ``(F, V_i, 3)`` positions already in the camera world.
     ``faces`` lists the matching ``(T_i, 3)`` triangles. ``face_mask`` is the optional
     packed-triangle mask taken by :func:`~track_4dgs.blender.kernels.sample_near_surface`.
     A point is kept when at least ``visible_cameras`` cameras see it, then carried
-    with that triangle. Occluded samples and projections outside the image are invalid.
-    Returns pixels ``(V, F, N, 2)`` and a bool mask ``(V, F, N)``.
+    with that triangle.
+    Returns pixels ``(V, F, N, 2)``, occlusion ``(V, F, N)``, and a frustum mask ``(V, F, N)``.
+    The mask is true when the projection is in front of the camera and inside the image.
     """
 
     warp_device = str(verts[0].device)
@@ -175,4 +176,4 @@ def sample_posed_surface(
             frames, worlds, world_verts, scene_faces, occlusion_eps, warp_device, ignore_face=binding.face,
         )
         points, in_frustum = project_frames(worlds, frames)
-    return points, (visibility > 0) & in_frustum
+    return points, visibility, in_frustum
