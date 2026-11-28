@@ -26,21 +26,22 @@ def bind_points(
     ``scene_faces`` is ``(T, 3)`` triangles into those vertices, and ``face_owner`` is ``(T,)``.
     Vertex count and triangle indices are the same on every frame.
     ``device`` is the Warp device used for ray casts and closest-point snaps.
-    A point with fewer than two in-image views stays masked off.
+    A point with fewer than two in-image views raises ``ValueError``.
     Each ray votes for the object of its first hit, or for empty space on a miss.
     The winner must beat both empty space and the runner-up.
     A snap stores Warp barycentric weights on the winning object's triangle.
     Those weights are ``u`` on the first vertex, ``v`` on the second, and ``1 - u - v`` on the third.
     Every frame interpolates the same triangle from that frame's vertices.
     A point that does not snap keeps its triangulated world position on every frame.
-    Returns ``worlds`` ``(F, N, 3)`` and ``valid`` ``(N,)`` int.
+    Returns ``worlds`` ``(F, N, 3)``.
     """
     n_points = query.points.shape[1]
+    if n_points > 0 and not bool((query.in_image.sum(dim=0) >= 2).all()):
+        raise ValueError("every point needs at least two in-image views to triangulate")
     n_frames = world_verts.shape[0]
     triangles = torch.full((n_points, 3), -1, dtype=torch.long, device=world_verts.device)
     bary = torch.zeros((n_points, 3), dtype=world_verts.dtype, device=world_verts.device)
     anchor = torch.zeros((n_points, 3), dtype=world_verts.dtype, device=world_verts.device)
-    valid = torch.zeros((n_points,), dtype=torch.int32, device=world_verts.device)
     frame = query.frame_indices[0].detach().to(dtype=torch.long)
     n_views = query.points.shape[0]
     for frame_index in frame.unique().tolist():
@@ -48,12 +49,9 @@ def bind_points(
         cameras = [frames[frame_index][view_index] for view_index in range(n_views)]
         posed_verts = world_verts[frame_index]
         rays = PointRays.from_cameras(query.points[:, selected], cameras, query.in_image[:, selected])
-        local_ids = torch.where(rays.valid)[0]
-        if local_ids.numel() == 0:
-            continue
-        view_mask = rays.ray_mask[local_ids]
-        origins = rays.origins[local_ids][view_mask]
-        directions = rays.directions[local_ids][view_mask]
+        view_mask = rays.ray_mask
+        origins = rays.origins[view_mask]
+        directions = rays.directions[view_mask]
         hit_faces = ray_cast(origins, directions, posed_verts, scene_faces, device)
         object_ids = torch.full((hit_faces.shape[0],), -1, dtype=torch.long, device=hit_faces.device)
         hit = hit_faces >= 0
@@ -62,11 +60,10 @@ def bind_points(
         cursor = 0
         pending = defaultdict(list)
         counts = view_mask.sum(dim=-1).tolist()
-        for local_index, n_rays in zip(local_ids.tolist(), counts):
+        for local_index, n_rays in enumerate(counts):
             point_index = int(selected[local_index])
             winner, count, second, misses = ray_votes(object_ids[cursor:cursor + n_rays])
             cursor += n_rays
-            valid[point_index] = 1
             if winner >= 0 and count > misses and count > second:
                 pending[winner].append((point_index, rays.xyz[local_index]))
             else:
@@ -89,4 +86,4 @@ def bind_points(
     if bool(bound.any()):
         corners = world_verts[:, triangles[bound]]
         worlds[:, bound] = (corners * bary[bound].view(1, -1, 3, 1)).sum(dim=2)
-    return worlds, valid
+    return worlds

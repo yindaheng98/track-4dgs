@@ -92,8 +92,3 @@ class PointRays:
         if bool(valid.any()):
             xyz[valid] = triangulate_rays(origins[valid], directions[valid], ray_mask[valid])
         return cls(xyz=xyz, origins=origins, directions=directions, ray_mask=ray_mask)
-
-    @property
-    def valid(self) -> torch.Tensor:
-        """Return ``(N,)`` bool, true when a point has at least two rays."""
-        return self.ray_mask.sum(dim=-1) >= 2

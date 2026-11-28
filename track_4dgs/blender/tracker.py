@@ -106,7 +106,7 @@ class BlenderPointTracker(AbstractPointTracker):
     The export returns triangles and the first frame together, then one later frame at a time.
     Rays, object votes, and surface snaps run against that frame's mesh.
     A snap stores barycentric coordinates and replays them on later frames.
-    :meth:`track_blender` returns those positions as ``worlds`` ``(F, N, 3)``, with ``valid``, ``points``, ``visibility``, and ``in_frustum``.
+    :meth:`track_blender` returns those positions as ``worlds`` ``(F, N, 3)``, with ``points``, ``visibility``, and ``in_frustum``.
     Every view of a point shares one query frame.
     Visibility is an any-hit test from each camera to each posed point.
     Exported frames are ``range(frame_start, frame_end + 1, frame_step)``.
@@ -175,30 +175,30 @@ class BlenderPointTracker(AbstractPointTracker):
     def track_blender(
             self,
             query: Query,
-            frames: Sequence[CameraDataset]) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+            frames: Sequence[CameraDataset]) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         """Bind ``query`` to the exported meshes and project it into ``frames``.
 
         Every view of a point must share one query frame.
-        Returns ``worlds`` ``(F, N, 3)`` blend-world coordinates, ``valid`` ``(N,)`` int,
+        Returns ``worlds`` ``(F, N, 3)`` blend-world coordinates,
         ``points`` ``(V, F, N, 2)`` pixels, ``visibility`` ``(V, F, N)``, and ``in_frustum`` ``(V, F, N)`` bool.
         ``visibility`` is the unoccluded camera-to-point test.
         ``in_frustum`` is whether the projection lies in front of the camera and inside the image.
         ``worlds`` is the same point on every view.
-        A point with ``valid == 0`` stays at the origin.
+        A point with fewer than two in-image views raises ``ValueError``.
         A point that does not snap keeps its triangulated position on every frame.
         """
 
         assert torch.all(query.frame_indices == query.frame_indices[0]), (
             "every view of a point must share one frame"
         )
-        worlds, valid, world_verts, scene_faces, _face_owner = track_points(
+        worlds, world_verts, scene_faces, _face_owner = track_points(
             self.verts, self.faces, query, frames, str(self.device),
         )
         visibility = project_visibility(
             frames, worlds, world_verts, scene_faces, self.occlusion_eps, str(self.device),
         )
         points, in_frustum = project_frames(worlds, frames)
-        return worlds, valid, points, visibility, in_frustum
+        return worlds, points, visibility, in_frustum
 
     @torch.no_grad()
     def track(
@@ -207,16 +207,14 @@ class BlenderPointTracker(AbstractPointTracker):
             frames: Sequence[CameraDataset]) -> Sequence[Track]:
         n_views, n_points, _ = query.points.shape
         n_frames = len(frames)
-        _, valid, points, visibility, in_frustum = self.track_blender(query, frames)
-        visibility = visibility * in_frustum.to(dtype=visibility.dtype)
+        _, points, visibility, in_frustum = self.track_blender(query, frames)
         confidence = query.points.new_ones((n_views, n_frames, n_points))
-        mask = valid.to(dtype=torch.bool).expand(n_frames, n_points)
         return [
             Track(
                 points=points[view_index],
                 visibility=visibility[view_index],
                 confidence=confidence[view_index],
-                mask=mask & query.in_image[view_index].unsqueeze(0),
+                mask=in_frustum[view_index],
             )
             for view_index in range(n_views)
         ]

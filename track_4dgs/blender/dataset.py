@@ -144,10 +144,10 @@ class BlenderScene:
         :func:`~track_4dgs.blender.kernels.track_bind.track_bind_points` applies the packed face, barycentric weights, and normal offset on every frame.
         :func:`~track_4dgs.blender.kernels.visibility.project_visibility` reports occlusion from each camera.
         :func:`~track_4dgs.utils.project_frames` turns the world positions into pixels and a frustum test.
-        Track visibility keeps the occlusion where the projection lies in the image.
+        Track visibility is that occlusion. The mask is the frustum test.
         The bound triangle is not an occluder.
         Returns one :class:`~track_4dgs.tracker.tracker.Track` per view.
-        ``mask`` is true for every sampled point. ``confidence`` is one.
+        ``confidence`` is one.
         """
 
         tracker = self.load_tracker(device)
@@ -162,16 +162,14 @@ class BlenderScene:
                 ignore_face=binding.face,
             )
             points, in_frustum = project_frames(worlds, frames)
-            visibility = visibility * in_frustum.to(dtype=visibility.dtype)
             n_views, n_frames, n_points, _ = points.shape
             confidence = points.new_ones((n_views, n_frames, n_points))
-            mask = valid.to(dtype=torch.bool).expand(n_frames, n_points)
             tracks = [
                 Track(
                     points=points[view_index],
                     visibility=visibility[view_index],
                     confidence=confidence[view_index],
-                    mask=mask,
+                    mask=in_frustum[view_index],
                 )
                 for view_index in range(n_views)
             ]

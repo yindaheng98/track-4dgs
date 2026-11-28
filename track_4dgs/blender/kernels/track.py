@@ -57,17 +57,17 @@ def track_points(
         faces: Sequence[torch.Tensor],
         query: Query,
         frames: Sequence[CameraDataset],
-        device: str) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        device: str) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     """Bind query pixels to the evaluated scene.
 
     ``verts`` lists per-object ``(F, V_i, 3)`` world positions in export order.
     ``faces`` lists per-object ``(T_i, 3)`` triangles into those vertices.
     Vertex count and triangle indices stay fixed across ``F``.
     ``device`` is a Warp device name.
-    Returns ``worlds`` ``(F, N, 3)``, ``valid`` ``(N,)`` int, ``world_verts`` ``(F, P, 3)``,
+    Returns ``worlds`` ``(F, N, 3)``, ``world_verts`` ``(F, P, 3)``,
     ``scene_faces`` ``(T, 3)``, and ``face_owner`` ``(T,)`` long.
     ``worlds`` is the bound point in blend world coordinates, the same on every view.
-    A point with ``valid == 0`` stays at the origin.
+    A point with fewer than two in-image views raises ``ValueError``.
     A point that does not snap keeps its triangulated position on every frame.
     ``world_verts`` and ``scene_faces`` are the posed scene those points were bound to.
     ``face_owner`` is the object index of each triangle in ``scene_faces``.
@@ -81,7 +81,7 @@ def track_points(
         ])
     else:
         world_verts = query.points.new_zeros((n_frames, 0, 3))
-    worlds, valid = bind_points(
+    worlds = bind_points(
         world_verts, scene_faces, face_owner, query, frames, device,
     )
-    return worlds, valid, world_verts, scene_faces, face_owner
+    return worlds, world_verts, scene_faces, face_owner
